@@ -133,7 +133,7 @@ On first launch the app creates a `Materials/` folder next to the executable for
 **Requirements:** Visual Studio 2022 (17.9+) with the **.NET desktop** and **Windows App SDK** workloads installed.
 
 ```bash
-git clone https://github.com/your-username/ForzaTechStudio.git
+git clone https://github.com/D3FEKT/ForzaTechStudio.git
 cd ForzaTechStudio
 ```
 
