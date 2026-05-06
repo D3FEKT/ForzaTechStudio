@@ -1,0 +1,945 @@
+﻿<Page
+    x:Class="ForzaTechStudio.Views.MaterialsAndShadersPage"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+    xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+    xmlns:controls="using:ForzaTechStudio.Views.Controls"
+    xmlns:services="using:ForzaTechStudio.Services"
+    xmlns:vm="using:ForzaTechStudio.ViewModels"
+    mc:Ignorable="d">
+
+    <Grid Padding="12">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+        </Grid.RowDefinitions>
+
+        <controls:StandardPageHeader Grid.Row="0"
+                                     Title="Materials &amp; Shaders"
+                                     Description="Parse and inspect linked materialbin and shaderbin assets, browse shared game libraries, and follow texture references into swatch metadata. Save/edit wiring is intentionally read-only in this first implementation slice."
+                                     Margin="0,0,0,12">
+            <controls:StandardPageHeader.HeaderCommands>
+                <StackPanel Orientation="Horizontal" Spacing="8">
+                    <Button Command="{x:Bind ViewModel.OpenMaterialbinCommand}"
+                            Style="{StaticResource GhostAccentButtonStyle}">
+                        <StackPanel Orientation="Horizontal" Spacing="8">
+                            <FontIcon Glyph="&#xE8E5;" FontSize="14"/>
+                            <TextBlock Text="Open Materialbin"/>
+                        </StackPanel>
+                    </Button>
+
+                    <Button Command="{x:Bind ViewModel.OpenShaderbinCommand}"
+                            Style="{StaticResource GhostAccentButtonStyle}">
+                        <StackPanel Orientation="Horizontal" Spacing="8">
+                            <FontIcon Glyph="&#xE8E5;" FontSize="14"/>
+                            <TextBlock Text="Open Shaderbin"/>
+                        </StackPanel>
+                    </Button>
+
+                    <Button Click="BrowseLibrary_Click"
+                            Style="{StaticResource GhostAccentButtonStyle}">
+                        <StackPanel Orientation="Horizontal" Spacing="8">
+                            <FontIcon Glyph="&#xE8F1;" FontSize="14"/>
+                            <TextBlock Text="Browse Game Library"/>
+                        </StackPanel>
+                    </Button>
+
+                    <Border Width="1" Background="{ThemeResource DividerStrokeColorDefaultBrush}" Margin="4,8"/>
+
+                    <Button Command="{x:Bind ViewModel.ReloadWorkspaceCommand}"
+                            IsEnabled="{x:Bind ViewModel.HasWorkspace, Mode=OneWay}"
+                            Style="{StaticResource GhostAccentButtonStyle}">
+                        <StackPanel Orientation="Horizontal" Spacing="8">
+                            <FontIcon Glyph="&#xE72C;" FontSize="14"/>
+                            <TextBlock Text="Reload"/>
+                        </StackPanel>
+                    </Button>
+
+                    <Button Command="{x:Bind ViewModel.SaveCommand}"
+                            IsEnabled="{x:Bind ViewModel.IsDirty, Mode=OneWay}"
+                            Style="{StaticResource GhostAccentButtonStyle}">
+                        <StackPanel Orientation="Horizontal" Spacing="8">
+                            <FontIcon Glyph="&#xE74E;" FontSize="14"/>
+                            <TextBlock Text="Save"/>
+                        </StackPanel>
+                        <Button.KeyboardAccelerators>
+                            <KeyboardAccelerator Modifiers="Control" Key="S"/>
+                        </Button.KeyboardAccelerators>
+                    </Button>
+
+                    <Button Command="{x:Bind ViewModel.SaveAsCommand}"
+                            IsEnabled="{x:Bind ViewModel.HasWorkspace, Mode=OneWay}"
+                            Style="{StaticResource GhostAccentButtonStyle}">
+                        <StackPanel Orientation="Horizontal" Spacing="8">
+                            <FontIcon Glyph="&#xE792;" FontSize="14"/>
+                            <TextBlock Text="Save As"/>
+                        </StackPanel>
+                        <Button.KeyboardAccelerators>
+                            <KeyboardAccelerator Modifiers="Control,Shift" Key="S"/>
+                        </Button.KeyboardAccelerators>
+                    </Button>
+
+                    <Button Command="{x:Bind ViewModel.CloseWorkspaceCommand}"
+                            IsEnabled="{x:Bind ViewModel.HasWorkspace, Mode=OneWay}"
+                            Style="{StaticResource GhostAccentButtonStyle}">
+                        <StackPanel Orientation="Horizontal" Spacing="8">
+                            <FontIcon Glyph="&#xE711;" FontSize="14"/>
+                            <TextBlock Text="Close"/>
+                        </StackPanel>
+                    </Button>
+
+                    <ProgressRing IsActive="{x:Bind ViewModel.IsBusy, Mode=OneWay}"
+                                  Width="18"
+                                  Height="18"
+                                  Margin="8,0,0,0"/>
+                </StackPanel>
+            </controls:StandardPageHeader.HeaderCommands>
+        </controls:StandardPageHeader>
+
+        <Grid Grid.Row="1" ColumnSpacing="16">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="320"/>
+                <ColumnDefinition Width="*"/>
+            </Grid.ColumnDefinitions>
+
+            <Border Grid.Column="0"
+                    Background="{ThemeResource LayerFillColorDefaultBrush}"
+                    BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
+                    BorderThickness="1"
+                    CornerRadius="8"
+                    Padding="0">
+                <ScrollViewer VerticalScrollBarVisibility="Auto" Padding="16">
+                    <StackPanel Spacing="16">
+                        <Button Click="BrowseLibrary_Click"
+                                HorizontalAlignment="Stretch"
+                                Style="{StaticResource AccentButtonStyle}">
+                            <StackPanel Orientation="Horizontal" Spacing="8">
+                                <FontIcon Glyph="&#xE8F1;" FontSize="14"/>
+                                <TextBlock Text="Browse Game Library"/>
+                            </StackPanel>
+                        </Button>
+
+                        <StackPanel Spacing="8">
+                            <TextBlock Text="Document Source"
+                                       Style="{StaticResource SubtitleTextBlockStyle}"/>
+                            <ItemsControl ItemsSource="{x:Bind ViewModel.SourceInfoItems, Mode=OneWay}">
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate>
+                                        <StackPanel Margin="0,0,0,8">
+                                            <TextBlock Text="{Binding Label}" Opacity="0.65" FontSize="12"/>
+                                            <TextBlock Text="{Binding Value}" TextWrapping="Wrap" FontFamily="Consolas"/>
+                                        </StackPanel>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+                        </StackPanel>
+
+                        <StackPanel Spacing="8">
+                            <TextBlock Text="Reference Chain"
+                                       Style="{StaticResource SubtitleTextBlockStyle}"/>
+                            <ItemsControl ItemsSource="{x:Bind ViewModel.ReferenceChainItems, Mode=OneWay}">
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate>
+                                        <Border Background="{ThemeResource LayerFillColorAltBrush}"
+                                                BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
+                                                BorderThickness="1"
+                                                CornerRadius="6"
+                                                Padding="10"
+                                                Margin="0,0,0,8">
+                                            <StackPanel Spacing="4">
+                                                <TextBlock Text="{Binding Label}" Opacity="0.65" FontSize="12"/>
+                                                <TextBlock Text="{Binding Value}" TextWrapping="Wrap" FontFamily="Consolas"/>
+                                            </StackPanel>
+                                        </Border>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+                        </StackPanel>
+                    </StackPanel>
+                </ScrollViewer>
+            </Border>
+
+            <Grid Grid.Column="1">
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="*"/>
+                </Grid.RowDefinitions>
+
+                <!-- Error banner (Phase 4) -->
+                <InfoBar Grid.Row="0"
+                         IsOpen="{x:Bind ViewModel.HasLoadError, Mode=OneWay}"
+                         Severity="Error"
+                         Title="Load Error"
+                         Message="{x:Bind ViewModel.LoadErrorBanner, Mode=OneWay}"
+                         IsClosable="False"
+                         Margin="0,0,0,8">
+                    <InfoBar.ActionButton>
+                        <Button Content="Dismiss" Command="{x:Bind ViewModel.DismissLoadErrorCommand}"/>
+                    </InfoBar.ActionButton>
+                </InfoBar>
+
+                <Grid Grid.Row="1" Visibility="{x:Bind ViewModel.HasNoWorkspace, Converter={StaticResource BoolToVisConverter}, Mode=OneWay}">
+                    <StackPanel HorizontalAlignment="Center"
+                                VerticalAlignment="Center"
+                                Spacing="10">
+                        <FontIcon Glyph="&#xE8F1;" FontSize="48" HorizontalAlignment="Center"
+                                  Foreground="{ThemeResource TextFillColorTertiaryBrush}"/>
+                        <TextBlock Text="Open a materialbin or shaderbin to begin"
+                                   Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                                   HorizontalAlignment="Center"/>
+                    </StackPanel>
+                </Grid>
+
+                <Pivot Grid.Row="1"
+                       Visibility="{x:Bind ViewModel.HasWorkspace, Converter={StaticResource BoolToVisConverter}, Mode=OneWay}"
+                       SelectedIndex="{x:Bind ViewModel.SelectedTopLevelPivotIndex, Mode=TwoWay}">
+
+                    <!-- MATERIALBIN -->
+                    <PivotItem Header="Materialbin">
+                        <Pivot SelectedIndex="{x:Bind ViewModel.SelectedMaterialPivotIndex, Mode=TwoWay}">
+
+                            <!-- MATERIALBIN - OVERVIEW -->
+                            <PivotItem Header="Overview">
+                                <ScrollViewer VerticalScrollBarVisibility="Auto">
+                                    <StackPanel Spacing="16" Padding="0,0,0,8">
+                                        <StackPanel Orientation="Horizontal" Spacing="8" Margin="0,4,0,0">
+                                            <Border Background="{ThemeResource AccentFillColorSecondaryBrush}"
+                                                    CornerRadius="4"
+                                                    Padding="6,2"
+                                                    Visibility="{x:Bind ViewModel.HasMaterialDocument, Converter={StaticResource BoolToVisConverter}, Mode=OneWay}">
+                                                <StackPanel Orientation="Horizontal" Spacing="5">
+                                                    <FontIcon Glyph="&#xE73E;" FontSize="10" Foreground="{ThemeResource TextOnAccentFillColorPrimaryBrush}"/>
+                                                    <TextBlock Text="Material" FontSize="12" FontWeight="SemiBold"
+                                                               Foreground="{ThemeResource TextOnAccentFillColorPrimaryBrush}"/>
+                                                </StackPanel>
+                                            </Border>
+                                        </StackPanel>
+                                        <TextBlock Text="{x:Bind ViewModel.StatusMessage, Mode=OneWay}"
+                                                   TextWrapping="Wrap"
+                                                   FontSize="13"
+                                                   Opacity="0.8"/>
+                                        <Border Background="{ThemeResource LayerFillColorDefaultBrush}"
+                                                BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
+                                                BorderThickness="1"
+                                                CornerRadius="8"
+                                                Padding="14">
+                                            <StackPanel Spacing="8">
+                                                <TextBlock Text="Material" Style="{StaticResource SubtitleTextBlockStyle}"/>
+                                                <ItemsControl ItemsSource="{x:Bind ViewModel.MaterialSummaryItems, Mode=OneWay}">
+                                                    <ItemsControl.ItemTemplate>
+                                                        <DataTemplate>
+                                                            <Grid Margin="0,0,0,6">
+                                                                <Grid.ColumnDefinitions>
+                                                                    <ColumnDefinition Width="110"/>
+                                                                    <ColumnDefinition Width="*"/>
+                                                                </Grid.ColumnDefinitions>
+                                                                <TextBlock Text="{Binding Label}" Opacity="0.65" FontSize="12"/>
+                                                                <TextBlock Grid.Column="1" Text="{Binding Value}" TextWrapping="Wrap" FontFamily="Consolas" FontSize="12"/>
+                                                            </Grid>
+                                                        </DataTemplate>
+                                                    </ItemsControl.ItemTemplate>
+                                                </ItemsControl>
+                                            </StackPanel>
+                                        </Border>
+                                        <Border Background="{ThemeResource LayerFillColorDefaultBrush}"
+                                                BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
+                                                BorderThickness="1"
+                                                CornerRadius="8"
+                                                Padding="14">
+                                            <ItemsControl ItemsSource="{x:Bind ViewModel.MaterialDefinitionItems, Mode=OneWay}">
+                                                <ItemsControl.ItemTemplate>
+                                                    <DataTemplate>
+                                                        <Grid Margin="0,0,0,8">
+                                                            <Grid.ColumnDefinitions>
+                                                                <ColumnDefinition Width="190"/>
+                                                                <ColumnDefinition Width="*"/>
+                                                            </Grid.ColumnDefinitions>
+                                                            <TextBlock Text="{Binding Label}" Opacity="0.65"/>
+                                                            <TextBlock Grid.Column="1" Text="{Binding Value}" TextWrapping="Wrap" FontFamily="Consolas"/>
+                                                        </Grid>
+                                                    </DataTemplate>
+                                                </ItemsControl.ItemTemplate>
+                                            </ItemsControl>
+                                        </Border>
+                                        <Border Background="{ThemeResource LayerFillColorDefaultBrush}"
+                                                BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
+                                                BorderThickness="1"
+                                                CornerRadius="8"
+                                                Padding="14">
+                                            <StackPanel Spacing="10">
+                                                <TextBlock Text="Override Comparison"
+                                                           Style="{StaticResource SubtitleTextBlockStyle}"/>
+                                                <TextBlock Text="Load the linked shaderbin to compare explicit material overrides against inherited shader defaults."
+                                                           TextWrapping="Wrap"
+                                                           Opacity="0.75"
+                                                           Visibility="{x:Bind ViewModel.HasShaderDocument, Converter={StaticResource InverseVisibilityConverter}, Mode=OneWay}"/>
+                                                <ItemsControl ItemsSource="{x:Bind ViewModel.MaterialParameterComparisonItems, Mode=OneWay}"
+                                                              Visibility="{x:Bind ViewModel.HasShaderDocument, Converter={StaticResource BoolToVisConverter}, Mode=OneWay}">
+                                                    <ItemsControl.ItemTemplate>
+                                                        <DataTemplate x:DataType="vm:MaterialShaderParameterComparisonItem">
+                                                            <Border Background="{ThemeResource LayerFillColorAltBrush}"
+                                                                    BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
+                                                                    BorderThickness="1"
+                                                                    CornerRadius="6"
+                                                                    Padding="12"
+                                                                    Margin="0,0,0,10">
+                                                                <StackPanel Spacing="8">
+                                                                    <Grid ColumnSpacing="10">
+                                                                        <Grid.ColumnDefinitions>
+                                                                            <ColumnDefinition Width="*"/>
+                                                                            <ColumnDefinition Width="Auto"/>
+                                                                        </Grid.ColumnDefinitions>
+                                                                        <StackPanel Spacing="2">
+                                                                            <TextBlock Text="{x:Bind Name}" FontWeight="SemiBold" TextWrapping="Wrap"/>
+                                                                            <TextBlock Text="{x:Bind TypeText}" Opacity="0.7" FontSize="12"/>
+                                                                        </StackPanel>
+                                                                        <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="6" VerticalAlignment="Top">
+                                                                            <Border Background="{ThemeResource AccentFillColorSecondaryBrush}"
+                                                                                    CornerRadius="4" Padding="6,2"
+                                                                                    Visibility="{x:Bind IsExplicitOverride, Converter={StaticResource BoolToVisConverter}, Mode=OneTime}">
+                                                                                <TextBlock Text="Override" Foreground="{ThemeResource TextOnAccentFillColorPrimaryBrush}" FontSize="12" FontWeight="SemiBold"/>
+                                                                            </Border>
+                                                                            <TextBlock Text="Inherited" FontSize="12" Opacity="0.55" VerticalAlignment="Center"
+                                                                                       Visibility="{x:Bind IsExplicitOverride, Converter={StaticResource InverseVisibilityConverter}, Mode=OneTime}"/>
+                                                                        </StackPanel>
+                                                                    </Grid>
+                                                                    <Grid ColumnSpacing="12">
+                                                                        <Grid.ColumnDefinitions>
+                                                                            <ColumnDefinition Width="170"/>
+                                                                            <ColumnDefinition Width="*"/>
+                                                                            <ColumnDefinition Width="140"/>
+                                                                            <ColumnDefinition Width="*"/>
+                                                                        </Grid.ColumnDefinitions>
+                                                                        <TextBlock Text="Hash" Opacity="0.65" FontSize="12"/>
+                                                                        <TextBlock Grid.Column="1" Text="{x:Bind NameHashText}" FontFamily="Consolas" FontSize="12" TextWrapping="Wrap"/>
+                                                                        <TextBlock Grid.Column="2" Text="Version" Opacity="0.65" FontSize="12"/>
+                                                                        <TextBlock Grid.Column="3" Text="{x:Bind VersionText}" FontFamily="Consolas" FontSize="12" TextWrapping="Wrap"/>
+                                                                    </Grid>
+                                                                    <Grid ColumnSpacing="12">
+                                                                        <Grid.ColumnDefinitions>
+                                                                            <ColumnDefinition Width="170"/>
+                                                                            <ColumnDefinition Width="*"/>
+                                                                            <ColumnDefinition Width="140"/>
+                                                                            <ColumnDefinition Width="*"/>
+                                                                        </Grid.ColumnDefinitions>
+                                                                        <TextBlock Text="GUID" Opacity="0.65" FontSize="12"/>
+                                                                        <TextBlock Grid.Column="1" Text="{x:Bind GuidText}" FontFamily="Consolas" FontSize="12" TextWrapping="Wrap"/>
+                                                                        <TextBlock Grid.Column="2" Text="Extra v3.1" Opacity="0.65" FontSize="12"/>
+                                                                        <TextBlock Grid.Column="3" Text="{x:Bind ExtraValueText}" FontFamily="Consolas" FontSize="12" TextWrapping="Wrap"/>
+                                                                    </Grid>
+                                                                    <Grid ColumnSpacing="12">
+                                                                        <Grid.ColumnDefinitions>
+                                                                            <ColumnDefinition Width="170"/>
+                                                                            <ColumnDefinition Width="*"/>
+                                                                        </Grid.ColumnDefinitions>
+                                                                        <TextBlock Text="Shader Default" Opacity="0.65" FontSize="12"/>
+                                                                        <TextBlock Grid.Column="1" Text="{x:Bind DefaultValueText}" FontFamily="Consolas" FontSize="12" TextWrapping="Wrap"/>
+                                                                    </Grid>
+                                                                    <Grid ColumnSpacing="12">
+                                                                        <Grid.ColumnDefinitions>
+                                                                            <ColumnDefinition Width="170"/>
+                                                                            <ColumnDefinition Width="*"/>
+                                                                        </Grid.ColumnDefinitions>
+                                                                        <TextBlock Text="Material Effective" Opacity="0.65" FontSize="12"/>
+                                                                        <TextBlock Grid.Column="1" Text="{x:Bind EffectiveValueText}" FontFamily="Consolas" FontSize="12" TextWrapping="Wrap"/>
+                                                                    </Grid>
+                                                                </StackPanel>
+                                                            </Border>
+                                                        </DataTemplate>
+                                                    </ItemsControl.ItemTemplate>
+                                                </ItemsControl>
+                                            </StackPanel>
+                                        </Border>
+                                    </StackPanel>
+                                </ScrollViewer>
+                            </PivotItem>
+
+                            <!-- MATERIALBIN - PARAMETERS -->
+                            <PivotItem Header="Parameters">
+                                <ScrollViewer VerticalScrollBarVisibility="Auto">
+                                    <StackPanel Spacing="14">
+                                        <Grid>
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="*"/>
+                                                <ColumnDefinition Width="Auto"/>
+                                            </Grid.ColumnDefinitions>
+                                            <TextBlock Text="{x:Bind ViewModel.MaterialEditorStateText, Mode=OneWay}"
+                                                       TextWrapping="Wrap" Opacity="0.75" VerticalAlignment="Center"/>
+                                            <Button Grid.Column="1"
+                                                    Command="{x:Bind ViewModel.AddMaterialParameterCommand}"
+                                                    IsEnabled="{x:Bind ViewModel.HasMaterialDocument, Mode=OneWay}"
+                                                    Style="{StaticResource GhostAccentButtonStyle}">
+                                                <StackPanel Orientation="Horizontal" Spacing="6">
+                                                    <FontIcon Glyph="&#xE710;" FontSize="13"/>
+                                                    <TextBlock Text="Add Parameter"/>
+                                                </StackPanel>
+                                            </Button>
+                                        </Grid>
+                                        <controls:MaterialParameterEditorView x:Name="MaterialEditorControl"
+                                                                              ParametersSource="{x:Bind ViewModel.MaterialParameters, Mode=OneWay}"
+                                                                              IsEnabled="{x:Bind ViewModel.HasMaterialDocument, Mode=OneWay}"
+                                                                              RemoveParameterCommand="{x:Bind ViewModel.RemoveMaterialParameterCommand}"/>
+                                    </StackPanel>
+                                </ScrollViewer>
+                            </PivotItem>
+
+                            <!-- MATERIALBIN - TEXTURES -->
+                            <PivotItem Header="Textures">
+                                <Grid>
+                                    <TextBlock Text="No texture references are available for the current workspace yet."
+                                               HorizontalAlignment="Center"
+                                               VerticalAlignment="Center"
+                                               Opacity="0.6"
+                                               Visibility="{x:Bind ViewModel.HasTextureReferences, Converter={StaticResource InverseVisibilityConverter}, Mode=OneWay}"/>
+                                    <ListView ItemsSource="{x:Bind ViewModel.TextureItems, Mode=OneWay}"
+                                              SelectedItem="{x:Bind ViewModel.SelectedTextureItem, Mode=TwoWay}"
+                                              Visibility="{x:Bind ViewModel.HasTextureReferences, Converter={StaticResource BoolToVisConverter}, Mode=OneWay}">
+                                        <ListView.ItemTemplate>
+                                            <DataTemplate x:DataType="services:MaterialShaderTextureReference">
+                                                <Border Background="{ThemeResource LayerFillColorDefaultBrush}"
+                                                        BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
+                                                        BorderThickness="1"
+                                                        CornerRadius="8"
+                                                        Margin="0,0,0,10">
+                                                    <StackPanel>
+                                                        <Border Background="{ThemeResource SystemFillColorCautionBackgroundBrush}"
+                                                                CornerRadius="7,7,0,0"
+                                                                Padding="10,5"
+                                                                Visibility="{x:Bind IsResolved, Converter={StaticResource InverseVisibilityConverter}}">
+                                                            <StackPanel Orientation="Horizontal" Spacing="6">
+                                                                <FontIcon Glyph="&#xE7BA;" FontSize="12"
+                                                                          Foreground="{ThemeResource SystemFillColorCautionBrush}"/>
+                                                                <TextBlock Text="Texture not resolved"
+                                                                           FontSize="12"
+                                                                           Foreground="{ThemeResource SystemFillColorCautionBrush}"/>
+                                                            </StackPanel>
+                                                        </Border>
+                                                        <StackPanel Spacing="8" Padding="12">
+                                                            <Grid ColumnSpacing="10">
+                                                                <Grid.ColumnDefinitions>
+                                                                    <ColumnDefinition Width="*"/>
+                                                                    <ColumnDefinition Width="Auto"/>
+                                                                </Grid.ColumnDefinitions>
+                                                                <StackPanel Spacing="2">
+                                                                    <TextBlock Text="{x:Bind ParameterName}" FontWeight="SemiBold"/>
+                                                                    <TextBlock Text="{x:Bind NameHashText}" FontFamily="Consolas" FontSize="12" Opacity="0.7"/>
+                                                                </StackPanel>
+                                                                <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="6" VerticalAlignment="Top">
+                                                                    <Border Background="{ThemeResource AccentFillColorSecondaryBrush}"
+                                                                            CornerRadius="4"
+                                                                            Padding="6,2"
+                                                                            Visibility="{x:Bind IsExplicitOverride, Converter={StaticResource BoolToVisConverter}, Mode=OneWay}">
+                                                                        <TextBlock Text="Override"
+                                                                                   Foreground="{ThemeResource TextOnAccentFillColorPrimaryBrush}"
+                                                                                   FontSize="12" FontWeight="SemiBold"/>
+                                                                    </Border>
+                                                                    <TextBlock Text="Inherited"
+                                                                               FontSize="12"
+                                                                               Opacity="0.55"
+                                                                               VerticalAlignment="Center"
+                                                                               Visibility="{x:Bind IsExplicitOverride, Converter={StaticResource InverseVisibilityConverter}, Mode=OneWay}"/>
+                                                                </StackPanel>
+                                                            </Grid>
+                                                            <TextBlock Text="{x:Bind SourceState}" Opacity="0.7" FontSize="12"/>
+                                                            <Border Height="112"
+                                                                    Background="{ThemeResource LayerFillColorAltBrush}"
+                                                                    BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
+                                                                    BorderThickness="1"
+                                                                    CornerRadius="6">
+                                                                <Grid>
+                                                                    <Image Source="{x:Bind PreviewImage, Mode=OneWay}"
+                                                                           Stretch="Uniform"
+                                                                           Visibility="{x:Bind HasPreviewImage, Converter={StaticResource BoolToVisConverter}, Mode=OneWay}"/>
+                                                                    <ProgressRing Width="28" Height="28"
+                                                                                  IsActive="{x:Bind IsPreviewLoading, Mode=OneWay}"
+                                                                                  Visibility="{x:Bind IsPreviewLoading, Converter={StaticResource BoolToVisConverter}, Mode=OneWay}"
+                                                                                  HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                                                    <TextBlock Text="{x:Bind PreviewStateText, Mode=OneWay}"
+                                                                               TextWrapping="Wrap"
+                                                                               HorizontalAlignment="Center" VerticalAlignment="Center"
+                                                                               TextAlignment="Center"
+                                                                               Opacity="0.65" Margin="12"
+                                                                               Visibility="{x:Bind ShowPreviewPlaceholder, Converter={StaticResource BoolToVisConverter}, Mode=OneWay}"/>
+                                                                </Grid>
+                                                            </Border>
+                                                            <Grid ColumnSpacing="12">
+                                                                <Grid.ColumnDefinitions>
+                                                                    <ColumnDefinition Width="130"/>
+                                                                    <ColumnDefinition Width="*"/>
+                                                                </Grid.ColumnDefinitions>
+                                                                <TextBlock Text="Path" Opacity="0.65" FontSize="12"/>
+                                                                <TextBlock Grid.Column="1" Text="{x:Bind TexturePath}" TextWrapping="Wrap" FontFamily="Consolas" FontSize="12"/>
+                                                            </Grid>
+                                                            <Grid ColumnSpacing="12">
+                                                                <Grid.ColumnDefinitions>
+                                                                    <ColumnDefinition Width="130"/>
+                                                                    <ColumnDefinition Width="*"/>
+                                                                    <ColumnDefinition Width="80"/>
+                                                                    <ColumnDefinition Width="*"/>
+                                                                </Grid.ColumnDefinitions>
+                                                                <TextBlock Text="Path Hash" Opacity="0.65" FontSize="12"/>
+                                                                <TextBlock Grid.Column="1" Text="{x:Bind PathHashText}" FontFamily="Consolas" FontSize="12"/>
+                                                                <TextBlock Grid.Column="2" Text="Source" Opacity="0.65" FontSize="12"/>
+                                                                <TextBlock Grid.Column="3" Text="{x:Bind ResolvedSource}" FontSize="12" TextWrapping="Wrap" Opacity="0.8"/>
+                                                            </Grid>
+                                                            <StackPanel Spacing="6"
+                                                                        Visibility="{x:Bind IsExplicitOverride, Converter={StaticResource BoolToVisConverter}, Mode=OneWay}">
+                                                                <Grid ColumnSpacing="12">
+                                                                    <Grid.ColumnDefinitions>
+                                                                        <ColumnDefinition Width="130"/>
+                                                                        <ColumnDefinition Width="*"/>
+                                                                    </Grid.ColumnDefinitions>
+                                                                    <TextBlock Text="Default Path" Opacity="0.65" FontSize="12"/>
+                                                                    <TextBlock Grid.Column="1" Text="{x:Bind DefaultTexturePath}" TextWrapping="Wrap" FontFamily="Consolas" FontSize="12"/>
+                                                                </Grid>
+                                                                <Grid ColumnSpacing="12">
+                                                                    <Grid.ColumnDefinitions>
+                                                                        <ColumnDefinition Width="130"/>
+                                                                        <ColumnDefinition Width="*"/>
+                                                                    </Grid.ColumnDefinitions>
+                                                                    <TextBlock Text="Default Source" Opacity="0.65" FontSize="12"/>
+                                                                    <TextBlock Grid.Column="1" Text="{x:Bind DefaultResolvedSource}" TextWrapping="Wrap" FontSize="12" Opacity="0.8"/>
+                                                                </Grid>
+                                                            </StackPanel>
+                                                            <Grid ColumnSpacing="12">
+                                                                <Grid.ColumnDefinitions>
+                                                                    <ColumnDefinition Width="130"/>
+                                                                    <ColumnDefinition Width="*"/>
+                                                                    <ColumnDefinition Width="80"/>
+                                                                    <ColumnDefinition Width="*"/>
+                                                                </Grid.ColumnDefinitions>
+                                                                <TextBlock Text="Size" Opacity="0.65" FontSize="12"/>
+                                                                <TextBlock Grid.Column="1" Text="{x:Bind SizeText}" FontSize="12"/>
+                                                                <TextBlock Grid.Column="2" Text="Mip Lvls" Opacity="0.65" FontSize="12"/>
+                                                                <TextBlock Grid.Column="3" Text="{x:Bind MipLevelsText}" FontSize="12"/>
+                                                            </Grid>
+                                                            <Grid ColumnSpacing="12">
+                                                                <Grid.ColumnDefinitions>
+                                                                    <ColumnDefinition Width="130"/>
+                                                                    <ColumnDefinition Width="*"/>
+                                                                    <ColumnDefinition Width="80"/>
+                                                                    <ColumnDefinition Width="*"/>
+                                                                </Grid.ColumnDefinitions>
+                                                                <TextBlock Text="DXGI Format" Opacity="0.65" FontSize="12"/>
+                                                                <TextBlock Grid.Column="1" Text="{x:Bind FormatText}" FontSize="12" TextWrapping="Wrap"/>
+                                                                <TextBlock Grid.Column="2" Text="Platform" Opacity="0.65" FontSize="12"/>
+                                                                <TextBlock Grid.Column="3" Text="{x:Bind PlatformText}" FontSize="12"/>
+                                                            </Grid>
+                                                            <Border Height="1" Background="{ThemeResource DividerStrokeColorDefaultBrush}" Margin="0,2"/>
+                                                            <StackPanel Orientation="Horizontal" Spacing="8">
+                                                                <Button Content="Open Effective Swatch"
+                                                                        Click="OpenTextureInSwatchbinViewer_Click"
+                                                                        Tag="{x:Bind ResolvedSource, Mode=OneWay}"
+                                                                        IsEnabled="{x:Bind CanOpenResolvedSource, Mode=OneWay}"/>
+                                                                <Button Content="Open Shader Default"
+                                                                        Click="OpenTextureInSwatchbinViewer_Click"
+                                                                        Tag="{x:Bind DefaultResolvedSource, Mode=OneWay}"
+                                                                        IsEnabled="{x:Bind CanOpenDefaultResolvedSource, Mode=OneWay}"
+                                                                        Visibility="{x:Bind IsExplicitOverride, Converter={StaticResource BoolToVisConverter}, Mode=OneWay}"/>
+                                                            </StackPanel>
+                                                        </StackPanel>
+                                                    </StackPanel>
+                                                </Border>
+                                            </DataTemplate>
+                                        </ListView.ItemTemplate>
+                                    </ListView>
+                                </Grid>
+                            </PivotItem>
+
+                        </Pivot>
+                    </PivotItem>
+
+                    <!-- SHADERBIN -->
+                    <PivotItem Header="Shaderbin">
+                        <Pivot SelectedIndex="{x:Bind ViewModel.SelectedShaderPivotIndex, Mode=TwoWay}">
+
+                            <!-- SHADERBIN - OVERVIEW -->
+                            <PivotItem Header="Overview">
+                                <ScrollViewer VerticalScrollBarVisibility="Auto">
+                                    <StackPanel Spacing="16" Padding="0,0,0,8">
+                                        <StackPanel Orientation="Horizontal" Spacing="8" Margin="0,4,0,0">
+                                            <Border Background="{ThemeResource AccentFillColorSecondaryBrush}"
+                                                    CornerRadius="4"
+                                                    Padding="6,2"
+                                                    Visibility="{x:Bind ViewModel.HasShaderDocument, Converter={StaticResource BoolToVisConverter}, Mode=OneWay}">
+                                                <StackPanel Orientation="Horizontal" Spacing="5">
+                                                    <FontIcon Glyph="&#xE73E;" FontSize="10" Foreground="{ThemeResource TextOnAccentFillColorPrimaryBrush}"/>
+                                                    <TextBlock Text="Shader" FontSize="12" FontWeight="SemiBold"
+                                                               Foreground="{ThemeResource TextOnAccentFillColorPrimaryBrush}"/>
+                                                </StackPanel>
+                                            </Border>
+                                        </StackPanel>
+                                        <TextBlock Text="{x:Bind ViewModel.StatusMessage, Mode=OneWay}"
+                                                   TextWrapping="Wrap"
+                                                   FontSize="13"
+                                                   Opacity="0.8"/>
+                                        <Border Background="{ThemeResource LayerFillColorDefaultBrush}"
+                                                BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
+                                                BorderThickness="1"
+                                                CornerRadius="8"
+                                                Padding="14">
+                                            <StackPanel Spacing="8">
+                                                <TextBlock Text="Shader" Style="{StaticResource SubtitleTextBlockStyle}"/>
+                                                <ItemsControl ItemsSource="{x:Bind ViewModel.ShaderSummaryItems, Mode=OneWay}">
+                                                    <ItemsControl.ItemTemplate>
+                                                        <DataTemplate>
+                                                            <Grid Margin="0,0,0,6">
+                                                                <Grid.ColumnDefinitions>
+                                                                    <ColumnDefinition Width="110"/>
+                                                                    <ColumnDefinition Width="*"/>
+                                                                </Grid.ColumnDefinitions>
+                                                                <TextBlock Text="{Binding Label}" Opacity="0.65" FontSize="12"/>
+                                                                <TextBlock Grid.Column="1" Text="{Binding Value}" TextWrapping="Wrap" FontFamily="Consolas" FontSize="12"/>
+                                                            </Grid>
+                                                        </DataTemplate>
+                                                    </ItemsControl.ItemTemplate>
+                                                </ItemsControl>
+                                            </StackPanel>
+                                        </Border>
+                                        <Border Background="{ThemeResource LayerFillColorDefaultBrush}"
+                                                BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
+                                                BorderThickness="1"
+                                                CornerRadius="8"
+                                                Padding="14">
+                                            <ItemsControl ItemsSource="{x:Bind ViewModel.ShaderIdentityItems, Mode=OneWay}">
+                                                <ItemsControl.ItemTemplate>
+                                                    <DataTemplate>
+                                                        <Grid Margin="0,0,0,8">
+                                                            <Grid.ColumnDefinitions>
+                                                                <ColumnDefinition Width="170"/>
+                                                                <ColumnDefinition Width="*"/>
+                                                            </Grid.ColumnDefinitions>
+                                                            <TextBlock Text="{Binding Label}" Opacity="0.65"/>
+                                                            <TextBlock Grid.Column="1" Text="{Binding Value}" TextWrapping="Wrap" FontFamily="Consolas"/>
+                                                        </Grid>
+                                                    </DataTemplate>
+                                                </ItemsControl.ItemTemplate>
+                                            </ItemsControl>
+                                        </Border>
+                                    </StackPanel>
+                                </ScrollViewer>
+                            </PivotItem>
+
+                            <!-- SHADERBIN - PARAMETERS -->
+                            <PivotItem Header="Parameters">
+                                <ScrollViewer VerticalScrollBarVisibility="Auto">
+                                    <StackPanel Spacing="14">
+                                        <TextBlock Text="{x:Bind ViewModel.ShaderEditorStateText, Mode=OneWay}"
+                                                   TextWrapping="Wrap" Opacity="0.75"/>
+                                        <controls:MaterialParameterEditorView ParametersSource="{x:Bind ViewModel.ShaderParameters, Mode=OneWay}"
+                                                                              IsEnabled="False"/>
+                                    </StackPanel>
+                                </ScrollViewer>
+                            </PivotItem>
+
+                            <!-- SHADERBIN - SCENARIOS -->
+                            <PivotItem Header="Scenarios">
+                                <ListView ItemsSource="{x:Bind ViewModel.ScenarioItems, Mode=OneWay}"
+                                          SelectedItem="{x:Bind ViewModel.SelectedScenarioItem, Mode=TwoWay}">
+                                    <ListView.ItemTemplate>
+                                        <DataTemplate x:DataType="services:MaterialShaderScenarioItem">
+                                            <Border Background="{ThemeResource LayerFillColorDefaultBrush}"
+                                                    BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
+                                                    BorderThickness="1"
+                                                    CornerRadius="8"
+                                                    Padding="12"
+                                                    Margin="0,0,0,10">
+                                                <StackPanel Spacing="6">
+                                                    <!-- Row 1: name + inline/version badges -->
+                                                    <Grid ColumnSpacing="10">
+                                                        <Grid.ColumnDefinitions>
+                                                            <ColumnDefinition Width="*"/>
+                                                            <ColumnDefinition Width="Auto"/>
+                                                        </Grid.ColumnDefinitions>
+                                                        <TextBlock Text="{x:Bind Name}" FontWeight="SemiBold" VerticalAlignment="Center"/>
+                                                        <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="10" VerticalAlignment="Center">
+                                                            <TextBlock Text="{x:Bind InlineState}" FontSize="11" Opacity="0.65"/>
+                                                            <TextBlock Text="{x:Bind VersionText}" FontSize="11" Opacity="0.5"/>
+                                                        </StackPanel>
+                                                    </Grid>
+                                                    <!-- Row 2: blend flags + anim count chips -->
+                                                    <StackPanel Orientation="Horizontal" Spacing="6">
+                                                        <!-- BlendFlagsText chip -->
+                                                        <Border Background="{ThemeResource LayerFillColorAltBrush}"
+                                                                BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
+                                                                BorderThickness="1"
+                                                                CornerRadius="4"
+                                                                Padding="6,2"
+                                                                Visibility="{x:Bind BlendFlagsText, Converter={StaticResource StringToVisConverter}, Mode=OneTime}">
+                                                            <TextBlock Text="{x:Bind BlendFlagsText}" FontSize="11" Opacity="0.8"/>
+                                                        </Border>
+                                                        <!-- AnimCount chip -->
+                                                        <Border Background="{ThemeResource LayerFillColorAltBrush}"
+                                                                BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
+                                                                BorderThickness="1"
+                                                                CornerRadius="4"
+                                                                Padding="6,2"
+                                                                Visibility="{x:Bind AnimCountText, Converter={StaticResource StringToVisConverter}, Mode=OneTime}">
+                                                            <StackPanel Orientation="Horizontal" Spacing="4">
+                                                                <FontIcon Glyph="&#xE916;" FontSize="10" Opacity="0.7"/>
+                                                                <TextBlock Text="{x:Bind AnimCountText}" FontSize="11" Opacity="0.8"/>
+                                                            </StackPanel>
+                                                        </Border>
+                                                    </StackPanel>
+                                                    <!-- Row 3: hash + VDCL raw flags -->
+                                                    <Grid ColumnSpacing="12">
+                                                        <Grid.ColumnDefinitions>
+                                                            <ColumnDefinition Width="120"/>
+                                                            <ColumnDefinition Width="*"/>
+                                                            <ColumnDefinition Width="80"/>
+                                                            <ColumnDefinition Width="*"/>
+                                                        </Grid.ColumnDefinitions>
+                                                        <TextBlock Text="Hash" Opacity="0.65" FontSize="12"/>
+                                                        <TextBlock Grid.Column="1" Text="{x:Bind ScenarioHashText}" FontFamily="Consolas" FontSize="12"/>
+                                                        <TextBlock Grid.Column="2" Text="VDCL Flags" Opacity="0.65" FontSize="12"/>
+                                                        <TextBlock Grid.Column="3" Text="{x:Bind VertexInputFlags}" FontFamily="Consolas" FontSize="12" TextWrapping="Wrap"/>
+                                                    </Grid>
+                                                    <!-- Row 3b: decoded vertex semantics -->
+                                                    <Grid ColumnSpacing="12"
+                                                          Visibility="{x:Bind VertexInputFlagsDecoded, Converter={StaticResource StringToVisConverter}, Mode=OneTime}">
+                                                        <Grid.ColumnDefinitions>
+                                                            <ColumnDefinition Width="120"/>
+                                                            <ColumnDefinition Width="*"/>
+                                                        </Grid.ColumnDefinitions>
+                                                        <TextBlock Text="Semantics" Opacity="0.65" FontSize="12"/>
+                                                        <TextBlock Grid.Column="1" Text="{x:Bind VertexInputFlagsDecoded}" FontSize="12" TextWrapping="Wrap" Opacity="0.9"/>
+                                                    </Grid>
+                                                    <!-- Row 4: shader stages -->
+                                                    <Grid ColumnSpacing="12">
+                                                        <Grid.ColumnDefinitions>
+                                                            <ColumnDefinition Width="120"/>
+                                                            <ColumnDefinition Width="*"/>
+                                                        </Grid.ColumnDefinitions>
+                                                        <TextBlock Text="Shader Stages" Opacity="0.65" FontSize="12"/>
+                                                        <TextBlock Grid.Column="1" Text="{x:Bind StageBitsText}" FontSize="12"/>
+                                                    </Grid>
+                                                    <!-- Row 5: vertex shaders -->
+                                                    <Grid ColumnSpacing="12">
+                                                        <Grid.ColumnDefinitions>
+                                                            <ColumnDefinition Width="120"/>
+                                                            <ColumnDefinition Width="*"/>
+                                                        </Grid.ColumnDefinitions>
+                                                        <TextBlock Text="Vertex Shaders" Opacity="0.65" FontSize="12"/>
+                                                        <TextBlock Grid.Column="1" Text="{x:Bind VertexShaderPaths}" FontFamily="Consolas" FontSize="12" TextWrapping="Wrap"/>
+                                                    </Grid>
+                                                    <!-- Row 6: geometry / pixel shader -->
+                                                    <Grid ColumnSpacing="12">
+                                                        <Grid.ColumnDefinitions>
+                                                            <ColumnDefinition Width="120"/>
+                                                            <ColumnDefinition Width="*"/>
+                                                        </Grid.ColumnDefinitions>
+                                                        <TextBlock Text="Geometry / PS" Opacity="0.65" FontSize="12"/>
+                                                        <TextBlock Grid.Column="1" Text="{x:Bind GeometryPixelShader}" FontFamily="Consolas" FontSize="12" TextWrapping="Wrap"/>
+                                                    </Grid>
+                                                </StackPanel>
+                                            </Border>
+                                        </DataTemplate>
+                                    </ListView.ItemTemplate>
+                                </ListView>
+                            </PivotItem>
+
+                            <!-- SHADERBIN - MAPPINGS -->
+                            <PivotItem Header="Mappings">
+                                <ScrollViewer VerticalScrollBarVisibility="Auto">
+                                    <StackPanel Spacing="16" Padding="0,4,0,8">
+                                        <Border Background="{ThemeResource LayerFillColorDefaultBrush}"
+                                                BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
+                                                BorderThickness="1" CornerRadius="8" Padding="14">
+                                            <StackPanel Spacing="8">
+                                                <TextBlock Text="Constant Buffer" Style="{StaticResource SubtitleTextBlockStyle}"/>
+                                                <TextBlock Text="No constant buffer mappings."
+                                                           Opacity="0.6" FontSize="12"
+                                                           Visibility="{x:Bind ViewModel.HasConstantBufferMappings, Converter={StaticResource InverseVisibilityConverter}, Mode=OneWay}"/>
+                                                <!-- Column headers (only when entries exist) -->
+                                                <Grid Margin="0,4,0,0" ColumnSpacing="12"
+                                                      Visibility="{x:Bind ViewModel.HasConstantBufferMappings, Converter={StaticResource BoolToVisConverter}, Mode=OneWay}">
+                                                    <Grid.ColumnDefinitions>
+                                                        <ColumnDefinition Width="*"/>
+                                                        <ColumnDefinition Width="160"/>
+                                                        <ColumnDefinition Width="60"/>
+                                                        <ColumnDefinition Width="80"/>
+                                                    </Grid.ColumnDefinitions>
+                                                    <TextBlock Text="Name" Opacity="0.5" FontSize="11"/>
+                                                    <TextBlock Grid.Column="1" Text="Hash" Opacity="0.5" FontSize="11"/>
+                                                    <TextBlock Grid.Column="2" Text="Slot" Opacity="0.5" FontSize="11" HorizontalAlignment="Right"/>
+                                                    <TextBlock Grid.Column="3" Text="Byte Offset" Opacity="0.5" FontSize="11" HorizontalAlignment="Right"/>
+                                                </Grid>
+                                                <Border Height="1" Background="{ThemeResource DividerStrokeColorDefaultBrush}"
+                                                        Visibility="{x:Bind ViewModel.HasConstantBufferMappings, Converter={StaticResource BoolToVisConverter}, Mode=OneWay}"/>
+                                                <ItemsControl ItemsSource="{x:Bind ViewModel.ConstantBufferMappings, Mode=OneWay}">
+                                                    <ItemsControl.ItemTemplate>
+                                                        <DataTemplate x:DataType="services:MaterialShaderMappingItem">
+                                                            <Grid Margin="0,4" ColumnSpacing="12">
+                                                                <Grid.ColumnDefinitions>
+                                                                    <ColumnDefinition Width="*"/>
+                                                                    <ColumnDefinition Width="160"/>
+                                                                    <ColumnDefinition Width="60"/>
+                                                                    <ColumnDefinition Width="80"/>
+                                                                </Grid.ColumnDefinitions>
+                                                                <TextBlock Text="{x:Bind Name}" TextWrapping="Wrap" FontSize="12"/>
+                                                                <TextBlock Grid.Column="1" Text="{x:Bind NameHashText}" FontFamily="Consolas" FontSize="12" Opacity="0.7"/>
+                                                                <TextBlock Grid.Column="2" Text="{x:Bind SlotText}" FontFamily="Consolas" FontSize="12" HorizontalAlignment="Right" Opacity="0.7"/>
+                                                                <TextBlock Grid.Column="3" Text="{x:Bind ByteOffsetText}" FontFamily="Consolas" FontSize="12" HorizontalAlignment="Right" Opacity="0.7"/>
+                                                            </Grid>
+                                                        </DataTemplate>
+                                                    </ItemsControl.ItemTemplate>
+                                                </ItemsControl>
+                                            </StackPanel>
+                                        </Border>
+                                        <Border Background="{ThemeResource LayerFillColorDefaultBrush}"
+                                                BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
+                                                BorderThickness="1" CornerRadius="8" Padding="14">
+                                            <StackPanel Spacing="8">
+                                                <TextBlock Text="Textures" Style="{StaticResource SubtitleTextBlockStyle}"/>
+                                                <TextBlock Text="No texture mappings."
+                                                           Opacity="0.6" FontSize="12"
+                                                           Visibility="{x:Bind ViewModel.HasTextureMappings, Converter={StaticResource InverseVisibilityConverter}, Mode=OneWay}"/>
+                                                <ItemsControl ItemsSource="{x:Bind ViewModel.TextureMappings, Mode=OneWay}">
+                                                    <ItemsControl.ItemTemplate>
+                                                        <DataTemplate x:DataType="services:MaterialShaderMappingItem">
+                                                            <Grid Margin="0,4" ColumnSpacing="12">
+                                                                <Grid.ColumnDefinitions>
+                                                                    <ColumnDefinition Width="*"/>
+                                                                    <ColumnDefinition Width="160"/>
+                                                                    <ColumnDefinition Width="80"/>
+                                                                </Grid.ColumnDefinitions>
+                                                                <TextBlock Text="{x:Bind Name}" TextWrapping="Wrap" FontSize="12"/>
+                                                                <TextBlock Grid.Column="1" Text="{x:Bind NameHashText}" FontFamily="Consolas" FontSize="12" Opacity="0.7"/>
+                                                                <TextBlock Grid.Column="2" Text="{x:Bind SlotText}" FontFamily="Consolas" FontSize="12" HorizontalAlignment="Right" Opacity="0.7"/>
+                                                            </Grid>
+                                                        </DataTemplate>
+                                                    </ItemsControl.ItemTemplate>
+                                                </ItemsControl>
+                                            </StackPanel>
+                                        </Border>
+                                        <Border Background="{ThemeResource LayerFillColorDefaultBrush}"
+                                                BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
+                                                BorderThickness="1" CornerRadius="8" Padding="14">
+                                            <StackPanel Spacing="8">
+                                                <TextBlock Text="Samplers" Style="{StaticResource SubtitleTextBlockStyle}"/>
+                                                <TextBlock Text="No sampler mappings."
+                                                           Opacity="0.6" FontSize="12"
+                                                           Visibility="{x:Bind ViewModel.HasSamplerMappings, Converter={StaticResource InverseVisibilityConverter}, Mode=OneWay}"/>
+                                                <ItemsControl ItemsSource="{x:Bind ViewModel.SamplerMappings, Mode=OneWay}">
+                                                    <ItemsControl.ItemTemplate>
+                                                        <DataTemplate x:DataType="services:MaterialShaderMappingItem">
+                                                            <Grid Margin="0,4" ColumnSpacing="12">
+                                                                <Grid.ColumnDefinitions>
+                                                                    <ColumnDefinition Width="*"/>
+                                                                    <ColumnDefinition Width="160"/>
+                                                                    <ColumnDefinition Width="80"/>
+                                                                </Grid.ColumnDefinitions>
+                                                                <TextBlock Text="{x:Bind Name}" TextWrapping="Wrap" FontSize="12"/>
+                                                                <TextBlock Grid.Column="1" Text="{x:Bind NameHashText}" FontFamily="Consolas" FontSize="12" Opacity="0.7"/>
+                                                                <TextBlock Grid.Column="2" Text="{x:Bind SlotText}" FontFamily="Consolas" FontSize="12" HorizontalAlignment="Right" Opacity="0.7"/>
+                                                            </Grid>
+                                                        </DataTemplate>
+                                                    </ItemsControl.ItemTemplate>
+                                                </ItemsControl>
+                                            </StackPanel>
+                                        </Border>
+                                    </StackPanel>
+                                </ScrollViewer>
+                            </PivotItem>
+                            <!-- SHADERBIN - RENDER TARGETS -->
+                            <PivotItem Header="Render Targets">
+                                <ListView ItemsSource="{x:Bind ViewModel.RenderTargetItems, Mode=OneWay}"
+                                          SelectedItem="{x:Bind ViewModel.SelectedRenderTargetItem, Mode=TwoWay}">
+                                    <ListView.ItemTemplate>
+                                        <DataTemplate x:DataType="services:MaterialShaderRenderTargetItem">
+                                            <Border Background="{ThemeResource LayerFillColorDefaultBrush}"
+                                                    BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
+                                                    BorderThickness="1"
+                                                    CornerRadius="8"
+                                                    Padding="12"
+                                                    Margin="0,0,0,10">
+                                                <StackPanel Spacing="6">
+                                                    <!-- Blob header row -->
+                                                    <Grid ColumnSpacing="10">
+                                                        <Grid.ColumnDefinitions>
+                                                            <ColumnDefinition Width="*"/>
+                                                            <ColumnDefinition Width="Auto"/>
+                                                        </Grid.ColumnDefinitions>
+                                                        <TextBlock Text="{x:Bind Label}" FontWeight="SemiBold" VerticalAlignment="Center"/>
+                                                        <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="10" VerticalAlignment="Center">
+                                                            <TextBlock Text="{x:Bind InlineState}" FontSize="11" Opacity="0.65"/>
+                                                            <TextBlock Text="{x:Bind VersionText}" FontSize="11" Opacity="0.5"/>
+                                                            <Border Background="{ThemeResource LayerFillColorAltBrush}"
+                                                                    BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
+                                                                    BorderThickness="1" CornerRadius="4" Padding="6,1">
+                                                                <TextBlock FontSize="11" Opacity="0.75">
+                                                                    <Run Text="{x:Bind EntryCount}"/><Run Text=" entries"/>
+                                                                </TextBlock>
+                                                            </Border>
+                                                        </StackPanel>
+                                                    </Grid>
+                                                    <!-- Column headers for VS/PS -->
+                                                    <Grid ColumnSpacing="12" Margin="0,4,0,0">
+                                                        <Grid.ColumnDefinitions>
+                                                            <ColumnDefinition Width="*"/>
+                                                            <ColumnDefinition Width="*"/>
+                                                        </Grid.ColumnDefinitions>
+                                                        <TextBlock Text="Vertex Shader" Opacity="0.5" FontSize="11"/>
+                                                        <TextBlock Grid.Column="1" Text="Pixel Shader" Opacity="0.5" FontSize="11"/>
+                                                    </Grid>
+                                                    <Border Height="1" Background="{ThemeResource DividerStrokeColorDefaultBrush}"/>
+                                                    <!-- VS / PS side-by-side paths -->
+                                                    <Grid ColumnSpacing="12">
+                                                        <Grid.ColumnDefinitions>
+                                                            <ColumnDefinition Width="*"/>
+                                                            <ColumnDefinition Width="*"/>
+                                                        </Grid.ColumnDefinitions>
+                                                        <TextBlock Text="{x:Bind VSPaths}" FontFamily="Consolas" FontSize="12" TextWrapping="Wrap"/>
+                                                        <TextBlock Grid.Column="1" Text="{x:Bind PSPaths}" FontFamily="Consolas" FontSize="12" TextWrapping="Wrap"/>
+                                                    </Grid>
+                                                </StackPanel>
+                                            </Border>
+                                        </DataTemplate>
+                                    </ListView.ItemTemplate>
+                                </ListView>
+                            </PivotItem>
+
+                            <!-- SHADERBIN - RAW BUNDLE -->
+                            <PivotItem Header="Raw Bundle">
+                                <ListView ItemsSource="{x:Bind ViewModel.RawBlobItems, Mode=OneWay}">
+                                    <ListView.ItemTemplate>
+                                        <DataTemplate>
+                                            <Border Background="{ThemeResource LayerFillColorDefaultBrush}"
+                                                    BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
+                                                    BorderThickness="1"
+                                                    CornerRadius="8"
+                                                    Padding="12"
+                                                    Margin="0,0,0,10">
+                                                <StackPanel Spacing="6">
+                                                    <Grid ColumnSpacing="10">
+                                                        <Grid.ColumnDefinitions>
+                                                            <ColumnDefinition Width="*"/>
+                                                            <ColumnDefinition Width="Auto"/>
+                                                        </Grid.ColumnDefinitions>
+                                                        <TextBlock Text="{Binding BlobTag}" FontWeight="SemiBold" FontFamily="Consolas"/>
+                                                        <TextBlock Grid.Column="1"
+                                                                   Text="{Binding DocumentKind}"
+                                                                   FontSize="11"
+                                                                   Opacity="0.65"
+                                                                   VerticalAlignment="Center"/>
+                                                    </Grid>
+                                                    <TextBlock Text="{Binding VersionText}" FontSize="12" Opacity="0.75"/>
+                                                    <TextBlock Text="{Binding MetadataTags}" TextWrapping="Wrap" FontFamily="Consolas" FontSize="12"/>
+                                                    <TextBlock Text="{Binding Notes}" TextWrapping="Wrap" FontSize="12" Opacity="0.8"/>
+                                                </StackPanel>
+                                            </Border>
+                                        </DataTemplate>
+                                    </ListView.ItemTemplate>
+                                </ListView>
+                            </PivotItem>
+
+                        </Pivot>
+                    </PivotItem>
+
+                </Pivot>
+            </Grid>
+
+        </Grid>
+    </Grid>
+</Page>

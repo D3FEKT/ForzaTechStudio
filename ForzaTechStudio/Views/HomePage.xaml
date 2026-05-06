@@ -1,0 +1,209 @@
+﻿<Page
+    x:Class="ForzaTechStudio.Views.HomePage"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+    xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+    mc:Ignorable="d"
+    Loaded="Page_Loaded">
+
+    <Page.Resources>
+        <Style x:Key="StaticTileStyle" TargetType="Button">
+            <Setter Property="HorizontalContentAlignment" Value="Stretch"/>
+            <Setter Property="VerticalContentAlignment" Value="Stretch"/>
+            <Setter Property="Background" Value="{ThemeResource CardBackgroundFillColorDefaultBrush}"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="BorderBrush" Value="{ThemeResource CardStrokeColorDefaultBrush}"/>
+            <Setter Property="CornerRadius" Value="8"/>
+            <Setter Property="Padding" Value="24"/>
+            <Setter Property="MinHeight" Value="110"/>
+            <Setter Property="HorizontalAlignment" Value="Stretch"/>
+            <Setter Property="VerticalAlignment" Value="Stretch"/>
+        </Style>
+
+        <Style x:Key="FooterButtonStyle" TargetType="Button" BasedOn="{StaticResource AccentButtonStyle}">
+            <Setter Property="Padding" Value="16,8"/>
+            <Setter Property="CornerRadius" Value="8"/>
+        </Style>
+    </Page.Resources>
+
+    <Grid>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+            <RowDefinition Height="Auto"/>
+        </Grid.RowDefinitions>
+
+        <!-- Hero Header matching Welcome Dialog -->
+        <Border Grid.Row="0" Background="{ThemeResource SystemControlBackgroundAccentBrush}" Padding="48,40,48,40">
+            <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" Spacing="24">
+                <Image Source="/Assets/store_logo.PNG" Width="80" Height="80" VerticalAlignment="Center"/>
+                <StackPanel VerticalAlignment="Center" Spacing="4">
+                    <StackPanel Orientation="Horizontal" Spacing="6" VerticalAlignment="Bottom">
+                        <TextBlock Text="ForzaTech" FontSize="36" FontWeight="Bold" Foreground="White" />
+                        <TextBlock Text="Studio" FontSize="36" FontWeight="Light" Foreground="White" />
+                    </StackPanel>
+                    <TextBlock Text="Multi asset tooling for Forza Motorsport &amp; Horizon" FontSize="16" Foreground="#DDFFFFFF" />
+                </StackPanel>
+            </StackPanel>
+        </Border>
+
+        <!-- Main Card Grid -->
+        <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto">
+            <Grid MaxWidth="1000" HorizontalAlignment="Center" Margin="32,48,32,48" MinHeight="330">
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="*"/>
+                    <RowDefinition Height="*"/>
+                    <RowDefinition Height="*"/>
+                </Grid.RowDefinitions>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="*"/>
+                </Grid.ColumnDefinitions>
+
+                <!-- Row 0: Models & Setup -->
+                <Button Grid.Row="0" Grid.Column="0" x:Name="Tile0" Tag="ModelViewerPage" Style="{StaticResource StaticTileStyle}" Margin="8"
+                        Click="Tile_Click" PointerEntered="Tile_PointerEntered" PointerExited="Tile_PointerExited">
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto"/>
+                            <ColumnDefinition Width="*"/>
+                        </Grid.ColumnDefinitions>
+                        <FontIcon Glyph="&#xF158;" FontSize="36" Foreground="{ThemeResource SystemAccentColorLight2}" VerticalAlignment="Center" Margin="0,0,24,0"/>
+                        <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="4">
+                            <TextBlock Text="3D Viewer" FontWeight="SemiBold" FontSize="18"/>
+                            <TextBlock Text="Preview models in an interactive viewport." FontSize="14" Opacity="0.7" TextWrapping="Wrap"/>
+                        </StackPanel>
+                    </Grid>
+                </Button>
+
+                <Button Grid.Row="0" Grid.Column="1" x:Name="Tile1" Tag="CarbinEditorPage" Style="{StaticResource StaticTileStyle}" Margin="8"
+                        Click="Tile_Click" PointerEntered="Tile_PointerEntered" PointerExited="Tile_PointerExited">
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto"/>
+                            <ColumnDefinition Width="*"/>
+                        </Grid.ColumnDefinitions>
+                        <FontIcon Glyph="&#xE81F;" FontSize="36" Foreground="{ThemeResource SystemAccentColorLight2}" VerticalAlignment="Center" Margin="0,0,24,0"/>
+                        <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="4">
+                            <TextBlock Text="Carbin Editor" FontWeight="SemiBold" FontSize="18"/>
+                            <TextBlock Text="Open, edit, and rebuild carbin bundle archives." FontSize="14" Opacity="0.7" TextWrapping="Wrap"/>
+                        </StackPanel>
+                    </Grid>
+                </Button>
+
+                <!-- Row 1: Bin Editors -->
+                <Button Grid.Row="1" Grid.Column="0" x:Name="Tile2" Tag="ModelBinEditorPage" Style="{StaticResource StaticTileStyle}" Margin="8"
+                        Click="Tile_Click" PointerEntered="Tile_PointerEntered" PointerExited="Tile_PointerExited">
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto"/>
+                            <ColumnDefinition Width="*"/>
+                        </Grid.ColumnDefinitions>
+                        <FontIcon Glyph="&#xE8E5;" FontSize="36" Foreground="{ThemeResource SystemAccentColorLight2}" VerticalAlignment="Center" Margin="0,0,24,0"/>
+                        <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="4">
+                            <TextBlock Text="Modelbin Editor" FontWeight="SemiBold" FontSize="18"/>
+                            <TextBlock Text="Inspect and modify .modelbin files and materials." FontSize="14" Opacity="0.7" TextWrapping="Wrap"/>
+                        </StackPanel>
+                    </Grid>
+                </Button>
+
+                <Button Grid.Row="1" Grid.Column="1" x:Name="Tile3" Tag="SwatchbinEditorPage" Style="{StaticResource StaticTileStyle}" Margin="8"
+                        Click="Tile_Click" PointerEntered="Tile_PointerEntered" PointerExited="Tile_PointerExited">
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto"/>
+                            <ColumnDefinition Width="*"/>
+                        </Grid.ColumnDefinitions>
+                        <FontIcon Glyph="&#xE790;" FontSize="36" Foreground="{ThemeResource SystemAccentColorLight2}" VerticalAlignment="Center" Margin="0,0,24,0"/>
+                        <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="4">
+                            <TextBlock Text="Swatchbin Editor" FontWeight="SemiBold" FontSize="18"/>
+                            <TextBlock Text="View, edit and create .swatchbin texture files." FontSize="14" Opacity="0.7" TextWrapping="Wrap"/>
+                        </StackPanel>
+                    </Grid>
+                </Button>
+
+                <!-- Row 2: Tools -->
+                <Button Grid.Row="2" Grid.Column="0" x:Name="Tile4" Tag="ConversionToolPage" Style="{StaticResource StaticTileStyle}" Margin="8"
+                        Click="Tile_Click" PointerEntered="Tile_PointerEntered" PointerExited="Tile_PointerExited">
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto"/>
+                            <ColumnDefinition Width="*"/>
+                        </Grid.ColumnDefinitions>
+                        <FontIcon Glyph="&#xE8AB;" FontSize="36" Foreground="{ThemeResource SystemAccentColorLight2}" VerticalAlignment="Center" Margin="0,0,24,0"/>
+                        <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="4">
+                            <TextBlock Text="Conversion Tool" FontWeight="SemiBold" FontSize="18"/>
+                            <TextBlock Text="Batch convert car scene formats between game versions." FontSize="14" Opacity="0.7" TextWrapping="Wrap"/>
+                        </StackPanel>
+                    </Grid>
+                </Button>
+
+                <Button Grid.Row="2" Grid.Column="1" x:Name="Tile5" Tag="LightsPage" Style="{StaticResource StaticTileStyle}" Margin="8"
+                        Click="Tile_Click" PointerEntered="Tile_PointerEntered" PointerExited="Tile_PointerExited">
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto"/>
+                            <ColumnDefinition Width="*"/>
+                        </Grid.ColumnDefinitions>
+                        <FontIcon Glyph="&#xEA80;" FontSize="36" Foreground="{ThemeResource SystemAccentColorLight2}" VerticalAlignment="Center" Margin="0,0,24,0"/>
+                        <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="4">
+                            <TextBlock Text="Lights Editor" FontWeight="SemiBold" FontSize="18"/>
+                            <TextBlock Text="Configure car scene lighting presets and attachments." FontSize="14" Opacity="0.7" TextWrapping="Wrap"/>
+                        </StackPanel>
+                    </Grid>
+                </Button>
+            </Grid>
+        </ScrollViewer>
+
+        <!-- Bottom bar -->
+        <Border Grid.Row="2"
+                Background="{ThemeResource LayerFillColorDefaultBrush}"
+                BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
+                BorderThickness="0,1,0,0"
+                Padding="24,16">
+            <Grid MaxWidth="1100" HorizontalAlignment="Stretch">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="Auto"/>
+                </Grid.ColumnDefinitions>
+
+                <StackPanel Grid.Column="0" Orientation="Horizontal" Spacing="16">
+                    <Button Click="SetupButton_Click" Style="{StaticResource FooterButtonStyle}">
+                        <StackPanel Orientation="Horizontal" Spacing="8">
+                            <FontIcon Glyph="&#xE713;" FontSize="16"/>
+                            <TextBlock Text="Game Setup" FontWeight="SemiBold" FontSize="14"/>
+                        </StackPanel>
+                    </Button>
+
+                    <Button Click="DiscordButton_Click" Style="{StaticResource FooterButtonStyle}">
+                        <StackPanel Orientation="Horizontal" Spacing="8">
+                            <Image Source="ms-appx:///Assets/discord.png" Width="16" Height="16"/>
+                            <TextBlock Text="Join Discord" FontWeight="SemiBold" FontSize="14"/>
+                        </StackPanel>
+                    </Button>
+
+                    <Button Click="DocsButton_Click" Style="{StaticResource FooterButtonStyle}">
+                        <StackPanel Orientation="Horizontal" Spacing="8">
+                            <FontIcon Glyph="&#xE736;" FontSize="16"/>
+                            <TextBlock Text="Documentation" FontWeight="SemiBold" FontSize="14"/>
+                        </StackPanel>
+                    </Button>
+                </StackPanel>
+
+                <Button Grid.Column="1"
+                        x:Name="CheckUpdatesButton"
+                        Click="CheckForUpdates_Click"
+                        VerticalAlignment="Center"
+                        Background="Transparent"
+                        BorderThickness="1"
+                        BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}">
+                    <StackPanel Orientation="Horizontal" Spacing="8">
+                        <FontIcon Glyph="&#xE777;" FontSize="14"/>
+                        <TextBlock Text="Check for Updates" FontSize="14"/>
+                    </StackPanel>
+                </Button>
+            </Grid>
+        </Border>
+    </Grid>
+</Page>

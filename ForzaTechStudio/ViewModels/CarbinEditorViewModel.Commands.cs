@@ -1,0 +1,882 @@
+﻿using CommunityToolkit.Mvvm.Input;
+using Microsoft.UI.Xaml;
+using Microsoft.UI.Xaml.Controls;
+using System;
+using System.IO;
+using System.Linq;
+using System.Text;
+using System.Threading.Tasks;
+using Windows.Storage.Pickers;
+using ForzaTechStudio.Services;
+
+namespace ForzaTechStudio.ViewModels
+{
+    public partial class CarbinEditorViewModel
+    {
+        [RelayCommand]
+        private void NewCarbin()
+        {
+            IsBusy = true;
+            ClearAll();
+            StatusMessage = "Initializing new carbin...";
+
+            try
+            {
+                LoadedFilePath = "";
+                LoadedFileName = "New_Car.carbin";
+
+                SelectedVersionIndex = 5; // FH5
+                var (sceneVer, modelVer, isHz) = GetVersionInfo();
+                DetectedSceneVersion = sceneVer;
+                DetectedModelVersion = modelVer;
+                IsHorizon = isHz;
+
+                SceneName = "CUSTOM_CAR";
+                MediaName = "CUSTOM_CAR";
+                SkeletonPath = @"game:\media\cars\CUSTOM_CAR\scene\_skeleton.modelbin";
+                Ordinal = 0;
+                BuildStrict = false;
+                BuildGuid = Guid.NewGuid();
+
+                LodFlagLODS = true;
+                LodFlagLOD0 = true;
+                LodFlagLOD1 = true;
+                LodFlagLOD2 = true;
+                LodFlagLOD3 = true;
+                LodFlagLOD4 = true;
+                LodFlagLOD5 = false;
+
+                IsContentVisible = true;
+                StatusMessage = "New carbin initialized. Ready to edit.";
+            }
+            finally
+            {
+                IsBusy = false;
+            }
+        }
+
+        [RelayCommand]
+        private async Task OpenCarbinAsync()
+        {
+            var picker = new FileOpenPicker();
+            var window = App.MainWindow;
+            var hWnd = WinRT.Interop.WindowNative.GetWindowHandle(window);
+            WinRT.Interop.InitializeWithWindow.Initialize(picker, hWnd);
+
+            picker.ViewMode = PickerViewMode.List;
+            picker.SuggestedStartLocation = PickerLocationId.Desktop;
+            picker.FileTypeFilter.Add(".carbin");
+
+            var file = await picker.PickSingleFileAsync();
+            if (file == null) return;
+
+            await LoadCarbinFileAsync(file.Path);
+        }
+
+        public async Task LoadCarbinFileAsync(string filePath)
+        {
+            IsBusy = true;
+            StatusMessage = "Loading carbin file...";
+            ClearAll();
+            _lastParsingContext = "Starting";
+            _lastFilePosition = 0;
+
+            try
+            {
+                LoadedFilePath = filePath;
+                LoadedFileName = Path.GetFileName(filePath);
+
+                byte[] fileBytes = await File.ReadAllBytesAsync(filePath);
+
+                if (fileBytes.Length < 2)
+                {
+                    StatusMessage = $"Error: File is too small ({fileBytes.Length} bytes)";
+                    return;
+                }
+
+                using var ms = new MemoryStream(fileBytes);
+                using var reader = new BinaryReader(ms, Encoding.UTF8, leaveOpen: false);
+                ParseCarbinFile(reader, fileBytes.Length);
+
+                IsContentVisible = true;
+                StatusMessage = $"Loaded: {LoadedFileName} (Scene v{DetectedSceneVersion}, Model v{DetectedModelVersion}, {(IsHorizon ? "Horizon" : "Motorsport")})";
+            }
+            catch (Exception ex)
+            {
+                StatusMessage = $"Parse error: {ex.Message} | Pos: 0x{_lastFilePosition:X} | {_lastParsingContext}";
+                IsContentVisible = false;
+            }
+            finally
+            {
+                IsBusy = false;
+            }
+        }
+
+        [RelayCommand]
+        public void CloseFile()
+        {
+            ClearAll();
+            StatusMessage = "File closed.";
+        }
+
+        [RelayCommand]
+        private async Task SaveCarbinAsync()
+        {
+            if (!IsContentVisible)
+            {
+                StatusMessage = "Please open a carbin file first.";
+                return;
+            }
+
+            var savePicker = new FileSavePicker();
+            var window = App.MainWindow;
+            var hWnd = WinRT.Interop.WindowNative.GetWindowHandle(window);
+            WinRT.Interop.InitializeWithWindow.Initialize(savePicker, hWnd);
+
+            savePicker.SuggestedStartLocation = PickerLocationId.Desktop;
+            savePicker.SuggestedFileName = LoadedFileName;
+            savePicker.FileTypeChoices.Add("Forza Carbin", new[] { ".carbin" });
+
+            var outputFile = await savePicker.PickSaveFileAsync();
+            if (outputFile == null) return;
+
+            IsBusy = true;
+            StatusMessage = "Saving carbin file...";
+
+            PrepareForSave();
+
+            try
+            {
+                var (sceneVersion, modelVersion, isHorizon) = GetVersionInfo();
+
+                await Task.Run(() =>
+                {
+                    using var fs = new FileStream(outputFile.Path, FileMode.Create, FileAccess.Write);
+                    using var writer = new BinaryWriter(fs);
+                    WriteCarbinFile(writer, sceneVersion, modelVersion, isHorizon);
+                });
+
+                StatusMessage = $"Success! Saved to {outputFile.Name}";
+            }
+            catch (Exception ex)
+            {
+                StatusMessage = $"Error saving: {ex.Message}";
+            }
+            finally
+            {
+                IsBusy = false;
+            }
+        }
+
+        [RelayCommand]
+        private async Task SaveCarbinInPlaceAsync()
+        {
+            if (!IsContentVisible)
+            {
+                StatusMessage = "Please open a carbin file first.";
+                return;
+            }
+
+            if (string.IsNullOrEmpty(LoadedFilePath))
+            {
+                StatusMessage = "No file path available. Use Save As instead.";
+                return;
+            }
+
+            IsBusy = true;
+            StatusMessage = "Saving carbin file...";
+
+            PrepareForSave();
+
+            try
+            {
+                var (sceneVersion, modelVersion, isHorizon) = GetVersionInfo();
+
+                await Task.Run(() =>
+                {
+                    using var fs = new FileStream(LoadedFilePath, FileMode.Create, FileAccess.Write);
+                    using var writer = new BinaryWriter(fs);
+                    WriteCarbinFile(writer, sceneVersion, modelVersion, isHorizon);
+                });
+
+                StatusMessage = $"Saved: {LoadedFileName}";
+            }
+            catch (Exception ex)
+            {
+                StatusMessage = $"Error saving: {ex.Message}";
+            }
+            finally
+            {
+                IsBusy = false;
+            }
+        }
+
+        // Non-Upgradable Part Actions
+
+        [RelayCommand]
+        private void AddNonUpgradablePart()
+        {
+            var part = new CarbinPartEntry(name => { })
+            {
+                PartTypeName = "CCarParts_CarBody",
+                PartType = CCarPartsEnum.CCarParts_CarBody
+            };
+            NonUpgradableParts.Add(part);
+            SelectedNonUpgradablePart = part;
+            StatusMessage = $"Added new non-upgradable part. Total: {NonUpgradableParts.Count}";
+        }
+
+        [RelayCommand]
+        private void RemoveNonUpgradablePart()
+        {
+            if (SelectedNonUpgradablePart != null)
+            {
+                NonUpgradableParts.Remove(SelectedNonUpgradablePart);
+                SelectedNonUpgradablePart = NonUpgradableParts.FirstOrDefault();
+                StatusMessage = $"Removed part. Remaining: {NonUpgradableParts.Count}";
+            }
+        }
+
+        [RelayCommand]
+        private void ConvertToUpgradablePart()
+        {
+            if (SelectedNonUpgradablePart == null) return;
+
+            var source = SelectedNonUpgradablePart;
+            var newPart = new CarbinPartEntry(name => { })
+            {
+                PartTypeName = source.PartTypeName,
+                PartType = source.PartType,
+                BoundsMinX = source.BoundsMinX,
+                BoundsMinY = source.BoundsMinY,
+                BoundsMinZ = source.BoundsMinZ,
+                BoundsMinW = source.BoundsMinW,
+                BoundsMaxX = source.BoundsMaxX,
+                BoundsMaxY = source.BoundsMaxY,
+                BoundsMaxZ = source.BoundsMaxZ,
+                BoundsMaxW = source.BoundsMaxW,
+                OriginalPartVersion = source.OriginalPartVersion,
+                OriginalUpgradablePartVersion = source.OriginalUpgradablePartVersion,
+                OriginalPartTypeUint = source.OriginalPartTypeUint,
+            };
+
+            foreach (var model in source.Models)
+                newPart.Models.Add(model);
+
+            // Add a default stock upgrade entry so the part is valid
+            newPart.Upgrades.Add(new UpgradeEntry(0, 0, true)
+            {
+                Version = 3,
+                CarBodyId = 0,
+                ParentIsStock = true
+            });
+
+            NonUpgradableParts.Remove(source);
+            UpgradableParts.Add(newPart);
+            SelectedUpgradablePart = newPart;
+            StatusMessage = $"Converted '{newPart.PartTypeName}' to upgradable part.";
+        }
+
+        [RelayCommand]
+        private async Task AddModelToNonUpgradablePartAsync()
+        {
+            if (SelectedNonUpgradablePart == null)
+            {
+                StatusMessage = "Please select a part first.";
+                return;
+            }
+            await AddModelsToPartAsync(SelectedNonUpgradablePart);
+        }
+
+        [RelayCommand]
+        private void RemoveModelFromNonUpgradablePart()
+        {
+            if (SelectedNonUpgradablePart != null && SelectedNonUpgradableModel != null)
+            {
+                SelectedNonUpgradablePart.Models.Remove(SelectedNonUpgradableModel);
+                SelectedNonUpgradableModel = SelectedNonUpgradablePart.Models.FirstOrDefault();
+                StatusMessage = "Model removed.";
+            }
+        }
+
+        [RelayCommand]
+        private async Task BrowseAoSwatchbinAsync()
+        {
+            if (SelectedNonUpgradableModel == null) return;
+            await BrowseSwatchbinForModelAsync(SelectedNonUpgradableModel);
+        }
+
+        [RelayCommand]
+        private async Task LoadMaterialsForNonUpgradableModelAsync()
+        {
+            if (SelectedNonUpgradableModel == null)
+            {
+                StatusMessage = "Please select a model first.";
+                return;
+            }
+            await LoadMaterialsForModelAsync(SelectedNonUpgradableModel);
+        }
+
+        [RelayCommand]
+        private void AddMaterialIndexToNonUpgradable()
+        {
+            if (SelectedNonUpgradableModel != null)
+            {
+                SelectedNonUpgradableModel.MaterialIndexes.Add(new MaterialIndexEntry("material_name", 0));
+                StatusMessage = $"Added material index. Total: {SelectedNonUpgradableModel.MaterialIndexes.Count}";
+            }
+        }
+
+        [RelayCommand]
+        private void RemoveMaterialIndexFromNonUpgradable()
+        {
+            if (SelectedNonUpgradableModel != null && SelectedNonUpgradableModel.SelectedMaterialIndex != null)
+            {
+                SelectedNonUpgradableModel.MaterialIndexes.Remove(SelectedNonUpgradableModel.SelectedMaterialIndex);
+                SelectedNonUpgradableModel.SelectedMaterialIndex = SelectedNonUpgradableModel.MaterialIndexes.FirstOrDefault();
+                StatusMessage = $"Removed material index. Remaining: {SelectedNonUpgradableModel.MaterialIndexes.Count}";
+            }
+        }
+
+        // Upgradable Part Actions
+
+        [RelayCommand]
+        private void AddUpgradablePart()
+        {
+            var part = new CarbinPartEntry(name => { })
+            {
+                PartTypeName = "CCarParts_FrontBumper",
+                PartType = CCarPartsEnum.CCarParts_FrontBumper
+            };
+            UpgradableParts.Add(part);
+            SelectedUpgradablePart = part;
+            StatusMessage = $"Added new upgradable part. Total: {UpgradableParts.Count}";
+        }
+
+        [RelayCommand]
+        private void RemoveUpgradablePart()
+        {
+            if (SelectedUpgradablePart != null)
+            {
+                UpgradableParts.Remove(SelectedUpgradablePart);
+                SelectedUpgradablePart = UpgradableParts.FirstOrDefault();
+                StatusMessage = $"Removed part. Remaining: {UpgradableParts.Count}";
+            }
+        }
+
+        [RelayCommand]
+        private void ConvertToNonUpgradablePart()
+        {
+            if (SelectedUpgradablePart == null) return;
+
+            var source = SelectedUpgradablePart;
+            var newPart = new CarbinPartEntry(name => { })
+            {
+                PartTypeName = source.PartTypeName,
+                PartType = source.PartType,
+                BoundsMinX = source.BoundsMinX,
+                BoundsMinY = source.BoundsMinY,
+                BoundsMinZ = source.BoundsMinZ,
+                BoundsMinW = source.BoundsMinW,
+                BoundsMaxX = source.BoundsMaxX,
+                BoundsMaxY = source.BoundsMaxY,
+                BoundsMaxZ = source.BoundsMaxZ,
+                BoundsMaxW = source.BoundsMaxW,
+                OriginalPartVersion = source.OriginalPartVersion,
+                OriginalUpgradablePartVersion = source.OriginalUpgradablePartVersion,
+                OriginalPartTypeUint = source.OriginalPartTypeUint,
+            };
+
+            // Copy models; clear upgrade IDs since non-upgradable parts don't use them
+            foreach (var model in source.Models)
+            {
+                model.UpgradeIds.Clear();
+                model.UpgradeIdWrappers.Clear();
+                newPart.Models.Add(model);
+            }
+
+            UpgradableParts.Remove(source);
+            NonUpgradableParts.Add(newPart);
+            SelectedNonUpgradablePart = newPart;
+            StatusMessage = $"Converted '{newPart.PartTypeName}' to standard (non-upgradable) part.";
+        }
+
+        [RelayCommand]
+        private async Task AddModelToUpgradablePartAsync()
+        {
+            if (SelectedUpgradablePart == null)
+            {
+                StatusMessage = "Please select a part first.";
+                return;
+            }
+            await AddModelsToPartAsync(SelectedUpgradablePart);
+        }
+
+        [RelayCommand]
+        private void RemoveModelFromUpgradablePart()
+        {
+            if (SelectedUpgradablePart != null && SelectedUpgradableModel != null)
+            {
+                SelectedUpgradablePart.Models.Remove(SelectedUpgradableModel);
+                SelectedUpgradableModel = SelectedUpgradablePart.Models.FirstOrDefault();
+                StatusMessage = "Model removed.";
+            }
+        }
+
+        [RelayCommand]
+        private async Task BrowseAoSwatchbinForUpgradableAsync()
+        {
+            if (SelectedUpgradableModel == null) return;
+            await BrowseSwatchbinForModelAsync(SelectedUpgradableModel);
+        }
+
+        [RelayCommand]
+        private async Task LoadMaterialsForUpgradableModelAsync()
+        {
+            if (SelectedUpgradableModel == null)
+            {
+                StatusMessage = "Please select a model first.";
+                return;
+            }
+            await LoadMaterialsForModelAsync(SelectedUpgradableModel);
+        }
+
+        [RelayCommand]
+        private void AddMaterialIndexToUpgradable()
+        {
+            if (SelectedUpgradableModel != null)
+            {
+                SelectedUpgradableModel.MaterialIndexes.Add(new MaterialIndexEntry("material_name", 0));
+                StatusMessage = $"Added material index. Total: {SelectedUpgradableModel.MaterialIndexes.Count}";
+            }
+        }
+
+        [RelayCommand]
+        private void RemoveMaterialIndexFromUpgradable()
+        {
+            if (SelectedUpgradableModel != null && SelectedUpgradableModel.SelectedMaterialIndex != null)
+            {
+                SelectedUpgradableModel.MaterialIndexes.Remove(SelectedUpgradableModel.SelectedMaterialIndex);
+                SelectedUpgradableModel.SelectedMaterialIndex = SelectedUpgradableModel.MaterialIndexes.FirstOrDefault();
+                StatusMessage = $"Removed material index. Remaining: {SelectedUpgradableModel.MaterialIndexes.Count}";
+            }
+        }
+
+        // Upgrade Actions
+
+        [RelayCommand]
+        private void AddUpgrade()
+        {
+            if (SelectedUpgradablePart != null)
+            {
+                var upgrade = new UpgradeEntry(SelectedUpgradablePart.Upgrades.Count, (byte)SelectedUpgradablePart.Upgrades.Count, SelectedUpgradablePart.Upgrades.Count == 0)
+                {
+                    Version = 3,
+                    CarBodyId = 0,
+                    ParentIsStock = true
+                };
+                SelectedUpgradablePart.Upgrades.Add(upgrade);
+                SelectedUpgrade = upgrade;
+                StatusMessage = $"Added upgrade. Total: {SelectedUpgradablePart.Upgrades.Count}";
+            }
+        }
+
+        [RelayCommand]
+        private void RemoveUpgrade()
+        {
+            if (SelectedUpgradablePart != null && SelectedUpgrade != null)
+            {
+                SelectedUpgradablePart.Upgrades.Remove(SelectedUpgrade);
+                SelectedUpgrade = SelectedUpgradablePart.Upgrades.FirstOrDefault();
+                StatusMessage = $"Removed upgrade. Remaining: {SelectedUpgradablePart.Upgrades.Count}";
+            }
+        }
+
+        [RelayCommand]
+        private void AddUpgradeIdToModel()
+        {
+            if (SelectedUpgradableModel != null)
+            {
+                SelectedUpgradableModel.UpgradeIds.Add(0);
+                SelectedUpgradableModel.UpgradeIdWrappers.Add(new UpgradeIdWrapper(0));
+                StatusMessage = $"Added upgrade ID. Total: {SelectedUpgradableModel.UpgradeIds.Count}";
+            }
+        }
+
+        [RelayCommand]
+        private void RemoveUpgradeIdFromModel()
+        {
+            if (SelectedUpgradableModel == null) return;
+
+            var model = SelectedUpgradableModel;
+            var selected = model.SelectedUpgradeIdWrapper;
+
+            if (selected != null)
+            {
+                int idx = model.UpgradeIdWrappers.IndexOf(selected);
+                model.UpgradeIdWrappers.Remove(selected);
+                if (idx < model.UpgradeIds.Count)
+                    model.UpgradeIds.RemoveAt(idx);
+                model.SelectedUpgradeIdWrapper = model.UpgradeIdWrappers.Count > 0
+                    ? model.UpgradeIdWrappers[Math.Min(idx, model.UpgradeIdWrappers.Count - 1)]
+                    : null;
+                StatusMessage = $"Removed upgrade ID. Remaining: {model.UpgradeIdWrappers.Count}";
+            }
+        }
+
+        [RelayCommand]
+        private async Task AddUpgradeIdToAllModelsAsync()
+        {
+            if (SelectedUpgradablePart == null) return;
+
+            var numberBox = new NumberBox
+            {
+                Value = 0,
+                SpinButtonPlacementMode = NumberBoxSpinButtonPlacementMode.Compact,
+                Minimum = int.MinValue,
+                Maximum = int.MaxValue,
+                Header = "Upgrade ID"
+            };
+
+            var dialog = new ContentDialog
+            {
+                Title = "Add Upgrade ID to All Models",
+                Content = new StackPanel
+                {
+                    Spacing = 8,
+                    Children =
+                    {
+                        new TextBlock
+                        {
+                            Text = $"Enter an upgrade ID to add to all {SelectedUpgradablePart.Models.Count} model(s) in '{SelectedUpgradablePart.PartTypeName}'.",
+                            TextWrapping = TextWrapping.Wrap
+                        },
+                        numberBox
+                    }
+                },
+                PrimaryButtonText = "Add",
+                CloseButtonText = "Cancel",
+                XamlRoot = App.MainWindow.Content.XamlRoot
+            };
+
+            var result = await dialog.ShowAsync();
+            if (result != ContentDialogResult.Primary) return;
+
+            int id = (int)numberBox.Value;
+            int count = 0;
+            foreach (var model in SelectedUpgradablePart.Models)
+            {
+                model.UpgradeIds.Add(id);
+                model.UpgradeIdWrappers.Add(new UpgradeIdWrapper(id));
+                count++;
+            }
+
+            StatusMessage = $"Added upgrade ID {id} to {count} model(s).";
+        }
+
+        [RelayCommand]
+        private async Task RemoveUpgradeIdFromAllModelsAsync()
+        {
+            if (SelectedUpgradablePart == null) return;
+
+            var numberBox = new NumberBox
+            {
+                Value = 0,
+                SpinButtonPlacementMode = NumberBoxSpinButtonPlacementMode.Compact,
+                Minimum = int.MinValue,
+                Maximum = int.MaxValue,
+                Header = "Upgrade ID"
+            };
+
+            var dialog = new ContentDialog
+            {
+                Title = "Remove Upgrade ID from All Models",
+                Content = new StackPanel
+                {
+                    Spacing = 8,
+                    Children =
+                    {
+                        new TextBlock
+                        {
+                            Text = $"Enter an upgrade ID to remove from all {SelectedUpgradablePart.Models.Count} model(s) in '{SelectedUpgradablePart.PartTypeName}'.",
+                            TextWrapping = TextWrapping.Wrap
+                        },
+                        numberBox
+                    }
+                },
+                PrimaryButtonText = "Remove",
+                CloseButtonText = "Cancel",
+                XamlRoot = App.MainWindow.Content.XamlRoot
+            };
+
+            var result = await dialog.ShowAsync();
+            if (result != ContentDialogResult.Primary) return;
+
+            int id = (int)numberBox.Value;
+            int affectedModels = 0;
+            int removedTotal = 0;
+
+            foreach (var model in SelectedUpgradablePart.Models)
+            {
+                var toRemove = model.UpgradeIdWrappers
+                    .Select((w, i) => (wrapper: w, index: i))
+                    .Where(x => x.wrapper.Value == id)
+                    .OrderByDescending(x => x.index)
+                    .ToList();
+
+                if (toRemove.Count == 0) continue;
+
+                foreach (var (wrapper, index) in toRemove)
+                {
+                    model.UpgradeIdWrappers.Remove(wrapper);
+                    if (index < model.UpgradeIds.Count)
+                        model.UpgradeIds.RemoveAt(index);
+                }
+
+                if (model.SelectedUpgradeIdWrapper != null && !model.UpgradeIdWrappers.Contains(model.SelectedUpgradeIdWrapper))
+                    model.SelectedUpgradeIdWrapper = model.UpgradeIdWrappers.FirstOrDefault();
+
+                affectedModels++;
+                removedTotal += toRemove.Count;
+            }
+
+            StatusMessage = removedTotal > 0
+                ? $"Removed upgrade ID {id} ({removedTotal} entr{(removedTotal == 1 ? "y" : "ies")}) from {affectedModels} model(s)."
+                : $"No entries with upgrade ID {id} found.";
+        }
+
+        // Shared Helpers
+
+        private async Task AddModelsToPartAsync(CarbinPartEntry part)
+        {
+            var picker = new FileOpenPicker();
+            var window = App.MainWindow;
+            var hWnd = WinRT.Interop.WindowNative.GetWindowHandle(window);
+            WinRT.Interop.InitializeWithWindow.Initialize(picker, hWnd);
+
+            picker.ViewMode = PickerViewMode.List;
+            picker.SuggestedStartLocation = PickerLocationId.Desktop;
+            picker.FileTypeFilter.Add(".modelbin");
+            picker.FileTypeFilter.Add(".carbin");
+
+            var files = await picker.PickMultipleFilesAsync();
+            if (files == null || files.Count == 0)
+                return;
+
+            int addedCount = 0;
+            var (_, targetModelVersion, targetIsHorizon) = GetVersionInfo();
+
+            foreach (var file in files)
+            {
+                string ext = Path.GetExtension(file.Path).ToLowerInvariant();
+
+                if (ext == ".carbin")
+                {
+                    // Import from carbin: show searchable model selector
+                    try
+                    {
+                        byte[] fileBytes = await File.ReadAllBytesAsync(file.Path);
+                        if (fileBytes.Length < 2)
+                        {
+                            StatusMessage = $"Error: {file.Name} is too small to be a valid carbin.";
+                            continue;
+                        }
+
+                        var allModels = ParseCarbinForAllModels(fileBytes);
+                        if (allModels.Count == 0)
+                        {
+                            StatusMessage = $"No models found in {file.Name}.";
+                            continue;
+                        }
+
+                        var selected = await ShowAddModelFromCarbinDialogAsync(allModels);
+                        if (selected == null)
+                            continue; // user cancelled this file
+
+                        var entry = CreateModelEntryFromCarbinSource(selected, targetModelVersion, targetIsHorizon);
+                        part.Models.Add(entry);
+                        addedCount++;
+                        StatusMessage = $"Added '{selected.DisplayName}' from {file.Name}.";
+                    }
+                    catch (Exception ex)
+                    {
+                        StatusMessage = $"Error reading {file.Name}: {ex.Message}";
+                    }
+                }
+                else
+                {
+                    // Import from modelbin: existing behaviour
+                    var entry = new CarbinModelEntry(file.Path, SceneName);
+
+                    var materials = MaterialExtractionService.GetMaterialNames(file.Path);
+                    foreach (var mat in materials)
+                        entry.MaterialIndexes.Add(new MaterialIndexEntry(mat, 0));
+
+                    part.Models.Add(entry);
+                    addedCount++;
+                }
+            }
+
+            if (addedCount > 0)
+            {
+                if (addedCount > 1)
+                    StatusMessage = $"Added {addedCount} model(s) to part.";
+
+                if (part == SelectedNonUpgradablePart && SelectedNonUpgradableModel == null)
+                    SelectedNonUpgradableModel = part.Models.FirstOrDefault();
+                else if (part == SelectedUpgradablePart && SelectedUpgradableModel == null)
+                    SelectedUpgradableModel = part.Models.FirstOrDefault();
+            }
+        }
+
+        private async Task BrowseSwatchbinForModelAsync(CarbinModelEntry model)
+        {
+            var picker = new FileOpenPicker();
+            var window = App.MainWindow;
+            var hWnd = WinRT.Interop.WindowNative.GetWindowHandle(window);
+            WinRT.Interop.InitializeWithWindow.Initialize(picker, hWnd);
+
+            picker.ViewMode = PickerViewMode.List;
+            picker.SuggestedStartLocation = PickerLocationId.Desktop;
+            picker.FileTypeFilter.Add(".swatchbin");
+
+            var file = await picker.PickSingleFileAsync();
+            if (file != null)
+            {
+                model.AoSwatchbinFullPath = file.Path;
+                model.AoSwatchbinFileName = Path.GetFileName(file.Path);
+                model.AoSwatchbinGamePath = $@"game:\media\cars\{SceneName}\textures\ao\swatches\{model.AoSwatchbinFileName}";
+
+                model.AoMapInfos.Clear();
+
+                StatusMessage = $"AO Swatchbin set: {model.AoSwatchbinFileName}";
+            }
+        }
+
+        // Move Model to Part
+
+        [RelayCommand]
+        private async Task MoveNonUpgradableModelAsync()
+        {
+            if (SelectedNonUpgradablePart == null || SelectedNonUpgradableModel == null)
+            {
+                StatusMessage = "Please select a model first.";
+                return;
+            }
+            await MoveModelAsync(SelectedNonUpgradableModel, SelectedNonUpgradablePart, isSourceUpgradable: false);
+        }
+
+        [RelayCommand]
+        private async Task MoveUpgradableModelAsync()
+        {
+            if (SelectedUpgradablePart == null || SelectedUpgradableModel == null)
+            {
+                StatusMessage = "Please select a model first.";
+                return;
+            }
+            await MoveModelAsync(SelectedUpgradableModel, SelectedUpgradablePart, isSourceUpgradable: true);
+        }
+
+        private async Task MoveModelAsync(CarbinModelEntry model, CarbinPartEntry sourcePart, bool isSourceUpgradable)
+        {
+            var targets = new System.Collections.Generic.List<MoveModelTarget>();
+            foreach (var p in NonUpgradableParts)
+                if (p != sourcePart) targets.Add(new MoveModelTarget(p, false));
+            foreach (var p in UpgradableParts)
+                if (p != sourcePart) targets.Add(new MoveModelTarget(p, true));
+
+            if (targets.Count == 0)
+            {
+                StatusMessage = "No other parts available to move this model into.";
+                return;
+            }
+
+            var listView = new Microsoft.UI.Xaml.Controls.ListView
+            {
+                SelectionMode = Microsoft.UI.Xaml.Controls.ListViewSelectionMode.Single,
+                MaxHeight = 400,
+                MinWidth = 480,
+                ItemTemplate = CreateMoveTargetTemplate()
+            };
+            foreach (var t in targets)
+                listView.Items.Add(t);
+            listView.SelectedIndex = 0;
+
+            var dialog = new Microsoft.UI.Xaml.Controls.ContentDialog
+            {
+                Title = $"Move \"{model.ModelFileName}\"",
+                Content = new Microsoft.UI.Xaml.Controls.StackPanel
+                {
+                    Spacing = 8,
+                    Children =
+                    {
+                        new Microsoft.UI.Xaml.Controls.TextBlock
+                        {
+                            Text = "Select the destination part:",
+                            TextWrapping = Microsoft.UI.Xaml.TextWrapping.Wrap
+                        },
+                        listView
+                    }
+                },
+                PrimaryButtonText = "Move",
+                CloseButtonText = "Cancel",
+                XamlRoot = App.MainWindow.Content.XamlRoot
+            };
+
+            var result = await dialog.ShowAsync();
+            if (result != Microsoft.UI.Xaml.Controls.ContentDialogResult.Primary) return;
+
+            var target = listView.SelectedItem as MoveModelTarget;
+            if (target == null) return;
+
+            // Remove from source
+            sourcePart.Models.Remove(model);
+
+            // Clear upgrade IDs when moving into a non-upgradable part
+            if (!target.IsUpgradable)
+            {
+                model.UpgradeIds.Clear();
+                model.UpgradeIdWrappers.Clear();
+            }
+
+            // Add to destination
+            target.Part.Models.Add(model);
+
+            // Refresh selection in source list
+            if (isSourceUpgradable)
+                SelectedUpgradableModel = sourcePart.Models.FirstOrDefault();
+            else
+                SelectedNonUpgradableModel = sourcePart.Models.FirstOrDefault();
+
+            StatusMessage = $"Moved \"{model.ModelFileName}\" to \"{target.Part.PartTypeName}\" ({(target.IsUpgradable ? "Upgradable" : "Standard")}).";
+        }
+
+        private sealed class MoveModelTarget
+        {
+            public CarbinPartEntry Part { get; }
+            public bool IsUpgradable { get; }
+            public string DisplayName => Part.PartTypeName;
+            public string SubInfo => IsUpgradable
+                ? $"Upgradable  �  {Part.Models.Count} model(s)  �  {Part.Upgrades.Count} upgrade(s)"
+                : $"Standard  �  {Part.Models.Count} model(s)";
+
+            public MoveModelTarget(CarbinPartEntry part, bool isUpgradable)
+            {
+                Part = part;
+                IsUpgradable = isUpgradable;
+            }
+        }
+
+        private static Microsoft.UI.Xaml.DataTemplate CreateMoveTargetTemplate()
+        {
+            var xaml = @"
+                <DataTemplate xmlns='http://schemas.microsoft.com/winfx/2006/xaml/presentation'>
+                    <StackPanel Padding='4,8' Spacing='2'>
+                        <TextBlock Text='{Binding DisplayName}' FontWeight='SemiBold'/>
+                        <TextBlock Text='{Binding SubInfo}' FontSize='11' Foreground='{ThemeResource TextFillColorSecondaryBrush}'/>
+                    </StackPanel>
+                </DataTemplate>";
+            return (Microsoft.UI.Xaml.DataTemplate)Microsoft.UI.Xaml.Markup.XamlReader.Load(xaml);
+        }
+    }
+}

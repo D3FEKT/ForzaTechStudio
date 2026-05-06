@@ -1,0 +1,60 @@
+﻿<Page
+    x:Class="ForzaTechStudio.Views.SettingsPage"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+    xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+    mc:Ignorable="d"
+    Background="{ThemeResource ApplicationPageBackgroundThemeBrush}">
+
+    <StackPanel Padding="24" Spacing="24">
+        <TextBlock Text="Settings" Style="{StaticResource TitleTextBlockStyle}"/>
+
+        <!-- Tools section -->
+        <StackPanel Spacing="8">
+            <TextBlock Text="Tools" Style="{StaticResource SubtitleTextBlockStyle}"/>
+            <TextBlock Text="Configure application features" Style="{StaticResource BodyTextBlockStyle}" Opacity="0.7"/>
+            <StackPanel Orientation="Horizontal" Spacing="8" Margin="0,8,0,0">
+                <Button Click="NavigateToSetup_Click" HorizontalAlignment="Left">
+                    <StackPanel Orientation="Horizontal" Spacing="8">
+                        <FontIcon Glyph="&#xE713;" FontSize="16"/>
+                        <TextBlock Text="Game Directory Setup"/>
+                    </StackPanel>
+                </Button>
+                <Button Click="NavigateToAppearance_Click" HorizontalAlignment="Left">
+                    <StackPanel Orientation="Horizontal" Spacing="8">
+                        <FontIcon Glyph="&#xE771;" FontSize="16"/>
+                        <TextBlock Text="Appearance"/>
+                    </StackPanel>
+                </Button>
+            </StackPanel>
+        </StackPanel>
+
+        <!-- About section -->
+        <StackPanel Spacing="4">
+            <TextBlock x:Name="VersionText" Text="Version Number: 1.0.0.0" FontWeight="SemiBold"/>
+            <TextBlock Text="ForzaTech Studio by D3FEKT"/>
+            <HyperlinkButton Content="Join the community discord" NavigateUri="https://discord.gg/forzamods" Margin="-4,8,0,0"/>
+
+            <TextBlock Text="Credits" Style="{StaticResource BodyStrongTextBlockStyle}" Margin="0,16,0,8"/>
+
+            <StackPanel Spacing="12">
+                <StackPanel>
+                    <TextBlock>
+                        <Run Text="Nenkai" FontWeight="SemiBold"/>
+                        <Run Text=" - Forza Tools"/>
+                    </TextBlock>
+                    <HyperlinkButton Content="https://github.com/Nenkai/ForzaTools" NavigateUri="https://github.com/Nenkai/ForzaTools" Margin="-4,0,0,0"/>
+                </StackPanel>
+
+                <StackPanel>
+                    <TextBlock>
+                        <Run Text="Doliman100" FontWeight="SemiBold"/>
+                        <Run Text=" - Research into ForzaTech file formats"/>
+                    </TextBlock>
+                    <HyperlinkButton Content="https://github.com/Doliman100/ForzaTech-extraction-tools/" NavigateUri="https://github.com/Doliman100/ForzaTech-extraction-tools/" Margin="-4,0,0,0"/>
+                </StackPanel>
+            </StackPanel>
+        </StackPanel>
+    </StackPanel>
+</Page>

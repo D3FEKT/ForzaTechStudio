@@ -1,0 +1,468 @@
+﻿<Page
+    x:Class="ForzaTechStudio.Views.ConversionToolPage"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+    xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+    xmlns:viewmodels="using:ForzaTechStudio.ViewModels"
+    xmlns:converters="using:ForzaTechStudio.Converters"
+    xmlns:controls="using:ForzaTechStudio.Views.Controls"
+    mc:Ignorable="d"
+    AllowDrop="True"
+    DragOver="Page_DragOver"
+    Drop="Page_Drop">
+
+    <Page.Resources>
+        <Style x:Key="PropertyCardStyle" TargetType="Border">
+            <Setter Property="Background" Value="{ThemeResource CardBackgroundFillColorDefaultBrush}"/>
+            <Setter Property="BorderBrush" Value="{ThemeResource SurfaceStrokeColorDefaultBrush}"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="CornerRadius" Value="8"/>
+            <Setter Property="Padding" Value="16"/>
+            <Setter Property="Margin" Value="0,0,0,12"/>
+        </Style>
+
+        <converters:BooleanToVisibilityConverter x:Key="BoolToVis"/>
+        <converters:BooleanToVisibilityConverter x:Key="InvertBoolToVis" Inverse="True"/>
+    </Page.Resources>
+
+    <Page.DataContext>
+        <viewmodels:ConversionToolViewModel x:Name="ViewModel"/>
+    </Page.DataContext>
+
+    <Grid Padding="12">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+        </Grid.RowDefinitions>
+
+        <!-- Header -->
+        <controls:StandardPageHeader Grid.Row="0"
+                                     Title="Conversion Tool"
+                                     Description="Convert modelbin and carbin files between Forza game versions"
+                                     Margin="0,0,0,12">
+            <controls:StandardPageHeader.HeaderCommands>
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="Auto"/>
+                        <ColumnDefinition Width="*"/>
+                    </Grid.ColumnDefinitions>
+                    
+                    <StackPanel Grid.Column="0" Orientation="Horizontal" Spacing="8">
+                        <Button Style="{StaticResource GhostAccentButtonStyle}" Command="{x:Bind ViewModel.OpenFileCommand}">
+                            <StackPanel Orientation="Horizontal" Spacing="8">
+                                <FontIcon Glyph="&#xE8E5;" FontSize="14"/>
+                                <TextBlock Text="Open File"/>
+                            </StackPanel>
+                            <Button.KeyboardAccelerators>
+                                <KeyboardAccelerator Modifiers="Control" Key="O"/>
+                            </Button.KeyboardAccelerators>
+                        </Button>
+                        <Button Style="{StaticResource GhostAccentButtonStyle}" Command="{x:Bind ViewModel.ConvertCommand}"
+                                IsEnabled="{x:Bind ViewModel.HasAnalysis, Mode=OneWay}">
+                            <StackPanel Orientation="Horizontal" Spacing="8">
+                                <FontIcon Glyph="&#xE8AB;" FontSize="14"/>
+                                <TextBlock Text="Convert"/>
+                            </StackPanel>
+                        </Button>
+
+                        <Border Width="1" Background="{ThemeResource DividerStrokeColorDefaultBrush}" Margin="4,8"/>
+
+                        <Button Style="{StaticResource GhostAccentButtonStyle}" Command="{x:Bind ViewModel.ClearAllCommand}">
+                            <StackPanel Orientation="Horizontal" Spacing="8">
+                                <FontIcon Glyph="&#xE711;" FontSize="14"/>
+                                <TextBlock Text="Clear"/>
+                            </StackPanel>
+                        </Button>
+
+                        <Border Width="1" Background="{ThemeResource DividerStrokeColorDefaultBrush}" Margin="4,8"/>
+                    </StackPanel>
+                    
+                    <TextBlock Grid.Column="1" 
+                               Text="{x:Bind ViewModel.StatusMessage, Mode=OneWay}"
+                               Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                               VerticalAlignment="Center" 
+                               Opacity="0.8" 
+                               Margin="8,0,0,0"
+                               TextWrapping="NoWrap"
+                               TextTrimming="CharacterEllipsis"/>
+                </Grid>
+            </controls:StandardPageHeader.HeaderCommands>
+        </controls:StandardPageHeader>
+
+        <!-- Loading -->
+        <ProgressBar Grid.Row="1" IsIndeterminate="{x:Bind ViewModel.IsBusy, Mode=OneWay}"
+                     Visibility="{x:Bind ViewModel.IsBusy, Mode=OneWay}" Margin="0,0,0,8"/>
+
+        <!-- Empty state -->
+        <Grid Grid.Row="2"
+              Background="Transparent"
+              AllowDrop="True"
+              DragOver="Page_DragOver"
+              Drop="Page_Drop"
+              Visibility="{x:Bind ViewModel.HasAnalysis, Mode=OneWay, Converter={StaticResource InvertBoolToVis}}">
+            <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center"
+                        Spacing="12">
+                <FontIcon Glyph="&#xE8AB;" FontSize="52"
+                          Foreground="{ThemeResource TextFillColorTertiaryBrush}"
+                          HorizontalAlignment="Center"/>
+                <TextBlock Text="Drag &amp; drop a .modelbin, .carbin or zip file here, or use Open File"
+                           Style="{StaticResource BodyTextBlockStyle}"
+                           Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                           HorizontalAlignment="Center"/>
+            </StackPanel>
+        </Grid>
+
+        <!-- Main Content -->
+        <Grid Grid.Row="2"
+              Visibility="{x:Bind ViewModel.HasAnalysis, Mode=OneWay}">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="400"/>
+                <ColumnDefinition Width="*"/>
+            </Grid.ColumnDefinitions>
+
+            <!-- Left Panel: File Analysis + Target Selection -->
+            <ScrollViewer Grid.Column="0" VerticalScrollBarVisibility="Auto" Margin="0,0,12,0">
+                <StackPanel Spacing="12">
+
+                    <!-- File Info Card -->
+                    <Border Style="{StaticResource PropertyCardStyle}"
+                            Visibility="{x:Bind ViewModel.HasAnalysis, Mode=OneWay}">
+                        <StackPanel Spacing="12">
+                            <StackPanel Orientation="Horizontal" Spacing="8">
+                                <FontIcon Glyph="&#xE8A5;" FontSize="16" Foreground="{ThemeResource AccentTextFillColorPrimaryBrush}"/>
+                                <TextBlock Text="Source File" Style="{StaticResource BodyStrongTextBlockStyle}"/>
+                            </StackPanel>
+
+                            <StackPanel Spacing="4">
+                                <TextBlock Text="File Name" FontWeight="SemiBold" Opacity="0.7" FontSize="12"/>
+                                <TextBlock Text="{x:Bind ViewModel.FileName, Mode=OneWay}" TextWrapping="Wrap"/>
+                            </StackPanel>
+
+                            <Grid ColumnDefinitions="Auto,*" RowDefinitions="Auto,Auto" ColumnSpacing="12" RowSpacing="8">
+                                <StackPanel Spacing="4">
+                                    <TextBlock Text="File Type" FontWeight="SemiBold" Opacity="0.7" FontSize="12"/>
+                                    <TextBlock Text="{x:Bind ViewModel.FileTypeName, Mode=OneWay}"/>
+                                </StackPanel>
+								<StackPanel Grid.Column="1" Spacing="4">
+                                    <TextBlock Text="Detected Game" FontWeight="SemiBold" Opacity="0.7" FontSize="12"/>
+                                    <TextBlock Text="{x:Bind ViewModel.DetectedGame, Mode=OneWay}" TextWrapping="Wrap" FontWeight="SemiBold"
+                                               Foreground="{ThemeResource AccentTextFillColorPrimaryBrush}"/>
+                                </StackPanel>
+                            </Grid>
+
+                            <!-- Batch zip details -->
+                            <StackPanel Spacing="4" Visibility="{x:Bind ViewModel.IsBatchZip, Mode=OneWay}">
+                                <TextBlock Text="Contents" FontWeight="SemiBold" Opacity="0.7" FontSize="12"/>
+                                <TextBlock Text="{x:Bind ViewModel.FileDetails, Mode=OneWay}" TextWrapping="Wrap"/>
+                            </StackPanel>
+                        </StackPanel>
+                    </Border>
+
+                    <!-- Modelbin Details Card -->
+                    <Border Style="{StaticResource PropertyCardStyle}"
+                            Visibility="{x:Bind ViewModel.IsModelbin, Mode=OneWay}">
+                        <StackPanel Spacing="12">
+                            <StackPanel Orientation="Horizontal" Spacing="8">
+                                <FontIcon Glyph="&#xF163;" FontSize="16" Foreground="{ThemeResource AccentTextFillColorPrimaryBrush}"/>
+                                <TextBlock Text="Modelbin Details" Style="{StaticResource BodyStrongTextBlockStyle}"/>
+                            </StackPanel>
+
+                            <Grid ColumnDefinitions="*,*" RowDefinitions="Auto,Auto,Auto" ColumnSpacing="12" RowSpacing="8">
+                                <StackPanel Spacing="2">
+                                    <TextBlock Text="Bundle Version" FontWeight="SemiBold" Opacity="0.7" FontSize="12"/>
+                                    <TextBlock Text="{x:Bind ViewModel.BundleVersion, Mode=OneWay}"/>
+                                </StackPanel>
+                                <StackPanel Grid.Column="1" Spacing="2">
+                                    <TextBlock Text="Modl Version" FontWeight="SemiBold" Opacity="0.7" FontSize="12"/>
+                                    <TextBlock Text="{x:Bind ViewModel.ModlVersion, Mode=OneWay}"/>
+                                </StackPanel>
+                                <StackPanel Grid.Row="1" Spacing="2">
+                                    <TextBlock Text="Mesh Version" FontWeight="SemiBold" Opacity="0.7" FontSize="12"/>
+                                    <TextBlock Text="{x:Bind ViewModel.MeshVersion, Mode=OneWay}"/>
+                                </StackPanel>
+                                <StackPanel Grid.Row="1" Grid.Column="1" Spacing="2">
+                                    <TextBlock Text="VLay Version" FontWeight="SemiBold" Opacity="0.7" FontSize="12"/>
+                                    <TextBlock Text="{x:Bind ViewModel.VlayVersion, Mode=OneWay}"/>
+                                </StackPanel>
+                                <StackPanel Grid.Row="2" Spacing="2">
+                                    <TextBlock Text="Meshes" FontWeight="SemiBold" Opacity="0.7" FontSize="12"/>
+                                    <TextBlock Text="{x:Bind ViewModel.MeshCount, Mode=OneWay}"/>
+                                </StackPanel>
+                                <StackPanel Grid.Row="2" Grid.Column="1" Spacing="2">
+                                    <TextBlock Text="Materials" FontWeight="SemiBold" Opacity="0.7" FontSize="12"/>
+                                    <TextBlock Text="{x:Bind ViewModel.MaterialCount, Mode=OneWay}"/>
+                                </StackPanel>
+                            </Grid>
+
+                            <!-- VLay Pattern Category -->
+                            <StackPanel Spacing="4">
+                                <TextBlock Text="VLay Pattern" FontWeight="SemiBold" Opacity="0.7" FontSize="12"/>
+                                <TextBlock Text="{x:Bind ViewModel.VlayPatternCategory, Mode=OneWay}" 
+                                           TextWrapping="Wrap"
+                                           Foreground="{ThemeResource SystemFillColorCautionBrush}"/>
+                            </StackPanel>
+                        </StackPanel>
+                    </Border>
+
+                    <!-- Carbin Details Card -->
+                    <Border Style="{StaticResource PropertyCardStyle}"
+                            Visibility="{x:Bind ViewModel.IsCarbin, Mode=OneWay}">
+                        <StackPanel Spacing="12">
+                            <StackPanel Orientation="Horizontal" Spacing="8">
+                                <FontIcon Glyph="&#xE81F;" FontSize="16" Foreground="{ThemeResource AccentTextFillColorPrimaryBrush}"/>
+                                <TextBlock Text="Carbin Details" Style="{StaticResource BodyStrongTextBlockStyle}"/>
+                            </StackPanel>
+
+                            <Grid ColumnDefinitions="*,*" RowDefinitions="Auto,Auto,Auto,Auto" ColumnSpacing="12" RowSpacing="8">
+                                <StackPanel Spacing="2">
+                                    <TextBlock Text="Scene Version" FontWeight="SemiBold" Opacity="0.7" FontSize="12"/>
+                                    <TextBlock Text="{x:Bind ViewModel.SceneVersion, Mode=OneWay}"/>
+                                </StackPanel>
+                                <StackPanel Grid.Column="1" Spacing="2">
+                                    <TextBlock Text="Model Version" FontWeight="SemiBold" Opacity="0.7" FontSize="12"/>
+                                    <TextBlock Text="{x:Bind ViewModel.ModelVersion, Mode=OneWay}"/>
+                                </StackPanel>
+                                <StackPanel Grid.Row="1" Spacing="2">
+                                    <TextBlock Text="Series" FontWeight="SemiBold" Opacity="0.7" FontSize="12"/>
+                                    <TextBlock Text="{x:Bind ViewModel.DetectedSeries, Mode=OneWay}"/>
+                                </StackPanel>
+                                <StackPanel Grid.Row="1" Grid.Column="1" Spacing="2">
+                                    <TextBlock Text="Total Models" FontWeight="SemiBold" Opacity="0.7" FontSize="12"/>
+                                    <TextBlock Text="{x:Bind ViewModel.MeshCount, Mode=OneWay}"/>
+                                </StackPanel>
+                                <StackPanel Grid.Row="2" Spacing="2">
+                                    <TextBlock Text="Parts" FontWeight="SemiBold" Opacity="0.7" FontSize="12"/>
+                                    <TextBlock Text="{x:Bind ViewModel.PartCount, Mode=OneWay}"/>
+                                </StackPanel>
+                                <StackPanel Grid.Row="2" Grid.Column="1" Spacing="2">
+                                    <TextBlock Text="Upgrade Parts" FontWeight="SemiBold" Opacity="0.7" FontSize="12"/>
+                                    <TextBlock Text="{x:Bind ViewModel.UpgradePartCount, Mode=OneWay}"/>
+                                </StackPanel>
+                                <StackPanel Grid.Row="3" Spacing="2">
+                                    <TextBlock Text="Standard Models" FontWeight="SemiBold" Opacity="0.7" FontSize="12"/>
+                                    <TextBlock Text="{x:Bind ViewModel.StandardModelCount, Mode=OneWay}"/>
+                                </StackPanel>
+                                <StackPanel Grid.Row="3" Grid.Column="1" Spacing="2">
+                                    <TextBlock Text="Shared Models" FontWeight="SemiBold" Opacity="0.7" FontSize="12"/>
+                                    <TextBlock Text="{x:Bind ViewModel.SharedModelCount, Mode=OneWay}"/>
+                                </StackPanel>
+                            </Grid>
+                        </StackPanel>
+                    </Border>
+
+                    <!-- LightsBin Details Card -->
+                    <Border Style="{StaticResource PropertyCardStyle}"
+                            Visibility="{x:Bind ViewModel.IsLightsBin, Mode=OneWay}">
+                        <StackPanel Spacing="12">
+                            <StackPanel Orientation="Horizontal" Spacing="8">
+                                <FontIcon Glyph="&#xEA80;" FontSize="16" Foreground="{ThemeResource AccentTextFillColorPrimaryBrush}"/>
+                                <TextBlock Text="Lights.bin Details" Style="{StaticResource BodyStrongTextBlockStyle}"/>
+                            </StackPanel>
+
+                            <Grid ColumnDefinitions="*,*" RowDefinitions="Auto,Auto" ColumnSpacing="12" RowSpacing="8">
+                                <StackPanel Spacing="2">
+                                    <TextBlock Text="File Version" FontWeight="SemiBold" Opacity="0.7" FontSize="12"/>
+                                    <TextBlock Text="{x:Bind ViewModel.LightsBinVersion, Mode=OneWay}"
+                                               FontWeight="SemiBold"
+                                               Foreground="{ThemeResource AccentTextFillColorPrimaryBrush}"/>
+                                </StackPanel>
+                                <StackPanel Grid.Column="1" Spacing="2">
+                                    <TextBlock Text="Lights" FontWeight="SemiBold" Opacity="0.7" FontSize="12"/>
+                                    <TextBlock Text="{x:Bind ViewModel.LightsBinLightCount, Mode=OneWay}"/>
+                                </StackPanel>
+                                <StackPanel Grid.Row="1" Spacing="2">
+                                    <TextBlock Text="Attachments" FontWeight="SemiBold" Opacity="0.7" FontSize="12"/>
+                                    <TextBlock Text="{x:Bind ViewModel.LightsBinAttachCount, Mode=OneWay}"/>
+                                </StackPanel>
+                                <StackPanel Grid.Row="1" Grid.Column="1" Spacing="2">
+                                    <TextBlock Text="LOD Overrides" FontWeight="SemiBold" Opacity="0.7" FontSize="12"/>
+                                    <TextBlock Text="{x:Bind ViewModel.LightsBinLodCount, Mode=OneWay}"/>
+                                </StackPanel>
+                            </Grid>
+                        </StackPanel>
+                    </Border>
+
+                    <!-- Swatchbin Details Card (only shown when a Durango/Xbox swatchbin is loaded) -->
+                    <Border Style="{StaticResource PropertyCardStyle}"
+                            Visibility="{x:Bind ViewModel.IsSwatchbin, Mode=OneWay}">
+                        <StackPanel Spacing="12">
+                            <StackPanel Orientation="Horizontal" Spacing="8">
+                                <FontIcon Glyph="&#xEB9F;" FontSize="16" Foreground="{ThemeResource AccentTextFillColorPrimaryBrush}"/>
+                                <TextBlock Text="Swatchbin Details" Style="{StaticResource BodyStrongTextBlockStyle}"/>
+                            </StackPanel>
+
+                            <!-- Platform badge -->
+                            <StackPanel Orientation="Horizontal" Spacing="8">
+                                <Border CornerRadius="4" Padding="8,3"
+                                        Background="{ThemeResource SystemFillColorCriticalBackgroundBrush}">
+                                    <TextBlock Text="Durango / Xbox" FontSize="11" FontWeight="SemiBold"
+                                               Foreground="{ThemeResource SystemFillColorCriticalBrush}"
+                                               Visibility="{x:Bind ViewModel.SwatchbinIsDurango, Mode=OneWay}"/>
+                                </Border>
+                                <TextBlock Text="? will be converted to PC format"
+                                           FontSize="11" Opacity="0.65" VerticalAlignment="Center"
+                                           Visibility="{x:Bind ViewModel.SwatchbinIsDurango, Mode=OneWay}"/>
+                            </StackPanel>
+
+                            <Grid ColumnDefinitions="*,*" RowDefinitions="Auto,Auto" ColumnSpacing="12" RowSpacing="8">
+                                <StackPanel Spacing="2">
+                                    <TextBlock Text="Resolution" FontWeight="SemiBold" Opacity="0.7" FontSize="12"/>
+                                    <TextBlock Text="{x:Bind ViewModel.SwatchbinResolution, Mode=OneWay}"/>
+                                </StackPanel>
+                                <StackPanel Grid.Column="1" Spacing="2">
+                                    <TextBlock Text="DXGI Format" FontWeight="SemiBold" Opacity="0.7" FontSize="12"/>
+                                    <TextBlock Text="{x:Bind ViewModel.SwatchbinFormat, Mode=OneWay}"
+                                               FontFamily="Cascadia Code, Consolas" FontSize="11"
+                                               TextWrapping="Wrap"/>
+                                </StackPanel>
+                                <StackPanel Grid.Row="1" Spacing="2">
+                                    <TextBlock Text="Mip Levels" FontWeight="SemiBold" Opacity="0.7" FontSize="12"/>
+                                    <TextBlock Text="{x:Bind ViewModel.SwatchbinMipLevels, Mode=OneWay}"/>
+                                </StackPanel>
+                                <StackPanel Grid.Row="1" Grid.Column="1" Spacing="2">
+                                    <TextBlock Text="Platform" FontWeight="SemiBold" Opacity="0.7" FontSize="12"/>
+                                    <TextBlock Text="{x:Bind ViewModel.DetectedGame, Mode=OneWay}"
+                                               FontWeight="SemiBold"
+                                               Foreground="{ThemeResource AccentTextFillColorPrimaryBrush}"/>
+                                </StackPanel>
+                            </Grid>
+                        </StackPanel>
+                    </Border>
+
+                    <!-- Target Selection Card -->
+                    <Border Style="{StaticResource PropertyCardStyle}"
+                            Visibility="{x:Bind ViewModel.HasAnalysis, Mode=OneWay}">
+                        <StackPanel Spacing="12">
+                            <StackPanel Orientation="Horizontal" Spacing="8">
+                                <FontIcon Glyph="&#xE8AB;" FontSize="16" Foreground="{ThemeResource AccentTextFillColorPrimaryBrush}"/>
+                                <TextBlock Text="Conversion Target" Style="{StaticResource BodyStrongTextBlockStyle}"/>
+                            </StackPanel>
+
+                            <ComboBox Header="Target Game"
+                                      ItemsSource="{x:Bind ViewModel.AvailableTargets}"
+                                      SelectedIndex="{x:Bind ViewModel.SelectedTargetIndex, Mode=TwoWay}"
+                                      HorizontalAlignment="Stretch"/>
+
+                            <TextBlock Text="{x:Bind ViewModel.TargetVersionInfo, Mode=OneWay}"
+                                       FontSize="11" Opacity="0.6" TextWrapping="Wrap"
+                                       Visibility="{x:Bind ViewModel.HasTargetSelected, Mode=OneWay}"/>
+
+                            <!-- Batch zip output format -->
+                            <StackPanel Spacing="8" Visibility="{x:Bind ViewModel.IsBatchZip, Mode=OneWay}">
+                                <TextBlock Text="Batch Output Format" FontWeight="SemiBold" FontSize="12"/>
+                                <RadioButtons>
+                                    <RadioButton Content="Output as folder" x:Name="RadioOutputFolder"/>
+                                    <RadioButton Content="Repack as Forza zip" x:Name="RadioOutputZip"/>
+                                </RadioButtons>
+                            </StackPanel>
+
+                            <!-- Path conversion (single modelbin or batch zip) -->
+                            <ToggleSwitch Header="Path Conversion"
+                                          IsOn="{x:Bind ViewModel.IsPathConversionEnabled, Mode=TwoWay}"
+                                          Visibility="{x:Bind ViewModel.ShowPathConversion, Mode=OneWay}"
+                                          OnContent="Enabled - Convert materialbin/swatchbin paths"
+                                          OffContent="Disabled - Keep original paths"/>
+
+                            <TextBox Header="Car Zip Name"
+                                     Text="{x:Bind ViewModel.CarZipName, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                                     PlaceholderText="e.g. NIS_SilviaK_92"
+                                     Visibility="{x:Bind ViewModel.IsPathConversionEnabled, Mode=OneWay}"
+                                     HorizontalAlignment="Stretch"/>
+                            <TextBlock Text="Missing materialbins and swatchbins will be copied to a 'converted' folder next to the output. Paths will be set to Game:\media\cars\{name}\converted\{file}. Requires game paths in Setup."
+                                       TextWrapping="Wrap" Opacity="0.5" FontSize="11"
+                                       Visibility="{x:Bind ViewModel.IsPathConversionEnabled, Mode=OneWay}"/>
+
+                                <StackPanel Spacing="4"
+                                    Visibility="{x:Bind ViewModel.ShowPathConversion, Mode=OneWay}">
+                                <CheckBox Content="Advanced VLay blob patch"
+                                      IsChecked="{x:Bind ViewModel.IsAdvancedVlayBlobPatchEnabled, Mode=TwoWay}"/>
+                                <TextBlock Text="Reads the target materialbin and shaderbin chain, then expands VLay and VerB data when target shader VDCL flags require extra semantics. Requires the target game path in Setup."
+                                       TextWrapping="Wrap"
+                                       Opacity="0.5"
+                                       FontSize="11"/>
+
+                                  <CheckBox Content="Remove conflicting shader parameters"
+                                      IsChecked="{x:Bind ViewModel.IsRemoveConflictingShaderParametersEnabled, Mode=TwoWay}"/>
+                                  <TextBlock Text="Clears instance shader parameters only on materials whose materialbin path was changed to a different target during conversion."
+                                       TextWrapping="Wrap"
+                                       Opacity="0.5"
+                                       FontSize="11"/>
+                                </StackPanel>
+
+                            <Button Command="{x:Bind ViewModel.ConvertCommand}"
+                                    Style="{StaticResource AccentButtonStyle}"
+                                    HorizontalAlignment="Stretch">
+                                <StackPanel Orientation="Horizontal" Spacing="8">
+                                    <FontIcon Glyph="&#xE8AB;" FontSize="14"/>
+                                    <TextBlock Text="Convert File"/>
+                                </StackPanel>
+                            </Button>
+                        </StackPanel>
+                    </Border>
+
+                    <!-- Placeholder when no file loaded -->
+                    <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center" Spacing="16"
+                                Visibility="{Binding HasAnalysis, Converter={StaticResource InvertBoolToVis}}"
+                                Margin="0,40,0,0">
+                        <FontIcon Glyph="&#xE8AB;" FontSize="64" Opacity="0.2"/>
+                        <TextBlock Text="No file loaded" Opacity="0.5" HorizontalAlignment="Center"/>
+                        <TextBlock Text="Open a .modelbin, .carbin, or .zip file" Opacity="0.3" HorizontalAlignment="Center" FontSize="12"/>
+                    </StackPanel>
+
+                </StackPanel>
+            </ScrollViewer>
+
+            <!-- Right Panel: Conversion Log -->
+            <Border Grid.Column="1"
+                    Background="{ThemeResource LayerFillColorDefaultBrush}"
+                    BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
+                    BorderThickness="1" CornerRadius="8">
+                <Grid>
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="*"/>
+                    </Grid.RowDefinitions>
+
+                    <!-- Log Header -->
+                    <Grid Grid.Row="0" Padding="16,12" Background="{ThemeResource LayerFillColorAltBrush}"
+                          BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="0,0,0,1">
+                        <StackPanel Orientation="Horizontal" Spacing="8">
+                            <FontIcon Glyph="&#xE7C3;" FontSize="14"/>
+                            <TextBlock Text="Conversion Log" Style="{StaticResource BodyStrongTextBlockStyle}"/>
+                        </StackPanel>
+                    </Grid>
+
+                    <!-- Result Banner -->
+                    <InfoBar Grid.Row="1"
+                             IsOpen="{x:Bind ViewModel.HasResult, Mode=OneWay}"
+                             IsClosable="False"
+                             Title="{x:Bind GetResultTitle(ViewModel.ConversionSuccess), Mode=OneWay}"
+                             Message="{x:Bind ViewModel.OutputFilePath, Mode=OneWay}"
+                             Margin="8,8,8,0"/>
+
+                    <!-- Log List -->
+                    <ListView Grid.Row="2" ItemsSource="{x:Bind ViewModel.ConversionLog}"
+                              Padding="8" SelectionMode="None">
+                        <ListView.ItemTemplate>
+                            <DataTemplate x:DataType="x:String">
+                                <TextBlock Text="{x:Bind}" FontFamily="Consolas" FontSize="12"
+                                           TextWrapping="Wrap" Padding="4,2"
+                                           IsTextSelectionEnabled="True"/>
+                            </DataTemplate>
+                        </ListView.ItemTemplate>
+                    </ListView>
+
+                    <!-- Empty State -->
+                    <StackPanel Grid.Row="2" HorizontalAlignment="Center" VerticalAlignment="Center" Spacing="8"
+                                Visibility="{x:Bind ShowEmptyLog(ViewModel.ConversionLog.Count), Mode=OneWay}">
+                        <FontIcon Glyph="&#xE7C3;" FontSize="48" Opacity="0.15"/>
+                        <TextBlock Text="Conversion output will appear here" Opacity="0.3" FontSize="12"/>
+                    </StackPanel>
+                </Grid>
+            </Border>
+        </Grid>
+    </Grid>
+</Page>

@@ -1,0 +1,130 @@
+﻿<Page
+    x:Class="ForzaTechStudio.Views.AppearancePage"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+    xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+    xmlns:vm="using:ForzaTechStudio.ViewModels"
+    mc:Ignorable="d"
+    Background="{ThemeResource ApplicationPageBackgroundThemeBrush}">
+
+    <Page.Resources>
+        <!-- Circular accent color swatch RadioButton style -->
+        <Style x:Key="ColorSwatchRadioButtonStyle" TargetType="RadioButton">
+            <Setter Property="Width" Value="36"/>
+            <Setter Property="Height" Value="36"/>
+            <Setter Property="Padding" Value="0"/>
+            <Setter Property="MinWidth" Value="0"/>
+            <Setter Property="CornerRadius" Value="18"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="RadioButton">
+                        <Grid>
+                            <!-- Outer ring shown when selected -->
+                            <Ellipse x:Name="OuterRing"
+                                     Width="36" Height="36"
+                                     Stroke="{ThemeResource TextFillColorPrimaryBrush}"
+                                     StrokeThickness="0"/>
+                            <!-- Color swatch -->
+                            <Ellipse x:Name="Swatch"
+                                     Width="28" Height="28"
+                                     HorizontalAlignment="Center"
+                                     VerticalAlignment="Center"
+                                     Fill="{TemplateBinding Background}"/>
+                            <VisualStateManager.VisualStateGroups>
+                                <VisualStateGroup x:Name="CheckStates">
+                                    <VisualState x:Name="Checked">
+                                        <Storyboard>
+                                            <DoubleAnimation Storyboard.TargetName="OuterRing"
+                                                             Storyboard.TargetProperty="StrokeThickness"
+                                                             To="2.5" Duration="0"/>
+                                        </Storyboard>
+                                    </VisualState>
+                                    <VisualState x:Name="Unchecked"/>
+                                    <VisualState x:Name="Indeterminate"/>
+                                </VisualStateGroup>
+                            </VisualStateManager.VisualStateGroups>
+                        </Grid>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+    </Page.Resources>
+
+    <ScrollViewer VerticalScrollBarVisibility="Auto">
+        <StackPanel Padding="24" Spacing="24" MaxWidth="640" HorizontalAlignment="Left">
+
+            <TextBlock Text="Appearance" Style="{StaticResource TitleTextBlockStyle}"/>
+
+            <!-- Theme -->
+            <Border Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
+                    BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
+                    BorderThickness="1" CornerRadius="8" Padding="16">
+                <StackPanel Spacing="12">
+                    <StackPanel Spacing="2">
+                        <TextBlock Text="Theme" Style="{StaticResource BodyStrongTextBlockStyle}"/>
+                        <TextBlock Text="Choose between light, dark, or follow the Windows system setting."
+                                   Style="{StaticResource CaptionTextBlockStyle}" Opacity="0.7"/>
+                    </StackPanel>
+                    <StackPanel Orientation="Horizontal" Spacing="8">
+                        <RadioButton x:Name="ThemeSystem"   Content="System"  GroupName="Theme" Checked="Theme_Checked" Tag="System"/>
+                        <RadioButton x:Name="ThemeLight"    Content="Light"   GroupName="Theme" Checked="Theme_Checked" Tag="Light"/>
+                        <RadioButton x:Name="ThemeDark"     Content="Dark"    GroupName="Theme" Checked="Theme_Checked" Tag="Dark"/>
+                    </StackPanel>
+                </StackPanel>
+            </Border>
+
+            <!-- Backdrop -->
+            <Border Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
+                    BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
+                    BorderThickness="1" CornerRadius="8" Padding="16">
+                <StackPanel Spacing="12">
+                    <StackPanel Spacing="2">
+                        <TextBlock Text="Window Material" Style="{StaticResource BodyStrongTextBlockStyle}"/>
+                        <TextBlock Text="Controls the translucency material applied to the app window."
+                                   Style="{StaticResource CaptionTextBlockStyle}" Opacity="0.7"/>
+                    </StackPanel>
+                    <StackPanel Orientation="Horizontal" Spacing="8">
+                        <RadioButton x:Name="BackdropMica"    Content="Mica"     GroupName="Backdrop" Checked="Backdrop_Checked" Tag="Mica"/>
+                        <RadioButton x:Name="BackdropMicaAlt" Content="Mica Alt" GroupName="Backdrop" Checked="Backdrop_Checked" Tag="MicaAlt"/>
+                        <RadioButton x:Name="BackdropAcrylic" Content="Acrylic"  GroupName="Backdrop" Checked="Backdrop_Checked" Tag="Acrylic"/>
+                        <RadioButton x:Name="BackdropNone"    Content="None"     GroupName="Backdrop" Checked="Backdrop_Checked" Tag="None"/>
+                    </StackPanel>
+                </StackPanel>
+            </Border>
+
+            <!-- Accent Color -->
+            <Border Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
+                    BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
+                    BorderThickness="1" CornerRadius="8" Padding="16">
+                <StackPanel Spacing="12">
+                    <StackPanel Spacing="2">
+                        <TextBlock Text="Accent Color" Style="{StaticResource BodyStrongTextBlockStyle}"/>
+                        <TextBlock Text="Override the Windows accent color with a Forza-themed preset, or use the system color."
+                                   Style="{StaticResource CaptionTextBlockStyle}" Opacity="0.7"/>
+                    </StackPanel>
+                    <StackPanel Orientation="Horizontal" Spacing="10" x:Name="AccentColorPanel"/>
+                </StackPanel>
+            </Border>
+
+            <!-- Navigation Style -->
+            <Border Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
+                    BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
+                    BorderThickness="1" CornerRadius="8" Padding="16">
+                <StackPanel Spacing="12">
+                    <StackPanel Spacing="2">
+                        <TextBlock Text="Navigation Pane" Style="{StaticResource BodyStrongTextBlockStyle}"/>
+                        <TextBlock Text="Choose how the sidebar navigation is displayed."
+                                   Style="{StaticResource CaptionTextBlockStyle}" Opacity="0.7"/>
+                    </StackPanel>
+                    <StackPanel Orientation="Horizontal" Spacing="8">
+                        <RadioButton x:Name="NavExpanded" Content="Expanded" GroupName="NavStyle" Checked="NavStyle_Checked" Tag="Expanded"/>
+                        <RadioButton x:Name="NavCompact"  Content="Compact"  GroupName="NavStyle" Checked="NavStyle_Checked" Tag="Compact"/>
+                        <RadioButton x:Name="NavTop"      Content="Top"      GroupName="NavStyle" Checked="NavStyle_Checked" Tag="Top"/>
+                    </StackPanel>
+                </StackPanel>
+            </Border>
+
+        </StackPanel>
+    </ScrollViewer>
+</Page>

@@ -1,0 +1,1782 @@
+﻿<Page
+    x:Class="ForzaTechStudio.Views.ViewportPage"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+    xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+    xmlns:vm="using:ForzaTechStudio.ViewModels.ThreeDViewer"
+    xmlns:converters="using:ForzaTechStudio.Converters"
+    mc:Ignorable="d"
+    AllowDrop="True"
+    DragOver="Page_DragOver"
+    DragLeave="Page_DragLeave"
+    Drop="Page_Drop">
+
+    <Page.Resources>
+        <converters:NodeTypeIconConverter x:Key="NodeTypeIconConverter"/>
+        <converters:BoolToVisibilityIconConverter x:Key="BoolToVisibilityIconConverter"/>
+
+        <!-- Used by the Materials filter dialog for virtualized rendering -->
+        <DataTemplate x:Key="MaterialFilterItemTemplate">
+            <CheckBox IsChecked="{Binding IsChecked, Mode=TwoWay}"
+                      Content="{Binding MaterialName}"
+                      HorizontalAlignment="Stretch"/>
+        </DataTemplate>
+
+        <!-- Used by the Objects filter dialog for virtualized rendering -->
+        <DataTemplate x:Key="ObjectFilterItemTemplate">
+            <CheckBox IsChecked="{Binding IsChecked, Mode=TwoWay}"
+                      HorizontalAlignment="Stretch">
+                <StackPanel Orientation="Horizontal" Spacing="6">
+                    <TextBlock Text="{Binding Name}" VerticalAlignment="Center"/>
+                    <TextBlock Text="{Binding TypeLabel}"
+                               VerticalAlignment="Center"
+                               Opacity="0.6"
+                               FontSize="11"/>
+                </StackPanel>
+            </CheckBox>
+        </DataTemplate>
+    </Page.Resources>
+
+    <Grid>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+        </Grid.RowDefinitions>
+        <Grid.ColumnDefinitions>
+            <ColumnDefinition x:Name="LeftPanelColumn" Width="380" MinWidth="0"/>
+            <ColumnDefinition Width="20"/>
+            <ColumnDefinition Width="*"/>
+        </Grid.ColumnDefinitions>
+
+        <!-- Left Panel (collapsible content) -->
+        <Border x:Name="LeftPanelContent"
+                Grid.Row="1"
+                Grid.Column="0"
+                BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
+                BorderThickness="0,0,1,0"
+                Background="{ThemeResource LayerFillColorDefaultBrush}">
+                <Grid>
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="*"/>
+                        <RowDefinition Height="Auto"/>
+                    </Grid.RowDefinitions>
+
+                <!-- Tree View -->
+                <TreeView x:Name="FileTree"
+                          Grid.Row="0" 
+                          SelectionMode="Single"
+                          ItemInvoked="FileTree_ItemInvoked"
+                          RightTapped="FileTree_RightTapped"
+                          Padding="0,0,0,8">
+                     <TreeView.ItemTemplate>
+                        <DataTemplate>
+                            <Grid Padding="0,2" ColumnSpacing="6">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="Auto"/>
+                                    <ColumnDefinition Width="Auto"/>
+                                    <ColumnDefinition Width="*"/>
+                                </Grid.ColumnDefinitions>
+                                
+                                <CheckBox IsChecked="{Binding Content.IsChecked, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                                          IsThreeState="False"
+                                          MinWidth="20"
+                                          MinHeight="20"
+                                          Margin="0,-4,0,-4"
+                                          VerticalAlignment="Center"/>
+
+                                <FontIcon Grid.Column="1" 
+                                          Glyph="{Binding Content.Type, Converter={StaticResource NodeTypeIconConverter}}"
+                                          FontSize="14"
+                                          Foreground="{ThemeResource SystemControlForegroundBaseMediumBrush}"
+                                          VerticalAlignment="Center"/>
+
+                                <TextBlock Grid.Column="2" 
+                                           Text="{Binding Content.Name}" 
+                                           FontSize="12"
+                                           VerticalAlignment="Center"
+                                           TextTrimming="CharacterEllipsis"/>
+                            </Grid>
+                        </DataTemplate>
+                     </TreeView.ItemTemplate>
+                </TreeView>
+
+                <!-- Properties Area (Bottom Left) -->
+                <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto" MaxHeight="450" Padding="0,0,0,8">
+                    <StackPanel Spacing="2">
+                        <!-- Transform Controls Section -->
+                        <Expander x:Name="ModelPropertiesExpander"
+                                  Header="Model Properties"
+                                  IsExpanded="True"
+                                  Visibility="Collapsed"
+                                  HorizontalAlignment="Stretch"
+                                  HorizontalContentAlignment="Stretch"
+                                  Padding="12,8"
+                                  Margin="8,0,8,0">
+                            <StackPanel Spacing="8">
+                                 <Grid ColumnSpacing="8">
+                                     <Grid.ColumnDefinitions>
+                                         <ColumnDefinition Width="*" />
+                                         <ColumnDefinition Width="*" />
+                                     </Grid.ColumnDefinitions>
+                                     
+                                     <ComboBox x:Name="ModelBinSelector" 
+                                               Header="Model" 
+                                               HorizontalAlignment="Stretch" 
+                                               SelectionChanged="ModelBinSelector_SelectionChanged" 
+                                               Grid.Column="0"
+                                               FontSize="12" MinHeight="28">
+                                         <ComboBox.ItemTemplate>
+                                             <DataTemplate>
+                                                 <Grid ColumnSpacing="4">
+                                                     <Grid.ColumnDefinitions>
+                                                         <ColumnDefinition Width="*"/>
+                                                         <ColumnDefinition Width="Auto"/>
+                                                     </Grid.ColumnDefinitions>
+                                                     <TextBlock Grid.Column="0" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" FontSize="12">
+                                                         <Run Text="{Binding Name}"/>
+                                                         <Run Text="{Binding BoneStatusText}" Foreground="Orange" FontSize="10"/>
+                                                     </TextBlock>
+                                                     <Button Grid.Column="1" Margin="4,0,0,0" Padding="2" Background="Transparent" BorderThickness="0" Click="ModelBinVisibility_Click" MinHeight="20" MinWidth="20">
+                                                         <FontIcon Glyph="{Binding IsChecked, Converter={StaticResource BoolToVisibilityIconConverter}}" FontSize="10"/>
+                                                     </Button>
+                                                 </Grid>
+                                             </DataTemplate>
+                                         </ComboBox.ItemTemplate>
+                                     </ComboBox>
+                                               
+                                     <ComboBox x:Name="MeshSelector" 
+                                               Header="Target Scope" 
+                                               HorizontalAlignment="Stretch" 
+                                               SelectionChanged="MeshSelector_SelectionChanged" 
+                                               Grid.Column="1"
+                                               FontSize="12" MinHeight="28">
+                                         <ComboBox.ItemTemplate>
+                                             <DataTemplate>
+                                                 <Grid>
+                                                     <Grid.ColumnDefinitions>
+                                                         <ColumnDefinition Width="*"/>
+                                                         <ColumnDefinition Width="Auto"/>
+                                                     </Grid.ColumnDefinitions>
+                                                     <TextBlock Text="{Binding Name}" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" FontSize="12"/>
+                                                     <Button Grid.Column="1" Margin="4,0,0,0" Padding="2" Background="Transparent" BorderThickness="0" Click="MeshVisibility_Click" MinHeight="20" MinWidth="20">
+                                                         <FontIcon Glyph="{Binding IsChecked, Converter={StaticResource BoolToVisibilityIconConverter}}" FontSize="10"/>
+                                                     </Button>
+                                                 </Grid>
+                                             </DataTemplate>
+                                         </ComboBox.ItemTemplate>
+                                     </ComboBox>
+                                 </Grid>
+
+                                <TextBlock x:Name="MultiSelectText"
+                                           Text=""
+                                           FontWeight="SemiBold"
+                                           FontSize="12"
+                                           HorizontalAlignment="Center"
+                                           Foreground="{ThemeResource AccentTextFillColorPrimaryBrush}"
+                                           Visibility="Collapsed"
+                                           Margin="0,0,0,0"/>
+
+                                <TextBlock x:Name="ConflictingTransformsText" 
+                                           Text="Conflicting transform values" 
+                                           Foreground="Red" 
+                                           FontSize="11" 
+                                           HorizontalAlignment="Center" 
+                                           Visibility="Collapsed"
+                                           Margin="0,-4,0,0"/>
+
+                                <!-- Position Controls -->
+                                <StackPanel Spacing="4">
+                                     <TextBlock Text="Position" FontWeight="SemiBold" FontSize="12"/>
+                                     <Grid ColumnSpacing="6">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="*"/>
+                                            <ColumnDefinition Width="*"/>
+                                            <ColumnDefinition Width="*"/>
+                                        </Grid.ColumnDefinitions>
+                                        
+                                        <!-- Trans X -->
+                                        <StackPanel Grid.Column="0" Spacing="2">
+                                            <TextBlock Text="X" FontSize="10" Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
+                                            <Grid ColumnSpacing="2">
+                                                <Grid.ColumnDefinitions>
+                                                    <ColumnDefinition Width="*"/>
+                                                    <ColumnDefinition Width="Auto"/>
+                                                </Grid.ColumnDefinitions>
+                                                <TextBox x:Name="TransX" Text="0.000" TextChanged="Transform_TextChanged" FontSize="11" MinHeight="24" Padding="4,2"/>
+                                                <StackPanel Grid.Column="1" Spacing="1">
+                                                    <RepeatButton Click="TransX_Up" Height="12" Width="16" Padding="0" CornerRadius="2">
+                                                        <FontIcon Glyph="&#xE70E;" FontSize="8"/>
+                                                    </RepeatButton>
+                                                    <RepeatButton Click="TransX_Down" Height="12" Width="16" Padding="0" CornerRadius="2">
+                                                        <FontIcon Glyph="&#xE70D;" FontSize="8"/>
+                                                    </RepeatButton>
+                                                </StackPanel>
+                                            </Grid>
+                                        </StackPanel>
+
+                                        <!-- Trans Y -->
+                                        <StackPanel Grid.Column="1" Spacing="2">
+                                            <TextBlock Text="Y" FontSize="10" Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
+                                            <Grid ColumnSpacing="2">
+                                                <Grid.ColumnDefinitions>
+                                                    <ColumnDefinition Width="*"/>
+                                                    <ColumnDefinition Width="Auto"/>
+                                                </Grid.ColumnDefinitions>
+                                                <TextBox x:Name="TransY" Text="0.000" TextChanged="Transform_TextChanged" FontSize="11" MinHeight="24" Padding="4,2"/>
+                                                <StackPanel Grid.Column="1" Spacing="1">
+                                                    <RepeatButton Click="TransY_Up" Height="12" Width="16" Padding="0" CornerRadius="2">
+                                                        <FontIcon Glyph="&#xE70E;" FontSize="8"/>
+                                                    </RepeatButton>
+                                                    <RepeatButton Click="TransY_Down" Height="12" Width="16" Padding="0" CornerRadius="2">
+                                                        <FontIcon Glyph="&#xE70D;" FontSize="8"/>
+                                                    </RepeatButton>
+                                                </StackPanel>
+                                            </Grid>
+                                        </StackPanel>
+
+                                        <!-- Trans Z -->
+                                        <StackPanel Grid.Column="2" Spacing="2">
+                                            <TextBlock Text="Z" FontSize="10" Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
+                                            <Grid ColumnSpacing="2">
+                                                <Grid.ColumnDefinitions>
+                                                    <ColumnDefinition Width="*"/>
+                                                    <ColumnDefinition Width="Auto"/>
+                                                </Grid.ColumnDefinitions>
+                                                <TextBox x:Name="TransZ" Text="0.000" TextChanged="Transform_TextChanged" FontSize="11" MinHeight="24" Padding="4,2"/>
+                                                <StackPanel Grid.Column="1" Spacing="1">
+                                                    <RepeatButton Click="TransZ_Up" Height="12" Width="16" Padding="0" CornerRadius="2">
+                                                        <FontIcon Glyph="&#xE70E;" FontSize="8"/>
+                                                    </RepeatButton>
+                                                    <RepeatButton Click="TransZ_Down" Height="12" Width="16" Padding="0" CornerRadius="2">
+                                                        <FontIcon Glyph="&#xE70D;" FontSize="8"/>
+                                                    </RepeatButton>
+                                                </StackPanel>
+                                            </Grid>
+                                        </StackPanel>
+
+                                    </Grid>
+                                </StackPanel>
+
+                                <!-- Scale Controls -->
+                                <StackPanel x:Name="ScaleControlsPanel" Spacing="4">
+                                    <TextBlock Text="Scale" FontWeight="SemiBold" FontSize="12"/>
+                                    <Grid ColumnSpacing="6">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="*"/>
+                                            <ColumnDefinition Width="*"/>
+                                            <ColumnDefinition Width="*"/>
+                                        </Grid.ColumnDefinitions>
+                                        
+                                        <!-- Scale X -->
+                                        <StackPanel Grid.Column="0" Spacing="2">
+                                            <TextBlock Text="X" FontSize="10" Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
+                                            <Grid ColumnSpacing="2">
+                                                <Grid.ColumnDefinitions>
+                                                    <ColumnDefinition Width="*"/>
+                                                    <ColumnDefinition Width="Auto"/>
+                                                </Grid.ColumnDefinitions>
+                                                <TextBox x:Name="ScaleX" Text="1.000" TextChanged="Transform_TextChanged" FontSize="11" MinHeight="24" Padding="4,2"/>
+                                                <StackPanel Grid.Column="1" Spacing="1">
+                                                    <RepeatButton Click="ScaleX_Up" Height="12" Width="16" Padding="0" CornerRadius="2">
+                                                        <FontIcon Glyph="&#xE70E;" FontSize="8"/>
+                                                    </RepeatButton>
+                                                    <RepeatButton Click="ScaleX_Down" Height="12" Width="16" Padding="0" CornerRadius="2">
+                                                        <FontIcon Glyph="&#xE70D;" FontSize="8"/>
+                                                    </RepeatButton>
+                                                </StackPanel>
+                                            </Grid>
+                                        </StackPanel>
+
+                                        <!-- Scale Y -->
+                                        <StackPanel Grid.Column="1" Spacing="2">
+                                            <TextBlock Text="Y" FontSize="10" Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
+                                            <Grid ColumnSpacing="2">
+                                                <Grid.ColumnDefinitions>
+                                                    <ColumnDefinition Width="*"/>
+                                                    <ColumnDefinition Width="Auto"/>
+                                                </Grid.ColumnDefinitions>
+                                                <TextBox x:Name="ScaleY" Text="1.000" TextChanged="Transform_TextChanged" FontSize="11" MinHeight="24" Padding="4,2"/>
+                                                <StackPanel Grid.Column="1" Spacing="1">
+                                                    <RepeatButton Click="ScaleY_Up" Height="12" Width="16" Padding="0" CornerRadius="2">
+                                                        <FontIcon Glyph="&#xE70E;" FontSize="8"/>
+                                                    </RepeatButton>
+                                                    <RepeatButton Click="ScaleY_Down" Height="12" Width="16" Padding="0" CornerRadius="2">
+                                                        <FontIcon Glyph="&#xE70D;" FontSize="8"/>
+                                                    </RepeatButton>
+                                                </StackPanel>
+                                            </Grid>
+                                        </StackPanel>
+
+                                        <!-- Scale Z -->
+                                        <StackPanel Grid.Column="2" Spacing="2">
+                                            <TextBlock Text="Z" FontSize="10" Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
+                                            <Grid ColumnSpacing="2">
+                                                <Grid.ColumnDefinitions>
+                                                    <ColumnDefinition Width="*"/>
+                                                    <ColumnDefinition Width="Auto"/>
+                                                </Grid.ColumnDefinitions>
+                                                <TextBox x:Name="ScaleZ" Text="1.000" TextChanged="Transform_TextChanged" FontSize="11" MinHeight="24" Padding="4,2"/>
+                                                <StackPanel Grid.Column="1" Spacing="1">
+                                                    <RepeatButton Click="ScaleZ_Up" Height="12" Width="16" Padding="0" CornerRadius="2">
+                                                        <FontIcon Glyph="&#xE70E;" FontSize="8"/>
+                                                    </RepeatButton>
+                                                    <RepeatButton Click="ScaleZ_Down" Height="12" Width="16" Padding="0" CornerRadius="2">
+                                                        <FontIcon Glyph="&#xE70D;" FontSize="8"/>
+                                                    </RepeatButton>
+                                                </StackPanel>
+                                            </Grid>
+                                        </StackPanel>
+                                    </Grid>
+                                </StackPanel>
+
+                                <!-- Rotation Controls (Euler Angles) -->
+                                <StackPanel x:Name="RotationControlsPanel" Spacing="4">
+                                    <TextBlock Text="Rotation (Degrees)" FontWeight="SemiBold" FontSize="12"/>
+                                    <Grid ColumnSpacing="6">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="*"/>
+                                            <ColumnDefinition Width="*"/>
+                                            <ColumnDefinition Width="*"/>
+                                        </Grid.ColumnDefinitions>
+                                        
+                                        <!-- Rot X -->
+                                        <StackPanel Grid.Column="0" Spacing="2">
+                                            <TextBlock Text="X" FontSize="10" Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
+                                            <Grid ColumnSpacing="2">
+                                                <Grid.ColumnDefinitions>
+                                                    <ColumnDefinition Width="*"/>
+                                                    <ColumnDefinition Width="Auto"/>
+                                                </Grid.ColumnDefinitions>
+                                                <TextBox x:Name="RotX" Text="0.000" TextChanged="Transform_TextChanged" FontSize="11" MinHeight="24" Padding="4,2"/>
+                                                <StackPanel Grid.Column="1" Spacing="1">
+                                                    <RepeatButton Click="RotX_Up" Height="12" Width="16" Padding="0" CornerRadius="2">
+                                                        <FontIcon Glyph="&#xE70E;" FontSize="8"/>
+                                                    </RepeatButton>
+                                                    <RepeatButton Click="RotX_Down" Height="12" Width="16" Padding="0" CornerRadius="2">
+                                                        <FontIcon Glyph="&#xE70D;" FontSize="8"/>
+                                                    </RepeatButton>
+                                                </StackPanel>
+                                            </Grid>
+                                        </StackPanel>
+
+                                        <!-- Rot Y -->
+                                        <StackPanel Grid.Column="1" Spacing="2">
+                                            <TextBlock Text="Y" FontSize="10" Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
+                                            <Grid ColumnSpacing="2">
+                                                <Grid.ColumnDefinitions>
+                                                    <ColumnDefinition Width="*"/>
+                                                    <ColumnDefinition Width="Auto"/>
+                                                </Grid.ColumnDefinitions>
+                                                <TextBox x:Name="RotY" Text="0.000" TextChanged="Transform_TextChanged" FontSize="11" MinHeight="24" Padding="4,2"/>
+                                                <StackPanel Grid.Column="1" Spacing="1">
+                                                    <RepeatButton Click="RotY_Up" Height="12" Width="16" Padding="0" CornerRadius="2">
+                                                        <FontIcon Glyph="&#xE70E;" FontSize="8"/>
+                                                    </RepeatButton>
+                                                    <RepeatButton Click="RotY_Down" Height="12" Width="16" Padding="0" CornerRadius="2">
+                                                        <FontIcon Glyph="&#xE70D;" FontSize="8"/>
+                                                    </RepeatButton>
+                                                </StackPanel>
+                                            </Grid>
+                                        </StackPanel>
+
+                                        <!-- Rot Z -->
+                                        <StackPanel Grid.Column="2" Spacing="2">
+                                            <TextBlock Text="Z" FontSize="10" Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
+                                            <Grid ColumnSpacing="2">
+                                                <Grid.ColumnDefinitions>
+                                                    <ColumnDefinition Width="*"/>
+                                                    <ColumnDefinition Width="Auto"/>
+                                                </Grid.ColumnDefinitions>
+                                                <TextBox x:Name="RotZ" Text="0.000" TextChanged="Transform_TextChanged" FontSize="11" MinHeight="24" Padding="4,2"/>
+                                                <StackPanel Grid.Column="1" Spacing="1">
+                                                    <RepeatButton Click="RotZ_Up" Height="12" Width="16" Padding="0" CornerRadius="2">
+                                                        <FontIcon Glyph="&#xE70E;" FontSize="8"/>
+                                                    </RepeatButton>
+                                                    <RepeatButton Click="RotZ_Down" Height="12" Width="16" Padding="0" CornerRadius="2">
+                                                        <FontIcon Glyph="&#xE70D;" FontSize="8"/>
+                                                    </RepeatButton>
+                                                </StackPanel>
+                                            </Grid>
+                                        </StackPanel>
+                                    </Grid>
+                                </StackPanel>
+
+                                 <!-- Reset Button -->
+                                 <Button Content="Reset Transformations" 
+                                         HorizontalAlignment="Stretch" 
+                                         Click="ResetTransform_Click"
+                                         Style="{StaticResource AccentButtonStyle}"
+                                         FontSize="12" MinHeight="28"/>
+
+                                <!-- Bone Section -->
+                                <Expander x:Name="BoneInfoExpander"
+                                          Header="Bone"
+                                          IsExpanded="True"
+                                          Visibility="Collapsed"
+                                          HorizontalAlignment="Stretch"
+                                          HorizontalContentAlignment="Stretch"
+                                          Padding="8,6"
+                                          Margin="0,4,0,0">
+                                    <StackPanel Spacing="8">
+                                        <!-- Bone name + Change button -->
+                                        <Grid ColumnSpacing="6">
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="*"/>
+                                                <ColumnDefinition Width="Auto"/>
+                                            </Grid.ColumnDefinitions>
+                                            <TextBlock x:Name="BoneNameText"
+                                                       Text="(no bone)"
+                                                       FontSize="12"
+                                                       FontWeight="SemiBold"
+                                                       VerticalAlignment="Center"
+                                                       TextTrimming="CharacterEllipsis"
+                                                       Foreground="{ThemeResource AccentTextFillColorPrimaryBrush}"/>
+                                            <Button x:Name="ChangeBoneButton"
+                                                    Grid.Column="1"
+                                                    Content="Change"
+                                                    Click="ChangeBone_Click"
+                                                    Padding="8,4"
+                                                    FontSize="11"
+                                                    MinHeight="24"
+                                                    ToolTipService.ToolTip="Pick a different bone from the skeleton"/>
+                                        </Grid>
+
+                                        <!-- Use Bone Transforms toggle -->
+                                        <CheckBox x:Name="UseBoneTransformsToggle"
+                                                  Content="Use Bone Transforms"
+                                                  IsChecked="True"
+                                                  FontSize="11"
+                                                  Click="UseBoneTransforms_Click"/>
+
+                                        <!-- Bone matrix label -->
+                                        <TextBlock Text="Bone Matrix (local)"
+                                                   FontWeight="SemiBold"
+                                                   FontSize="11"
+                                                   Margin="0,2,0,0"/>
+
+                                        <!-- Row 1 -->
+                                        <StackPanel Spacing="2">
+                                            <Grid ColumnSpacing="3">
+                                                <Grid.ColumnDefinitions>
+                                                    <ColumnDefinition Width="*"/>
+                                                    <ColumnDefinition Width="*"/>
+                                                    <ColumnDefinition Width="*"/>
+                                                    <ColumnDefinition Width="*"/>
+                                                </Grid.ColumnDefinitions>
+                                                <TextBlock Grid.Column="0" Text="_11" FontSize="9" Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
+                                                <TextBlock Grid.Column="1" Text="_12" FontSize="9" Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
+                                                <TextBlock Grid.Column="2" Text="_13" FontSize="9" Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
+                                                <TextBlock Grid.Column="3" Text="_14" FontSize="9" Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
+                                            </Grid>
+                                            <Grid ColumnSpacing="3">
+                                                <Grid.ColumnDefinitions>
+                                                    <ColumnDefinition Width="*"/>
+                                                    <ColumnDefinition Width="*"/>
+                                                    <ColumnDefinition Width="*"/>
+                                                    <ColumnDefinition Width="*"/>
+                                                </Grid.ColumnDefinitions>
+                                                <Grid Grid.Column="0" ColumnSpacing="2"><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions><TextBox x:Name="BM11" PlaceholderText="_11" TextChanged="BoneMatrix_TextChanged" FontSize="10" MinHeight="22" Padding="3,1"/><StackPanel Grid.Column="1" Spacing="1"><RepeatButton Click="BM11_Up" Height="12" Width="16" Padding="0" CornerRadius="2"><FontIcon Glyph="&#xE70E;" FontSize="8"/></RepeatButton><RepeatButton Click="BM11_Down" Height="12" Width="16" Padding="0" CornerRadius="2"><FontIcon Glyph="&#xE70D;" FontSize="8"/></RepeatButton></StackPanel></Grid>
+                                                <Grid Grid.Column="1" ColumnSpacing="2"><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions><TextBox x:Name="BM12" PlaceholderText="_12" TextChanged="BoneMatrix_TextChanged" FontSize="10" MinHeight="22" Padding="3,1"/><StackPanel Grid.Column="1" Spacing="1"><RepeatButton Click="BM12_Up" Height="12" Width="16" Padding="0" CornerRadius="2"><FontIcon Glyph="&#xE70E;" FontSize="8"/></RepeatButton><RepeatButton Click="BM12_Down" Height="12" Width="16" Padding="0" CornerRadius="2"><FontIcon Glyph="&#xE70D;" FontSize="8"/></RepeatButton></StackPanel></Grid>
+                                                <Grid Grid.Column="2" ColumnSpacing="2"><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions><TextBox x:Name="BM13" PlaceholderText="_13" TextChanged="BoneMatrix_TextChanged" FontSize="10" MinHeight="22" Padding="3,1"/><StackPanel Grid.Column="1" Spacing="1"><RepeatButton Click="BM13_Up" Height="12" Width="16" Padding="0" CornerRadius="2"><FontIcon Glyph="&#xE70E;" FontSize="8"/></RepeatButton><RepeatButton Click="BM13_Down" Height="12" Width="16" Padding="0" CornerRadius="2"><FontIcon Glyph="&#xE70D;" FontSize="8"/></RepeatButton></StackPanel></Grid>
+                                                <Grid Grid.Column="3" ColumnSpacing="2"><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions><TextBox x:Name="BM14" PlaceholderText="_14" TextChanged="BoneMatrix_TextChanged" FontSize="10" MinHeight="22" Padding="3,1"/><StackPanel Grid.Column="1" Spacing="1"><RepeatButton Click="BM14_Up" Height="12" Width="16" Padding="0" CornerRadius="2"><FontIcon Glyph="&#xE70E;" FontSize="8"/></RepeatButton><RepeatButton Click="BM14_Down" Height="12" Width="16" Padding="0" CornerRadius="2"><FontIcon Glyph="&#xE70D;" FontSize="8"/></RepeatButton></StackPanel></Grid>
+                                            </Grid>
+                                        </StackPanel>
+
+                                        <!-- Row 2 -->
+                                        <StackPanel Spacing="2">
+                                            <Grid ColumnSpacing="3">
+                                                <Grid.ColumnDefinitions>
+                                                    <ColumnDefinition Width="*"/>
+                                                    <ColumnDefinition Width="*"/>
+                                                    <ColumnDefinition Width="*"/>
+                                                    <ColumnDefinition Width="*"/>
+                                                </Grid.ColumnDefinitions>
+                                                <TextBlock Grid.Column="0" Text="_21" FontSize="9" Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
+                                                <TextBlock Grid.Column="1" Text="_22" FontSize="9" Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
+                                                <TextBlock Grid.Column="2" Text="_23" FontSize="9" Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
+                                                <TextBlock Grid.Column="3" Text="_24" FontSize="9" Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
+                                            </Grid>
+                                            <Grid ColumnSpacing="3">
+                                                <Grid.ColumnDefinitions>
+                                                    <ColumnDefinition Width="*"/>
+                                                    <ColumnDefinition Width="*"/>
+                                                    <ColumnDefinition Width="*"/>
+                                                    <ColumnDefinition Width="*"/>
+                                                </Grid.ColumnDefinitions>
+                                                <Grid Grid.Column="0" ColumnSpacing="2"><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions><TextBox x:Name="BM21" PlaceholderText="_21" TextChanged="BoneMatrix_TextChanged" FontSize="10" MinHeight="22" Padding="3,1"/><StackPanel Grid.Column="1" Spacing="1"><RepeatButton Click="BM21_Up" Height="12" Width="16" Padding="0" CornerRadius="2"><FontIcon Glyph="&#xE70E;" FontSize="8"/></RepeatButton><RepeatButton Click="BM21_Down" Height="12" Width="16" Padding="0" CornerRadius="2"><FontIcon Glyph="&#xE70D;" FontSize="8"/></RepeatButton></StackPanel></Grid>
+                                                <Grid Grid.Column="1" ColumnSpacing="2"><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions><TextBox x:Name="BM22" PlaceholderText="_22" TextChanged="BoneMatrix_TextChanged" FontSize="10" MinHeight="22" Padding="3,1"/><StackPanel Grid.Column="1" Spacing="1"><RepeatButton Click="BM22_Up" Height="12" Width="16" Padding="0" CornerRadius="2"><FontIcon Glyph="&#xE70E;" FontSize="8"/></RepeatButton><RepeatButton Click="BM22_Down" Height="12" Width="16" Padding="0" CornerRadius="2"><FontIcon Glyph="&#xE70D;" FontSize="8"/></RepeatButton></StackPanel></Grid>
+                                                <Grid Grid.Column="2" ColumnSpacing="2"><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions><TextBox x:Name="BM23" PlaceholderText="_23" TextChanged="BoneMatrix_TextChanged" FontSize="10" MinHeight="22" Padding="3,1"/><StackPanel Grid.Column="1" Spacing="1"><RepeatButton Click="BM23_Up" Height="12" Width="16" Padding="0" CornerRadius="2"><FontIcon Glyph="&#xE70E;" FontSize="8"/></RepeatButton><RepeatButton Click="BM23_Down" Height="12" Width="16" Padding="0" CornerRadius="2"><FontIcon Glyph="&#xE70D;" FontSize="8"/></RepeatButton></StackPanel></Grid>
+                                                <Grid Grid.Column="3" ColumnSpacing="2"><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions><TextBox x:Name="BM24" PlaceholderText="_24" TextChanged="BoneMatrix_TextChanged" FontSize="10" MinHeight="22" Padding="3,1"/><StackPanel Grid.Column="1" Spacing="1"><RepeatButton Click="BM24_Up" Height="12" Width="16" Padding="0" CornerRadius="2"><FontIcon Glyph="&#xE70E;" FontSize="8"/></RepeatButton><RepeatButton Click="BM24_Down" Height="12" Width="16" Padding="0" CornerRadius="2"><FontIcon Glyph="&#xE70D;" FontSize="8"/></RepeatButton></StackPanel></Grid>
+                                            </Grid>
+                                        </StackPanel>
+
+                                        <!-- Row 3 -->
+                                        <StackPanel Spacing="2">
+                                            <Grid ColumnSpacing="3">
+                                                <Grid.ColumnDefinitions>
+                                                    <ColumnDefinition Width="*"/>
+                                                    <ColumnDefinition Width="*"/>
+                                                    <ColumnDefinition Width="*"/>
+                                                    <ColumnDefinition Width="*"/>
+                                                </Grid.ColumnDefinitions>
+                                                <TextBlock Grid.Column="0" Text="_31" FontSize="9" Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
+                                                <TextBlock Grid.Column="1" Text="_32" FontSize="9" Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
+                                                <TextBlock Grid.Column="2" Text="_33" FontSize="9" Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
+                                                <TextBlock Grid.Column="3" Text="_34" FontSize="9" Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
+                                            </Grid>
+                                            <Grid ColumnSpacing="3">
+                                                <Grid.ColumnDefinitions>
+                                                    <ColumnDefinition Width="*"/>
+                                                    <ColumnDefinition Width="*"/>
+                                                    <ColumnDefinition Width="*"/>
+                                                    <ColumnDefinition Width="*"/>
+                                                </Grid.ColumnDefinitions>
+                                                <Grid Grid.Column="0" ColumnSpacing="2"><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions><TextBox x:Name="BM31" PlaceholderText="_31" TextChanged="BoneMatrix_TextChanged" FontSize="10" MinHeight="22" Padding="3,1"/><StackPanel Grid.Column="1" Spacing="1"><RepeatButton Click="BM31_Up" Height="12" Width="16" Padding="0" CornerRadius="2"><FontIcon Glyph="&#xE70E;" FontSize="8"/></RepeatButton><RepeatButton Click="BM31_Down" Height="12" Width="16" Padding="0" CornerRadius="2"><FontIcon Glyph="&#xE70D;" FontSize="8"/></RepeatButton></StackPanel></Grid>
+                                                <Grid Grid.Column="1" ColumnSpacing="2"><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions><TextBox x:Name="BM32" PlaceholderText="_32" TextChanged="BoneMatrix_TextChanged" FontSize="10" MinHeight="22" Padding="3,1"/><StackPanel Grid.Column="1" Spacing="1"><RepeatButton Click="BM32_Up" Height="12" Width="16" Padding="0" CornerRadius="2"><FontIcon Glyph="&#xE70E;" FontSize="8"/></RepeatButton><RepeatButton Click="BM32_Down" Height="12" Width="16" Padding="0" CornerRadius="2"><FontIcon Glyph="&#xE70D;" FontSize="8"/></RepeatButton></StackPanel></Grid>
+                                                <Grid Grid.Column="2" ColumnSpacing="2"><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions><TextBox x:Name="BM33" PlaceholderText="_33" TextChanged="BoneMatrix_TextChanged" FontSize="10" MinHeight="22" Padding="3,1"/><StackPanel Grid.Column="1" Spacing="1"><RepeatButton Click="BM33_Up" Height="12" Width="16" Padding="0" CornerRadius="2"><FontIcon Glyph="&#xE70E;" FontSize="8"/></RepeatButton><RepeatButton Click="BM33_Down" Height="12" Width="16" Padding="0" CornerRadius="2"><FontIcon Glyph="&#xE70D;" FontSize="8"/></RepeatButton></StackPanel></Grid>
+                                                <Grid Grid.Column="3" ColumnSpacing="2"><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions><TextBox x:Name="BM34" PlaceholderText="_34" TextChanged="BoneMatrix_TextChanged" FontSize="10" MinHeight="22" Padding="3,1"/><StackPanel Grid.Column="1" Spacing="1"><RepeatButton Click="BM34_Up" Height="12" Width="16" Padding="0" CornerRadius="2"><FontIcon Glyph="&#xE70E;" FontSize="8"/></RepeatButton><RepeatButton Click="BM34_Down" Height="12" Width="16" Padding="0" CornerRadius="2"><FontIcon Glyph="&#xE70D;" FontSize="8"/></RepeatButton></StackPanel></Grid>
+                                            </Grid>
+                                        </StackPanel>
+
+                                        <!-- Row 4 (translation) -->
+                                        <StackPanel Spacing="2">
+                                            <Grid ColumnSpacing="3">
+                                                <Grid.ColumnDefinitions>
+                                                    <ColumnDefinition Width="*"/>
+                                                    <ColumnDefinition Width="*"/>
+                                                    <ColumnDefinition Width="*"/>
+                                                    <ColumnDefinition Width="*"/>
+                                                </Grid.ColumnDefinitions>
+                                                <TextBlock Grid.Column="0" Text="_41" FontSize="9" Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
+                                                <TextBlock Grid.Column="1" Text="_42" FontSize="9" Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
+                                                <TextBlock Grid.Column="2" Text="_43" FontSize="9" Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
+                                                <TextBlock Grid.Column="3" Text="_44" FontSize="9" Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
+                                            </Grid>
+                                            <Grid ColumnSpacing="3">
+                                                <Grid.ColumnDefinitions>
+                                                    <ColumnDefinition Width="*"/>
+                                                    <ColumnDefinition Width="*"/>
+                                                    <ColumnDefinition Width="*"/>
+                                                    <ColumnDefinition Width="*"/>
+                                                </Grid.ColumnDefinitions>
+                                                <Grid Grid.Column="0" ColumnSpacing="2"><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions><TextBox x:Name="BM41" PlaceholderText="_41" TextChanged="BoneMatrix_TextChanged" FontSize="10" MinHeight="22" Padding="3,1"/><StackPanel Grid.Column="1" Spacing="1"><RepeatButton Click="BM41_Up" Height="12" Width="16" Padding="0" CornerRadius="2"><FontIcon Glyph="&#xE70E;" FontSize="8"/></RepeatButton><RepeatButton Click="BM41_Down" Height="12" Width="16" Padding="0" CornerRadius="2"><FontIcon Glyph="&#xE70D;" FontSize="8"/></RepeatButton></StackPanel></Grid>
+                                                <Grid Grid.Column="1" ColumnSpacing="2"><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions><TextBox x:Name="BM42" PlaceholderText="_42" TextChanged="BoneMatrix_TextChanged" FontSize="10" MinHeight="22" Padding="3,1"/><StackPanel Grid.Column="1" Spacing="1"><RepeatButton Click="BM42_Up" Height="12" Width="16" Padding="0" CornerRadius="2"><FontIcon Glyph="&#xE70E;" FontSize="8"/></RepeatButton><RepeatButton Click="BM42_Down" Height="12" Width="16" Padding="0" CornerRadius="2"><FontIcon Glyph="&#xE70D;" FontSize="8"/></RepeatButton></StackPanel></Grid>
+                                                <Grid Grid.Column="2" ColumnSpacing="2"><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions><TextBox x:Name="BM43" PlaceholderText="_43" TextChanged="BoneMatrix_TextChanged" FontSize="10" MinHeight="22" Padding="3,1"/><StackPanel Grid.Column="1" Spacing="1"><RepeatButton Click="BM43_Up" Height="12" Width="16" Padding="0" CornerRadius="2"><FontIcon Glyph="&#xE70E;" FontSize="8"/></RepeatButton><RepeatButton Click="BM43_Down" Height="12" Width="16" Padding="0" CornerRadius="2"><FontIcon Glyph="&#xE70D;" FontSize="8"/></RepeatButton></StackPanel></Grid>
+                                                <Grid Grid.Column="3" ColumnSpacing="2"><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions><TextBox x:Name="BM44" PlaceholderText="_44" TextChanged="BoneMatrix_TextChanged" FontSize="10" MinHeight="22" Padding="3,1"/><StackPanel Grid.Column="1" Spacing="1"><RepeatButton Click="BM44_Up" Height="12" Width="16" Padding="0" CornerRadius="2"><FontIcon Glyph="&#xE70E;" FontSize="8"/></RepeatButton><RepeatButton Click="BM44_Down" Height="12" Width="16" Padding="0" CornerRadius="2"><FontIcon Glyph="&#xE70D;" FontSize="8"/></RepeatButton></StackPanel></Grid>
+                                            </Grid>
+                                        </StackPanel>
+                                    </StackPanel>
+                                </Expander>
+
+                                <!-- Damage Morph Targets (only visible when selected modelbin has damage meshes) -->
+                                <Expander x:Name="DamageModelExpander"
+                                          Header="Damage Morph Targets"
+                                          IsExpanded="True"
+                                          Visibility="Collapsed"
+                                          HorizontalAlignment="Stretch"
+                                          HorizontalContentAlignment="Stretch"
+                                          Padding="8,6"
+                                          Margin="0,4,0,0">
+                                    <StackPanel Spacing="8">
+                                        <TextBlock x:Name="MorphInfoText"
+                                                   Text=""
+                                                   FontSize="10"
+                                                   TextWrapping="Wrap"
+                                                   Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
+                                        <ComboBox x:Name="DamageMeshSelector"
+                                                  Header="Morph Buffer"
+                                                  HorizontalAlignment="Stretch"
+                                                  SelectionChanged="DamageMeshSelector_SelectionChanged"
+                                                  FontSize="12" MinHeight="28">
+                                            <ComboBox.ItemTemplate>
+                                                <DataTemplate>
+                                                    <Grid ColumnSpacing="4">
+                                                        <Grid.ColumnDefinitions>
+                                                            <ColumnDefinition Width="*"/>
+                                                            <ColumnDefinition Width="Auto"/>
+                                                        </Grid.ColumnDefinitions>
+                                                        <TextBlock Grid.Column="0" Text="{Binding Name}"
+                                                                   VerticalAlignment="Center"
+                                                                   TextTrimming="CharacterEllipsis"
+                                                                   FontSize="12"/>
+                                                        <Button Grid.Column="1" Margin="4,0,0,0" Padding="2"
+                                                                Background="Transparent" BorderThickness="0"
+                                                                Click="DamageMeshVisibility_Click"
+                                                                MinHeight="20" MinWidth="20">
+                                                            <FontIcon Glyph="{Binding IsChecked, Converter={StaticResource BoolToVisibilityIconConverter}}" FontSize="10"/>
+                                                        </Button>
+                                                    </Grid>
+                                                </DataTemplate>
+                                            </ComboBox.ItemTemplate>
+                                        </ComboBox>
+                                    </StackPanel>
+                                </Expander>
+                            </StackPanel>
+                        </Expander>
+
+                        <!-- Light Transform (only visible when a lights.bin is loaded) -->
+                        <Expander x:Name="LightTransformExpander"
+                                  Header="Light Transformations"
+                                  IsExpanded="True"
+                                  Visibility="Collapsed"
+                                  HorizontalAlignment="Stretch"
+                                  HorizontalContentAlignment="Stretch"
+                                  Padding="12,8"
+                                  Margin="8,0,8,0">
+                            <StackPanel Spacing="8">
+                                <TextBlock x:Name="LightMultiSelectText"
+                                           Text=""
+                                           FontWeight="SemiBold"
+                                           FontSize="12"
+                                           HorizontalAlignment="Center"
+                                           Foreground="{ThemeResource AccentTextFillColorPrimaryBrush}"
+                                           Visibility="Collapsed"/>
+                                <ComboBox x:Name="LightPartSelector"
+                                          Header="Light Part"
+                                          HorizontalAlignment="Stretch"
+                                          SelectionChanged="LightPartSelector_SelectionChanged"
+                                          FontSize="12" MinHeight="28">
+                                    <ComboBox.ItemTemplate>
+                                        <DataTemplate>
+                                            <TextBlock Text="{Binding Name}" VerticalAlignment="Center"
+                                                       TextTrimming="CharacterEllipsis" FontSize="12"/>
+                                        </DataTemplate>
+                                    </ComboBox.ItemTemplate>
+                                </ComboBox>
+                                <!-- Pos -->
+                                <StackPanel Spacing="2">
+                                    <TextBlock Text="Pos" FontWeight="SemiBold" FontSize="12"/>
+                                    <Grid ColumnSpacing="4">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="*"/><ColumnDefinition Width="*"/><ColumnDefinition Width="*"/><ColumnDefinition Width="*"/>
+                                        </Grid.ColumnDefinitions>
+                                        <StackPanel Grid.Column="0" Spacing="2">
+                                            <TextBlock Text="X" FontSize="10" Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
+                                            <Grid ColumnSpacing="2"><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions><TextBox x:Name="LtPosX" Text="0.000" TextChanged="LightTransform_TextChanged" FontSize="11" MinHeight="24" Padding="4,2"/><StackPanel Grid.Column="1" Spacing="1"><RepeatButton Click="LtPosX_Up" Height="12" Width="16" Padding="0" CornerRadius="2"><FontIcon Glyph="&#xE70E;" FontSize="8"/></RepeatButton><RepeatButton Click="LtPosX_Down" Height="12" Width="16" Padding="0" CornerRadius="2"><FontIcon Glyph="&#xE70D;" FontSize="8"/></RepeatButton></StackPanel></Grid>
+                                        </StackPanel>
+                                        <StackPanel Grid.Column="1" Spacing="2">
+                                            <TextBlock Text="Y" FontSize="10" Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
+                                            <Grid ColumnSpacing="2"><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions><TextBox x:Name="LtPosY" Text="0.000" TextChanged="LightTransform_TextChanged" FontSize="11" MinHeight="24" Padding="4,2"/><StackPanel Grid.Column="1" Spacing="1"><RepeatButton Click="LtPosY_Up" Height="12" Width="16" Padding="0" CornerRadius="2"><FontIcon Glyph="&#xE70E;" FontSize="8"/></RepeatButton><RepeatButton Click="LtPosY_Down" Height="12" Width="16" Padding="0" CornerRadius="2"><FontIcon Glyph="&#xE70D;" FontSize="8"/></RepeatButton></StackPanel></Grid>
+                                        </StackPanel>
+                                        <StackPanel Grid.Column="2" Spacing="2">
+                                            <TextBlock Text="Z" FontSize="10" Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
+                                            <Grid ColumnSpacing="2"><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions><TextBox x:Name="LtPosZ" Text="0.000" TextChanged="LightTransform_TextChanged" FontSize="11" MinHeight="24" Padding="4,2"/><StackPanel Grid.Column="1" Spacing="1"><RepeatButton Click="LtPosZ_Up" Height="12" Width="16" Padding="0" CornerRadius="2"><FontIcon Glyph="&#xE70E;" FontSize="8"/></RepeatButton><RepeatButton Click="LtPosZ_Down" Height="12" Width="16" Padding="0" CornerRadius="2"><FontIcon Glyph="&#xE70D;" FontSize="8"/></RepeatButton></StackPanel></Grid>
+                                        </StackPanel>
+                                        <StackPanel Grid.Column="3" Spacing="2">
+                                            <TextBlock Text="W" FontSize="10" Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
+                                            <Grid ColumnSpacing="2"><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions><TextBox x:Name="LtPosW" Text="0.000" TextChanged="LightTransform_TextChanged" FontSize="11" MinHeight="24" Padding="4,2"/><StackPanel Grid.Column="1" Spacing="1"><RepeatButton Click="LtPosW_Up" Height="12" Width="16" Padding="0" CornerRadius="2"><FontIcon Glyph="&#xE70E;" FontSize="8"/></RepeatButton><RepeatButton Click="LtPosW_Down" Height="12" Width="16" Padding="0" CornerRadius="2"><FontIcon Glyph="&#xE70D;" FontSize="8"/></RepeatButton></StackPanel></Grid>
+                                        </StackPanel>
+                                    </Grid>
+                                </StackPanel>
+                                <!-- Rot -->
+                                <StackPanel Spacing="2">
+                                    <TextBlock Text="Rot" FontWeight="SemiBold" FontSize="12"/>
+                                    <Grid ColumnSpacing="4">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="*"/><ColumnDefinition Width="*"/><ColumnDefinition Width="*"/><ColumnDefinition Width="*"/>
+                                        </Grid.ColumnDefinitions>
+                                        <StackPanel Grid.Column="0" Spacing="2">
+                                            <TextBlock Text="X" FontSize="10" Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
+                                            <Grid ColumnSpacing="2"><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions><TextBox x:Name="LtRotX" Text="0.000" TextChanged="LightTransform_TextChanged" FontSize="11" MinHeight="24" Padding="4,2"/><StackPanel Grid.Column="1" Spacing="1"><RepeatButton Click="LtRotX_Up" Height="12" Width="16" Padding="0" CornerRadius="2"><FontIcon Glyph="&#xE70E;" FontSize="8"/></RepeatButton><RepeatButton Click="LtRotX_Down" Height="12" Width="16" Padding="0" CornerRadius="2"><FontIcon Glyph="&#xE70D;" FontSize="8"/></RepeatButton></StackPanel></Grid>
+                                        </StackPanel>
+                                        <StackPanel Grid.Column="1" Spacing="2">
+                                            <TextBlock Text="Y" FontSize="10" Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
+                                            <Grid ColumnSpacing="2"><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions><TextBox x:Name="LtRotY" Text="0.000" TextChanged="LightTransform_TextChanged" FontSize="11" MinHeight="24" Padding="4,2"/><StackPanel Grid.Column="1" Spacing="1"><RepeatButton Click="LtRotY_Up" Height="12" Width="16" Padding="0" CornerRadius="2"><FontIcon Glyph="&#xE70E;" FontSize="8"/></RepeatButton><RepeatButton Click="LtRotY_Down" Height="12" Width="16" Padding="0" CornerRadius="2"><FontIcon Glyph="&#xE70D;" FontSize="8"/></RepeatButton></StackPanel></Grid>
+                                        </StackPanel>
+                                        <StackPanel Grid.Column="2" Spacing="2">
+                                            <TextBlock Text="Z" FontSize="10" Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
+                                            <Grid ColumnSpacing="2"><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions><TextBox x:Name="LtRotZ" Text="0.000" TextChanged="LightTransform_TextChanged" FontSize="11" MinHeight="24" Padding="4,2"/><StackPanel Grid.Column="1" Spacing="1"><RepeatButton Click="LtRotZ_Up" Height="12" Width="16" Padding="0" CornerRadius="2"><FontIcon Glyph="&#xE70E;" FontSize="8"/></RepeatButton><RepeatButton Click="LtRotZ_Down" Height="12" Width="16" Padding="0" CornerRadius="2"><FontIcon Glyph="&#xE70D;" FontSize="8"/></RepeatButton></StackPanel></Grid>
+                                        </StackPanel>
+                                        <StackPanel Grid.Column="3" Spacing="2">
+                                            <TextBlock Text="W" FontSize="10" Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
+                                            <Grid ColumnSpacing="2"><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions><TextBox x:Name="LtRotW" Text="0.000" TextChanged="LightTransform_TextChanged" FontSize="11" MinHeight="24" Padding="4,2"/><StackPanel Grid.Column="1" Spacing="1"><RepeatButton Click="LtRotW_Up" Height="12" Width="16" Padding="0" CornerRadius="2"><FontIcon Glyph="&#xE70E;" FontSize="8"/></RepeatButton><RepeatButton Click="LtRotW_Down" Height="12" Width="16" Padding="0" CornerRadius="2"><FontIcon Glyph="&#xE70D;" FontSize="8"/></RepeatButton></StackPanel></Grid>
+                                        </StackPanel>
+                                    </Grid>
+                                </StackPanel>
+                                <!-- Dmg Pos -->
+                                <StackPanel Spacing="2">
+                                    <TextBlock Text="Dmg Pos" FontWeight="SemiBold" FontSize="12"/>
+                                    <Grid ColumnSpacing="4">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="*"/><ColumnDefinition Width="*"/><ColumnDefinition Width="*"/><ColumnDefinition Width="*"/>
+                                        </Grid.ColumnDefinitions>
+                                        <StackPanel Grid.Column="0" Spacing="2">
+                                            <TextBlock Text="X" FontSize="10" Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
+                                            <Grid ColumnSpacing="2"><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions><TextBox x:Name="LtDmgPosX" Text="0.000" TextChanged="LightTransform_TextChanged" FontSize="11" MinHeight="24" Padding="4,2"/><StackPanel Grid.Column="1" Spacing="1"><RepeatButton Click="LtDmgPosX_Up" Height="12" Width="16" Padding="0" CornerRadius="2"><FontIcon Glyph="&#xE70E;" FontSize="8"/></RepeatButton><RepeatButton Click="LtDmgPosX_Down" Height="12" Width="16" Padding="0" CornerRadius="2"><FontIcon Glyph="&#xE70D;" FontSize="8"/></RepeatButton></StackPanel></Grid>
+                                        </StackPanel>
+                                        <StackPanel Grid.Column="1" Spacing="2">
+                                            <TextBlock Text="Y" FontSize="10" Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
+                                            <Grid ColumnSpacing="2"><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions><TextBox x:Name="LtDmgPosY" Text="0.000" TextChanged="LightTransform_TextChanged" FontSize="11" MinHeight="24" Padding="4,2"/><StackPanel Grid.Column="1" Spacing="1"><RepeatButton Click="LtDmgPosY_Up" Height="12" Width="16" Padding="0" CornerRadius="2"><FontIcon Glyph="&#xE70E;" FontSize="8"/></RepeatButton><RepeatButton Click="LtDmgPosY_Down" Height="12" Width="16" Padding="0" CornerRadius="2"><FontIcon Glyph="&#xE70D;" FontSize="8"/></RepeatButton></StackPanel></Grid>
+                                        </StackPanel>
+                                        <StackPanel Grid.Column="2" Spacing="2">
+                                            <TextBlock Text="Z" FontSize="10" Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
+                                            <Grid ColumnSpacing="2"><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions><TextBox x:Name="LtDmgPosZ" Text="0.000" TextChanged="LightTransform_TextChanged" FontSize="11" MinHeight="24" Padding="4,2"/><StackPanel Grid.Column="1" Spacing="1"><RepeatButton Click="LtDmgPosZ_Up" Height="12" Width="16" Padding="0" CornerRadius="2"><FontIcon Glyph="&#xE70E;" FontSize="8"/></RepeatButton><RepeatButton Click="LtDmgPosZ_Down" Height="12" Width="16" Padding="0" CornerRadius="2"><FontIcon Glyph="&#xE70D;" FontSize="8"/></RepeatButton></StackPanel></Grid>
+                                        </StackPanel>
+                                        <StackPanel Grid.Column="3" Spacing="2">
+                                            <TextBlock Text="W" FontSize="10" Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
+                                            <Grid ColumnSpacing="2"><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions><TextBox x:Name="LtDmgPosW" Text="0.000" TextChanged="LightTransform_TextChanged" FontSize="11" MinHeight="24" Padding="4,2"/><StackPanel Grid.Column="1" Spacing="1"><RepeatButton Click="LtDmgPosW_Up" Height="12" Width="16" Padding="0" CornerRadius="2"><FontIcon Glyph="&#xE70E;" FontSize="8"/></RepeatButton><RepeatButton Click="LtDmgPosW_Down" Height="12" Width="16" Padding="0" CornerRadius="2"><FontIcon Glyph="&#xE70D;" FontSize="8"/></RepeatButton></StackPanel></Grid>
+                                        </StackPanel>
+                                    </Grid>
+                                </StackPanel>
+                                <!-- Dmg Rot -->
+                                <StackPanel Spacing="2">
+                                    <TextBlock Text="Dmg Rot" FontWeight="SemiBold" FontSize="12"/>
+                                    <Grid ColumnSpacing="4">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="*"/><ColumnDefinition Width="*"/><ColumnDefinition Width="*"/><ColumnDefinition Width="*"/>
+                                        </Grid.ColumnDefinitions>
+                                        <StackPanel Grid.Column="0" Spacing="2">
+                                            <TextBlock Text="X" FontSize="10" Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
+                                            <Grid ColumnSpacing="2"><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions><TextBox x:Name="LtDmgRotX" Text="0.000" TextChanged="LightTransform_TextChanged" FontSize="11" MinHeight="24" Padding="4,2"/><StackPanel Grid.Column="1" Spacing="1"><RepeatButton Click="LtDmgRotX_Up" Height="12" Width="16" Padding="0" CornerRadius="2"><FontIcon Glyph="&#xE70E;" FontSize="8"/></RepeatButton><RepeatButton Click="LtDmgRotX_Down" Height="12" Width="16" Padding="0" CornerRadius="2"><FontIcon Glyph="&#xE70D;" FontSize="8"/></RepeatButton></StackPanel></Grid>
+                                        </StackPanel>
+                                        <StackPanel Grid.Column="1" Spacing="2">
+                                            <TextBlock Text="Y" FontSize="10" Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
+                                            <Grid ColumnSpacing="2"><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions><TextBox x:Name="LtDmgRotY" Text="0.000" TextChanged="LightTransform_TextChanged" FontSize="11" MinHeight="24" Padding="4,2"/><StackPanel Grid.Column="1" Spacing="1"><RepeatButton Click="LtDmgRotY_Up" Height="12" Width="16" Padding="0" CornerRadius="2"><FontIcon Glyph="&#xE70E;" FontSize="8"/></RepeatButton><RepeatButton Click="LtDmgRotY_Down" Height="12" Width="16" Padding="0" CornerRadius="2"><FontIcon Glyph="&#xE70D;" FontSize="8"/></RepeatButton></StackPanel></Grid>
+                                        </StackPanel>
+                                        <StackPanel Grid.Column="2" Spacing="2">
+                                            <TextBlock Text="Z" FontSize="10" Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
+                                            <Grid ColumnSpacing="2"><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions><TextBox x:Name="LtDmgRotZ" Text="0.000" TextChanged="LightTransform_TextChanged" FontSize="11" MinHeight="24" Padding="4,2"/><StackPanel Grid.Column="1" Spacing="1"><RepeatButton Click="LtDmgRotZ_Up" Height="12" Width="16" Padding="0" CornerRadius="2"><FontIcon Glyph="&#xE70E;" FontSize="8"/></RepeatButton><RepeatButton Click="LtDmgRotZ_Down" Height="12" Width="16" Padding="0" CornerRadius="2"><FontIcon Glyph="&#xE70D;" FontSize="8"/></RepeatButton></StackPanel></Grid>
+                                        </StackPanel>
+                                        <StackPanel Grid.Column="3" Spacing="2">
+                                            <TextBlock Text="W" FontSize="10" Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
+                                            <Grid ColumnSpacing="2"><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions><TextBox x:Name="LtDmgRotW" Text="0.000" TextChanged="LightTransform_TextChanged" FontSize="11" MinHeight="24" Padding="4,2"/><StackPanel Grid.Column="1" Spacing="1"><RepeatButton Click="LtDmgRotW_Up" Height="12" Width="16" Padding="0" CornerRadius="2"><FontIcon Glyph="&#xE70E;" FontSize="8"/></RepeatButton><RepeatButton Click="LtDmgRotW_Down" Height="12" Width="16" Padding="0" CornerRadius="2"><FontIcon Glyph="&#xE70D;" FontSize="8"/></RepeatButton></StackPanel></Grid>
+                                        </StackPanel>
+                                    </Grid>
+                                </StackPanel>
+                                <Button Content="Save Lights.bin"
+                                        HorizontalAlignment="Stretch"
+                                        Style="{StaticResource AccentButtonStyle}"
+                                        Click="LightsSave_Click"
+                                        FontSize="12" MinHeight="28"/>
+                            </StackPanel>
+                        </Expander>
+
+                        <!-- 4x4 Matrix Editor for Locators (only visible when a locators.xml is loaded) -->
+                        <Expander x:Name="LocatorMatrixExpander"
+                                  Header="Locator Transformations"
+                                  IsExpanded="False"
+                                  Visibility="Collapsed"
+                                  HorizontalAlignment="Stretch"
+                                  HorizontalContentAlignment="Stretch"
+                                  Padding="12,8"
+                                  Margin="8,0,8,0">
+                            <StackPanel Spacing="8">
+                                <!-- Locator part selector dropdown -->
+                                <ComboBox x:Name="LocatorPartSelector"
+                                          Header="Locator Part"
+                                          HorizontalAlignment="Stretch"
+                                          SelectionChanged="LocatorPartSelector_SelectionChanged"
+                                          FontSize="12" MinHeight="28">
+                                    <ComboBox.ItemTemplate>
+                                        <DataTemplate>
+                                            <TextBlock Text="{Binding Name}" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" FontSize="12"/>
+                                        </DataTemplate>
+                                    </ComboBox.ItemTemplate>
+                                </ComboBox>
+
+                                <!-- Row 1 -->
+                                <StackPanel Spacing="2">
+                                    <TextBlock Text="Row 1 (_11 _12 _13 _14)" FontSize="10" Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
+                                    <Grid ColumnSpacing="4">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="*"/>
+                                            <ColumnDefinition Width="*"/>
+                                            <ColumnDefinition Width="*"/>
+                                            <ColumnDefinition Width="*"/>
+                                        </Grid.ColumnDefinitions>
+                                        <Grid Grid.Column="0" ColumnSpacing="2"><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions><TextBox x:Name="M11" PlaceholderText="_11" TextChanged="LocatorMatrix_TextChanged" FontSize="11" MinHeight="24" Padding="4,2"/><StackPanel Grid.Column="1" Spacing="1"><RepeatButton Click="M11_Up" Height="12" Width="16" Padding="0" CornerRadius="2"><FontIcon Glyph="&#xE70E;" FontSize="8"/></RepeatButton><RepeatButton Click="M11_Down" Height="12" Width="16" Padding="0" CornerRadius="2"><FontIcon Glyph="&#xE70D;" FontSize="8"/></RepeatButton></StackPanel></Grid>
+                                        <Grid Grid.Column="1" ColumnSpacing="2"><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions><TextBox x:Name="M12" PlaceholderText="_12" TextChanged="LocatorMatrix_TextChanged" FontSize="11" MinHeight="24" Padding="4,2"/><StackPanel Grid.Column="1" Spacing="1"><RepeatButton Click="M12_Up" Height="12" Width="16" Padding="0" CornerRadius="2"><FontIcon Glyph="&#xE70E;" FontSize="8"/></RepeatButton><RepeatButton Click="M12_Down" Height="12" Width="16" Padding="0" CornerRadius="2"><FontIcon Glyph="&#xE70D;" FontSize="8"/></RepeatButton></StackPanel></Grid>
+                                        <Grid Grid.Column="2" ColumnSpacing="2"><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions><TextBox x:Name="M13" PlaceholderText="_13" TextChanged="LocatorMatrix_TextChanged" FontSize="11" MinHeight="24" Padding="4,2"/><StackPanel Grid.Column="1" Spacing="1"><RepeatButton Click="M13_Up" Height="12" Width="16" Padding="0" CornerRadius="2"><FontIcon Glyph="&#xE70E;" FontSize="8"/></RepeatButton><RepeatButton Click="M13_Down" Height="12" Width="16" Padding="0" CornerRadius="2"><FontIcon Glyph="&#xE70D;" FontSize="8"/></RepeatButton></StackPanel></Grid>
+                                        <Grid Grid.Column="3" ColumnSpacing="2"><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions><TextBox x:Name="M14" PlaceholderText="_14" TextChanged="LocatorMatrix_TextChanged" FontSize="11" MinHeight="24" Padding="4,2"/><StackPanel Grid.Column="1" Spacing="1"><RepeatButton Click="M14_Up" Height="12" Width="16" Padding="0" CornerRadius="2"><FontIcon Glyph="&#xE70E;" FontSize="8"/></RepeatButton><RepeatButton Click="M14_Down" Height="12" Width="16" Padding="0" CornerRadius="2"><FontIcon Glyph="&#xE70D;" FontSize="8"/></RepeatButton></StackPanel></Grid>
+                                    </Grid>
+                                </StackPanel>
+
+                                <!-- Row 2 -->
+                                <StackPanel Spacing="2">
+                                    <TextBlock Text="Row 2 (_21 _22 _23 _24)" FontSize="10" Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
+                                    <Grid ColumnSpacing="4">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="*"/>
+                                            <ColumnDefinition Width="*"/>
+                                            <ColumnDefinition Width="*"/>
+                                            <ColumnDefinition Width="*"/>
+                                        </Grid.ColumnDefinitions>
+                                        <Grid Grid.Column="0" ColumnSpacing="2"><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions><TextBox x:Name="M21" PlaceholderText="_21" TextChanged="LocatorMatrix_TextChanged" FontSize="11" MinHeight="24" Padding="4,2"/><StackPanel Grid.Column="1" Spacing="1"><RepeatButton Click="M21_Up" Height="12" Width="16" Padding="0" CornerRadius="2"><FontIcon Glyph="&#xE70E;" FontSize="8"/></RepeatButton><RepeatButton Click="M21_Down" Height="12" Width="16" Padding="0" CornerRadius="2"><FontIcon Glyph="&#xE70D;" FontSize="8"/></RepeatButton></StackPanel></Grid>
+                                        <Grid Grid.Column="1" ColumnSpacing="2"><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions><TextBox x:Name="M22" PlaceholderText="_22" TextChanged="LocatorMatrix_TextChanged" FontSize="11" MinHeight="24" Padding="4,2"/><StackPanel Grid.Column="1" Spacing="1"><RepeatButton Click="M22_Up" Height="12" Width="16" Padding="0" CornerRadius="2"><FontIcon Glyph="&#xE70E;" FontSize="8"/></RepeatButton><RepeatButton Click="M22_Down" Height="12" Width="16" Padding="0" CornerRadius="2"><FontIcon Glyph="&#xE70D;" FontSize="8"/></RepeatButton></StackPanel></Grid>
+                                        <Grid Grid.Column="2" ColumnSpacing="2"><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions><TextBox x:Name="M23" PlaceholderText="_23" TextChanged="LocatorMatrix_TextChanged" FontSize="11" MinHeight="24" Padding="4,2"/><StackPanel Grid.Column="1" Spacing="1"><RepeatButton Click="M23_Up" Height="12" Width="16" Padding="0" CornerRadius="2"><FontIcon Glyph="&#xE70E;" FontSize="8"/></RepeatButton><RepeatButton Click="M23_Down" Height="12" Width="16" Padding="0" CornerRadius="2"><FontIcon Glyph="&#xE70D;" FontSize="8"/></RepeatButton></StackPanel></Grid>
+                                        <Grid Grid.Column="3" ColumnSpacing="2"><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions><TextBox x:Name="M24" PlaceholderText="_24" TextChanged="LocatorMatrix_TextChanged" FontSize="11" MinHeight="24" Padding="4,2"/><StackPanel Grid.Column="1" Spacing="1"><RepeatButton Click="M24_Up" Height="12" Width="16" Padding="0" CornerRadius="2"><FontIcon Glyph="&#xE70E;" FontSize="8"/></RepeatButton><RepeatButton Click="M24_Down" Height="12" Width="16" Padding="0" CornerRadius="2"><FontIcon Glyph="&#xE70D;" FontSize="8"/></RepeatButton></StackPanel></Grid>
+                                    </Grid>
+                                </StackPanel>
+
+                                <!-- Row 3 -->
+                                <StackPanel Spacing="2">
+                                    <TextBlock Text="Row 3 (_31 _32 _33 _34)" FontSize="10" Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
+                                    <Grid ColumnSpacing="4">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="*"/>
+                                            <ColumnDefinition Width="*"/>
+                                            <ColumnDefinition Width="*"/>
+                                            <ColumnDefinition Width="*"/>
+                                        </Grid.ColumnDefinitions>
+                                        <Grid Grid.Column="0" ColumnSpacing="2"><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions><TextBox x:Name="M31" PlaceholderText="_31" TextChanged="LocatorMatrix_TextChanged" FontSize="11" MinHeight="24" Padding="4,2"/><StackPanel Grid.Column="1" Spacing="1"><RepeatButton Click="M31_Up" Height="12" Width="16" Padding="0" CornerRadius="2"><FontIcon Glyph="&#xE70E;" FontSize="8"/></RepeatButton><RepeatButton Click="M31_Down" Height="12" Width="16" Padding="0" CornerRadius="2"><FontIcon Glyph="&#xE70D;" FontSize="8"/></RepeatButton></StackPanel></Grid>
+                                        <Grid Grid.Column="1" ColumnSpacing="2"><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions><TextBox x:Name="M32" PlaceholderText="_32" TextChanged="LocatorMatrix_TextChanged" FontSize="11" MinHeight="24" Padding="4,2"/><StackPanel Grid.Column="1" Spacing="1"><RepeatButton Click="M32_Up" Height="12" Width="16" Padding="0" CornerRadius="2"><FontIcon Glyph="&#xE70E;" FontSize="8"/></RepeatButton><RepeatButton Click="M32_Down" Height="12" Width="16" Padding="0" CornerRadius="2"><FontIcon Glyph="&#xE70D;" FontSize="8"/></RepeatButton></StackPanel></Grid>
+                                        <Grid Grid.Column="2" ColumnSpacing="2"><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions><TextBox x:Name="M33" PlaceholderText="_33" TextChanged="LocatorMatrix_TextChanged" FontSize="11" MinHeight="24" Padding="4,2"/><StackPanel Grid.Column="1" Spacing="1"><RepeatButton Click="M33_Up" Height="12" Width="16" Padding="0" CornerRadius="2"><FontIcon Glyph="&#xE70E;" FontSize="8"/></RepeatButton><RepeatButton Click="M33_Down" Height="12" Width="16" Padding="0" CornerRadius="2"><FontIcon Glyph="&#xE70D;" FontSize="8"/></RepeatButton></StackPanel></Grid>
+                                        <Grid Grid.Column="3" ColumnSpacing="2"><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions><TextBox x:Name="M34" PlaceholderText="_34" TextChanged="LocatorMatrix_TextChanged" FontSize="11" MinHeight="24" Padding="4,2"/><StackPanel Grid.Column="1" Spacing="1"><RepeatButton Click="M34_Up" Height="12" Width="16" Padding="0" CornerRadius="2"><FontIcon Glyph="&#xE70E;" FontSize="8"/></RepeatButton><RepeatButton Click="M34_Down" Height="12" Width="16" Padding="0" CornerRadius="2"><FontIcon Glyph="&#xE70D;" FontSize="8"/></RepeatButton></StackPanel></Grid>
+                                    </Grid>
+                                </StackPanel>
+
+                                <!-- Row 4 (Translation) -->
+                                <StackPanel Spacing="2">
+                                    <TextBlock Text="Row 4 / Translation (_41 _42 _43 _44)" FontSize="10" Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
+                                    <Grid ColumnSpacing="4">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="*"/>
+                                            <ColumnDefinition Width="*"/>
+                                            <ColumnDefinition Width="*"/>
+                                            <ColumnDefinition Width="*"/>
+                                        </Grid.ColumnDefinitions>
+                                        <Grid Grid.Column="0" ColumnSpacing="2"><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions><TextBox x:Name="M41" PlaceholderText="_41" TextChanged="LocatorMatrix_TextChanged" FontSize="11" MinHeight="24" Padding="4,2"/><StackPanel Grid.Column="1" Spacing="1"><RepeatButton Click="M41_Up" Height="12" Width="16" Padding="0" CornerRadius="2"><FontIcon Glyph="&#xE70E;" FontSize="8"/></RepeatButton><RepeatButton Click="M41_Down" Height="12" Width="16" Padding="0" CornerRadius="2"><FontIcon Glyph="&#xE70D;" FontSize="8"/></RepeatButton></StackPanel></Grid>
+                                        <Grid Grid.Column="1" ColumnSpacing="2"><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions><TextBox x:Name="M42" PlaceholderText="_42" TextChanged="LocatorMatrix_TextChanged" FontSize="11" MinHeight="24" Padding="4,2"/><StackPanel Grid.Column="1" Spacing="1"><RepeatButton Click="M42_Up" Height="12" Width="16" Padding="0" CornerRadius="2"><FontIcon Glyph="&#xE70E;" FontSize="8"/></RepeatButton><RepeatButton Click="M42_Down" Height="12" Width="16" Padding="0" CornerRadius="2"><FontIcon Glyph="&#xE70D;" FontSize="8"/></RepeatButton></StackPanel></Grid>
+                                        <Grid Grid.Column="2" ColumnSpacing="2"><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions><TextBox x:Name="M43" PlaceholderText="_43" TextChanged="LocatorMatrix_TextChanged" FontSize="11" MinHeight="24" Padding="4,2"/><StackPanel Grid.Column="1" Spacing="1"><RepeatButton Click="M43_Up" Height="12" Width="16" Padding="0" CornerRadius="2"><FontIcon Glyph="&#xE70E;" FontSize="8"/></RepeatButton><RepeatButton Click="M43_Down" Height="12" Width="16" Padding="0" CornerRadius="2"><FontIcon Glyph="&#xE70D;" FontSize="8"/></RepeatButton></StackPanel></Grid>
+                                        <Grid Grid.Column="3" ColumnSpacing="2"><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions><TextBox x:Name="M44" PlaceholderText="_44" TextChanged="LocatorMatrix_TextChanged" FontSize="11" MinHeight="24" Padding="4,2"/><StackPanel Grid.Column="1" Spacing="1"><RepeatButton Click="M44_Up" Height="12" Width="16" Padding="0" CornerRadius="2"><FontIcon Glyph="&#xE70E;" FontSize="8"/></RepeatButton><RepeatButton Click="M44_Down" Height="12" Width="16" Padding="0" CornerRadius="2"><FontIcon Glyph="&#xE70D;" FontSize="8"/></RepeatButton></StackPanel></Grid>
+                                    </Grid>
+                                </StackPanel>
+
+                                <!-- Save button -->
+                                <Button Content="Save Locators XML"
+                                        HorizontalAlignment="Stretch"
+                                        Style="{StaticResource AccentButtonStyle}"
+                                        Click="SaveLocatorsXml_Click"
+                                        FontSize="12" MinHeight="28"/>
+                            </StackPanel>
+                        </Expander>
+
+                        <!-- Animation Playback Controls -->
+                        <Expander x:Name="AnimationExpander"
+                                  Header="Animation Playback"
+                                  IsExpanded="False"
+                                  Visibility="Collapsed"
+                                  HorizontalAlignment="Stretch"
+                                  HorizontalContentAlignment="Stretch"
+                                  Padding="12,8"
+                                  Margin="8,0,8,0">
+                            <StackPanel Spacing="8">
+                                <!-- Animation selector -->
+                                <ComboBox x:Name="AnimationSelector"
+                                          Header="Animation Clip"
+                                          HorizontalAlignment="Stretch"
+                                          SelectionChanged="AnimationSelector_SelectionChanged"
+                                          FontSize="12" MinHeight="28">
+                                    <ComboBox.ItemTemplate>
+                                        <DataTemplate>
+                                            <TextBlock Text="{Binding Name}" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" FontSize="12"/>
+                                        </DataTemplate>
+                                    </ComboBox.ItemTemplate>
+                                </ComboBox>
+
+                                <!-- Track selector ? "All Tracks" or a specific track -->
+                                <ComboBox x:Name="TrackSelector"
+                                          Header="Track Filter"
+                                          HorizontalAlignment="Stretch"
+                                          SelectionChanged="TrackSelector_SelectionChanged"
+                                          FontSize="12" MinHeight="28">
+                                    <ComboBox.ItemTemplate>
+                                        <DataTemplate>
+                                            <TextBlock Text="{Binding DisplayName}" VerticalAlignment="Center"
+                                                       TextTrimming="CharacterEllipsis" FontSize="12"/>
+                                        </DataTemplate>
+                                    </ComboBox.ItemTemplate>
+                                </ComboBox>
+
+                                <!-- Keyframe detail info for selected track -->
+                                <TextBlock x:Name="TrackKeyframeInfoText"
+                                           Text=""
+                                           FontSize="10"
+                                           FontFamily="Consolas"
+                                           Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                                           TextWrapping="Wrap"
+                                           Visibility="Collapsed"/>
+
+                                <!-- Skeleton ModelBin link status + manual link button -->
+                                <Grid ColumnSpacing="6">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*"/>
+                                        <ColumnDefinition Width="Auto"/>
+                                    </Grid.ColumnDefinitions>
+                                    <TextBlock x:Name="SkeletonMbLinkText"
+                                               Text="No skeleton.modelbin linked"
+                                               FontSize="10"
+                                               VerticalAlignment="Center"
+                                               Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                                               TextWrapping="Wrap"/>
+                                    <Button x:Name="LinkSkeletonMbButton"
+                                            Grid.Column="1"
+                                            Content="Link Skel MB"
+                                            Click="LinkSkeletonMb_Click"
+                                            Padding="6,4"
+                                            FontSize="10"
+                                            MinHeight="24"
+                                            ToolTipService.ToolTip="Manually link a _skeleton.modelbin file to drive the animation skeleton"/>
+                                </Grid>
+
+                                <!-- Playback controls -->
+                                <Grid ColumnSpacing="8">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="Auto"/>
+                                        <ColumnDefinition Width="Auto"/>
+                                        <ColumnDefinition Width="*"/>
+                                    </Grid.ColumnDefinitions>
+                                    
+                                    <Button x:Name="PlayPauseButton" 
+                                            Click="PlayPause_Click" 
+                                            Padding="8" MinHeight="28">
+                                        <FontIcon x:Name="PlayPauseIcon" Glyph="&#xE768;" FontSize="14"/>
+                                    </Button>
+                                    
+                                    <Button x:Name="StopButton" 
+                                            Grid.Column="1" 
+                                            Click="StopAnimation_Click" 
+                                            Padding="8" MinHeight="28">
+                                        <FontIcon Glyph="&#xE71A;" FontSize="14"/>
+                                    </Button>
+                                    
+                                    <TextBlock x:Name="AnimTimeText" 
+                                               Grid.Column="2" 
+                                               Text="0.00s / 0.00s" 
+                                               FontSize="11" 
+                                               VerticalAlignment="Center"
+                                               HorizontalAlignment="Right"
+                                               FontFamily="Consolas"/>
+                                </Grid>
+
+                                <!-- Timeline slider -->
+                                <Slider x:Name="AnimTimeSlider" 
+                                        Minimum="0" 
+                                        Maximum="1" 
+                                        StepFrequency="0.001" 
+                                        Value="0" 
+                                        ValueChanged="AnimTimeSlider_ValueChanged"/>
+
+                                <!-- Speed control -->
+                                <StackPanel Spacing="2">
+                                    <Grid>
+                                        <TextBlock Text="Playback Speed" FontSize="10" Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
+                                        <TextBlock x:Name="SpeedValueText" Text="1.0x" FontSize="10" 
+                                                   Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                                                   HorizontalAlignment="Right"/>
+                                    </Grid>
+                                    <Slider x:Name="AnimSpeedSlider" 
+                                            Minimum="0.1" 
+                                            Maximum="3.0" 
+                                            StepFrequency="0.1" 
+                                            Value="1.0"
+                                            ValueChanged="AnimSpeedSlider_ValueChanged"/>
+                                </StackPanel>
+
+
+
+                                <!-- Bone info -->
+                                <TextBlock x:Name="AnimBoneInfoText" 
+                                           Text="" 
+                                           FontSize="10" 
+                                           Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                                           TextWrapping="Wrap"/>
+
+                                <!-- Bone Match Details -->
+                                <Expander x:Name="BoneMatchExpander"
+                                          Header="Bone Matching Details"
+                                          IsExpanded="False"
+                                          Visibility="Collapsed"
+                                          HorizontalAlignment="Stretch"
+                                          HorizontalContentAlignment="Stretch"
+                                          Padding="4,4">
+                                    <StackPanel Spacing="4">
+                                        <TextBlock x:Name="BoneMatchSummaryText"
+                                                   Text=""
+                                                   FontSize="10"
+                                                   TextWrapping="Wrap"
+                                                   Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
+                                        <ListView x:Name="BoneMatchListView"
+                                                  MaxHeight="200"
+                                                  SelectionMode="None"
+                                                  Padding="0">
+                                            <ListView.ItemTemplate>
+                                                <DataTemplate>
+                                                    <Grid ColumnSpacing="6" Padding="2,1">
+                                                        <Grid.ColumnDefinitions>
+                                                            <ColumnDefinition Width="16"/>
+                                                            <ColumnDefinition Width="*"/>
+                                                            <ColumnDefinition Width="Auto"/>
+                                                            <ColumnDefinition Width="Auto"/>
+                                                            <ColumnDefinition Width="Auto"/>
+                                                            <ColumnDefinition Width="Auto"/>
+                                                        </Grid.ColumnDefinitions>
+                                                        <TextBlock Text="{Binding StatusIcon}" FontSize="10" VerticalAlignment="Center" HorizontalAlignment="Center"/>
+                                                        <TextBlock Grid.Column="1" Text="{Binding BoneName}" FontSize="10" TextTrimming="CharacterEllipsis" VerticalAlignment="Center"/>
+                                                        <TextBlock Grid.Column="2" FontSize="9" VerticalAlignment="Center" Foreground="CornflowerBlue">
+                                                            <Run Text="MB:"/>
+                                                            <Run Text="{Binding InModelBinSkeleton}"/>
+                                                        </TextBlock>
+                                                        <TextBlock Grid.Column="3" FontSize="9" VerticalAlignment="Center" Foreground="MediumSeaGreen">
+                                                            <Run Text="GR2:"/>
+                                                            <Run Text="{Binding InGr2Skeleton}"/>
+                                                        </TextBlock>
+                                                        <TextBlock Grid.Column="4" FontSize="9" VerticalAlignment="Center" Foreground="Goldenrod">
+                                                            <Run Text="Anim:"/>
+                                                            <Run Text="{Binding InAnimTrack}"/>
+                                                        </TextBlock>
+                                                        <TextBlock Grid.Column="5" FontSize="9" VerticalAlignment="Center" Foreground="Orange">
+                                                            <Run Text="Meshes:"/>
+                                                            <Run Text="{Binding LinkedMeshCount}"/>
+                                                        </TextBlock>
+                                                    </Grid>
+                                                </DataTemplate>
+                                            </ListView.ItemTemplate>
+                                        </ListView>
+                                    </StackPanel>
+                                </Expander>
+
+                                <!-- Load Associated Files -->
+                                <Button x:Name="LoadAssociatedFilesButton"
+                                        Content="Load Associated GR2/GSF Files"
+                                        Click="LoadAssociatedFiles_Click"
+                                        HorizontalAlignment="Stretch"
+                                        Padding="6"
+                                        MinHeight="28"
+                                        FontSize="11"
+                                        Visibility="Collapsed"/>
+
+                            </StackPanel>
+                        </Expander>
+
+                        <!-- Points of Interest (.avpins) -->
+                        <Expander x:Name="AvPinsExpander"
+                                  Header="Points of Interest"
+                                  IsExpanded="True"
+                                  Visibility="Collapsed"
+                                  HorizontalAlignment="Stretch"
+                                  HorizontalContentAlignment="Stretch"
+                                  Padding="12,8"
+                                  Margin="8,0,8,0">
+                            <StackPanel Spacing="8">
+
+                                <!-- POI selector -->
+                                <ComboBox x:Name="AvPinSelector"
+                                          Header="Point of Interest"
+                                          HorizontalAlignment="Stretch"
+                                          SelectionChanged="AvPinSelector_SelectionChanged"
+                                          FontSize="12" MinHeight="28">
+                                    <ComboBox.ItemTemplate>
+                                        <DataTemplate>
+                                            <TextBlock Text="{Binding Name}"
+                                                       VerticalAlignment="Center"
+                                                       TextTrimming="CharacterEllipsis"
+                                                       FontSize="12"/>
+                                        </DataTemplate>
+                                    </ComboBox.ItemTemplate>
+                                </ComboBox>
+
+                                <!-- Position -->
+                                <StackPanel Spacing="4">
+                                    <TextBlock Text="Position" FontWeight="SemiBold" FontSize="12"/>
+                                    <Grid ColumnSpacing="6">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="*"/>
+                                            <ColumnDefinition Width="*"/>
+                                            <ColumnDefinition Width="*"/>
+                                        </Grid.ColumnDefinitions>
+                                        <StackPanel Grid.Column="0" Spacing="2">
+                                            <TextBlock Text="X" FontSize="10" Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
+                                            <Grid ColumnSpacing="2"><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions><TextBox x:Name="AvPinPosX" Text="0.000000" TextChanged="AvPinField_TextChanged" FontSize="11" MinHeight="24" Padding="4,2"/><StackPanel Grid.Column="1" Spacing="1"><RepeatButton Click="AvPinPosX_Up" Height="12" Width="16" Padding="0" CornerRadius="2"><FontIcon Glyph="&#xE70E;" FontSize="8"/></RepeatButton><RepeatButton Click="AvPinPosX_Down" Height="12" Width="16" Padding="0" CornerRadius="2"><FontIcon Glyph="&#xE70D;" FontSize="8"/></RepeatButton></StackPanel></Grid>
+                                        </StackPanel>
+                                        <StackPanel Grid.Column="1" Spacing="2">
+                                            <TextBlock Text="Y" FontSize="10" Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
+                                            <Grid ColumnSpacing="2"><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions><TextBox x:Name="AvPinPosY" Text="0.000000" TextChanged="AvPinField_TextChanged" FontSize="11" MinHeight="24" Padding="4,2"/><StackPanel Grid.Column="1" Spacing="1"><RepeatButton Click="AvPinPosY_Up" Height="12" Width="16" Padding="0" CornerRadius="2"><FontIcon Glyph="&#xE70E;" FontSize="8"/></RepeatButton><RepeatButton Click="AvPinPosY_Down" Height="12" Width="16" Padding="0" CornerRadius="2"><FontIcon Glyph="&#xE70D;" FontSize="8"/></RepeatButton></StackPanel></Grid>
+                                        </StackPanel>
+                                        <StackPanel Grid.Column="2" Spacing="2">
+                                            <TextBlock Text="Z" FontSize="10" Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
+                                            <Grid ColumnSpacing="2"><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions><TextBox x:Name="AvPinPosZ" Text="0.000000" TextChanged="AvPinField_TextChanged" FontSize="11" MinHeight="24" Padding="4,2"/><StackPanel Grid.Column="1" Spacing="1"><RepeatButton Click="AvPinPosZ_Up" Height="12" Width="16" Padding="0" CornerRadius="2"><FontIcon Glyph="&#xE70E;" FontSize="8"/></RepeatButton><RepeatButton Click="AvPinPosZ_Down" Height="12" Width="16" Padding="0" CornerRadius="2"><FontIcon Glyph="&#xE70D;" FontSize="8"/></RepeatButton></StackPanel></Grid>
+                                        </StackPanel>
+                                    </Grid>
+                                </StackPanel>
+
+                                <!-- Axis (Yaw / Pitch) -->
+                                <StackPanel Spacing="4">
+                                    <TextBlock Text="Axis" FontWeight="SemiBold" FontSize="12"/>
+                                    <Grid ColumnSpacing="6">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="*"/>
+                                            <ColumnDefinition Width="*"/>
+                                        </Grid.ColumnDefinitions>
+                                        <StackPanel Grid.Column="0" Spacing="2">
+                                            <TextBlock Text="Yaw" FontSize="10" Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
+                                            <Grid ColumnSpacing="2"><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions><TextBox x:Name="AvPinAxisYaw" Text="0.000000" TextChanged="AvPinField_TextChanged" FontSize="11" MinHeight="24" Padding="4,2"/><StackPanel Grid.Column="1" Spacing="1"><RepeatButton Click="AvPinAxisYaw_Up" Height="12" Width="16" Padding="0" CornerRadius="2"><FontIcon Glyph="&#xE70E;" FontSize="8"/></RepeatButton><RepeatButton Click="AvPinAxisYaw_Down" Height="12" Width="16" Padding="0" CornerRadius="2"><FontIcon Glyph="&#xE70D;" FontSize="8"/></RepeatButton></StackPanel></Grid>
+                                        </StackPanel>
+                                        <StackPanel Grid.Column="1" Spacing="2">
+                                            <TextBlock Text="Pitch" FontSize="10" Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
+                                            <Grid ColumnSpacing="2"><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions><TextBox x:Name="AvPinAxisPitch" Text="0.000000" TextChanged="AvPinField_TextChanged" FontSize="11" MinHeight="24" Padding="4,2"/><StackPanel Grid.Column="1" Spacing="1"><RepeatButton Click="AvPinAxisPitch_Up" Height="12" Width="16" Padding="0" CornerRadius="2"><FontIcon Glyph="&#xE70E;" FontSize="8"/></RepeatButton><RepeatButton Click="AvPinAxisPitch_Down" Height="12" Width="16" Padding="0" CornerRadius="2"><FontIcon Glyph="&#xE70D;" FontSize="8"/></RepeatButton></StackPanel></Grid>
+                                        </StackPanel>
+                                    </Grid>
+                                </StackPanel>
+
+                                <!-- Apex -->
+                                <StackPanel Spacing="4">
+                                    <TextBlock Text="Apex" FontWeight="SemiBold" FontSize="12"/>
+                                    <Grid ColumnSpacing="6">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="*"/>
+                                            <ColumnDefinition Width="*"/>
+                                        </Grid.ColumnDefinitions>
+                                        <StackPanel Grid.Column="0" Spacing="2">
+                                            <TextBlock Text="Yaw" FontSize="10" Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
+                                            <Grid ColumnSpacing="2"><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions><TextBox x:Name="AvPinApexYaw" Text="0.000000" TextChanged="AvPinField_TextChanged" FontSize="11" MinHeight="24" Padding="4,2"/><StackPanel Grid.Column="1" Spacing="1"><RepeatButton Click="AvPinApexYaw_Up" Height="12" Width="16" Padding="0" CornerRadius="2"><FontIcon Glyph="&#xE70E;" FontSize="8"/></RepeatButton><RepeatButton Click="AvPinApexYaw_Down" Height="12" Width="16" Padding="0" CornerRadius="2"><FontIcon Glyph="&#xE70D;" FontSize="8"/></RepeatButton></StackPanel></Grid>
+                                        </StackPanel>
+                                        <StackPanel Grid.Column="1" Spacing="2">
+                                            <TextBlock Text="Pitch" FontSize="10" Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
+                                            <Grid ColumnSpacing="2"><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions><TextBox x:Name="AvPinApexPitch" Text="0.000000" TextChanged="AvPinField_TextChanged" FontSize="11" MinHeight="24" Padding="4,2"/><StackPanel Grid.Column="1" Spacing="1"><RepeatButton Click="AvPinApexPitch_Up" Height="12" Width="16" Padding="0" CornerRadius="2"><FontIcon Glyph="&#xE70E;" FontSize="8"/></RepeatButton><RepeatButton Click="AvPinApexPitch_Down" Height="12" Width="16" Padding="0" CornerRadius="2"><FontIcon Glyph="&#xE70D;" FontSize="8"/></RepeatButton></StackPanel></Grid>
+                                        </StackPanel>
+                                    </Grid>
+                                </StackPanel>
+
+                                <!-- Active Apex -->
+                                <StackPanel Spacing="4">
+                                    <TextBlock Text="Active Apex" FontWeight="SemiBold" FontSize="12"/>
+                                    <Grid ColumnSpacing="6">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="*"/>
+                                            <ColumnDefinition Width="*"/>
+                                        </Grid.ColumnDefinitions>
+                                        <StackPanel Grid.Column="0" Spacing="2">
+                                            <TextBlock Text="Yaw" FontSize="10" Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
+                                            <Grid ColumnSpacing="2"><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions><TextBox x:Name="AvPinActiveApexYaw" Text="0.000000" TextChanged="AvPinField_TextChanged" FontSize="11" MinHeight="24" Padding="4,2"/><StackPanel Grid.Column="1" Spacing="1"><RepeatButton Click="AvPinActiveApexYaw_Up" Height="12" Width="16" Padding="0" CornerRadius="2"><FontIcon Glyph="&#xE70E;" FontSize="8"/></RepeatButton><RepeatButton Click="AvPinActiveApexYaw_Down" Height="12" Width="16" Padding="0" CornerRadius="2"><FontIcon Glyph="&#xE70D;" FontSize="8"/></RepeatButton></StackPanel></Grid>
+                                        </StackPanel>
+                                        <StackPanel Grid.Column="1" Spacing="2">
+                                            <TextBlock Text="Pitch" FontSize="10" Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
+                                            <Grid ColumnSpacing="2"><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions><TextBox x:Name="AvPinActiveApexPitch" Text="0.000000" TextChanged="AvPinField_TextChanged" FontSize="11" MinHeight="24" Padding="4,2"/><StackPanel Grid.Column="1" Spacing="1"><RepeatButton Click="AvPinActiveApexPitch_Up" Height="12" Width="16" Padding="0" CornerRadius="2"><FontIcon Glyph="&#xE70E;" FontSize="8"/></RepeatButton><RepeatButton Click="AvPinActiveApexPitch_Down" Height="12" Width="16" Padding="0" CornerRadius="2"><FontIcon Glyph="&#xE70D;" FontSize="8"/></RepeatButton></StackPanel></Grid>
+                                        </StackPanel>
+                                    </Grid>
+                                </StackPanel>
+
+                                <!-- Mid Apex -->
+                                <StackPanel Spacing="4">
+                                    <TextBlock Text="Mid Apex" FontWeight="SemiBold" FontSize="12"/>
+                                    <Grid ColumnSpacing="6">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="*"/>
+                                            <ColumnDefinition Width="*"/>
+                                        </Grid.ColumnDefinitions>
+                                        <StackPanel Grid.Column="0" Spacing="2">
+                                            <TextBlock Text="Yaw" FontSize="10" Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
+                                            <Grid ColumnSpacing="2"><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions><TextBox x:Name="AvPinMidApexYaw" Text="0.000000" TextChanged="AvPinField_TextChanged" FontSize="11" MinHeight="24" Padding="4,2"/><StackPanel Grid.Column="1" Spacing="1"><RepeatButton Click="AvPinMidApexYaw_Up" Height="12" Width="16" Padding="0" CornerRadius="2"><FontIcon Glyph="&#xE70E;" FontSize="8"/></RepeatButton><RepeatButton Click="AvPinMidApexYaw_Down" Height="12" Width="16" Padding="0" CornerRadius="2"><FontIcon Glyph="&#xE70D;" FontSize="8"/></RepeatButton></StackPanel></Grid>
+                                        </StackPanel>
+                                        <StackPanel Grid.Column="1" Spacing="2">
+                                            <TextBlock Text="Pitch" FontSize="10" Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
+                                            <Grid ColumnSpacing="2"><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions><TextBox x:Name="AvPinMidApexPitch" Text="0.000000" TextChanged="AvPinField_TextChanged" FontSize="11" MinHeight="24" Padding="4,2"/><StackPanel Grid.Column="1" Spacing="1"><RepeatButton Click="AvPinMidApexPitch_Up" Height="12" Width="16" Padding="0" CornerRadius="2"><FontIcon Glyph="&#xE70E;" FontSize="8"/></RepeatButton><RepeatButton Click="AvPinMidApexPitch_Down" Height="12" Width="16" Padding="0" CornerRadius="2"><FontIcon Glyph="&#xE70D;" FontSize="8"/></RepeatButton></StackPanel></Grid>
+                                        </StackPanel>
+                                    </Grid>
+                                </StackPanel>
+
+                                <!-- Distance -->
+                                <StackPanel Spacing="4">
+                                    <TextBlock Text="Distance" FontWeight="SemiBold" FontSize="12"/>
+                                    <Grid ColumnSpacing="6">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="*"/>
+                                            <ColumnDefinition Width="*"/>
+                                            <ColumnDefinition Width="*"/>
+                                        </Grid.ColumnDefinitions>
+                                        <StackPanel Grid.Column="0" Spacing="2">
+                                            <TextBlock Text="Near" FontSize="10" Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
+                                            <Grid ColumnSpacing="2"><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions><TextBox x:Name="AvPinNearRadius" Text="0.000000" TextChanged="AvPinField_TextChanged" FontSize="11" MinHeight="24" Padding="4,2"/><StackPanel Grid.Column="1" Spacing="1"><RepeatButton Click="AvPinNearRadius_Up" Height="12" Width="16" Padding="0" CornerRadius="2"><FontIcon Glyph="&#xE70E;" FontSize="8"/></RepeatButton><RepeatButton Click="AvPinNearRadius_Down" Height="12" Width="16" Padding="0" CornerRadius="2"><FontIcon Glyph="&#xE70D;" FontSize="8"/></RepeatButton></StackPanel></Grid>
+                                        </StackPanel>
+                                        <StackPanel Grid.Column="1" Spacing="2">
+                                            <TextBlock Text="Mid" FontSize="10" Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
+                                            <Grid ColumnSpacing="2"><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions><TextBox x:Name="AvPinMidRadius" Text="0.000000" TextChanged="AvPinField_TextChanged" FontSize="11" MinHeight="24" Padding="4,2"/><StackPanel Grid.Column="1" Spacing="1"><RepeatButton Click="AvPinMidRadius_Up" Height="12" Width="16" Padding="0" CornerRadius="2"><FontIcon Glyph="&#xE70E;" FontSize="8"/></RepeatButton><RepeatButton Click="AvPinMidRadius_Down" Height="12" Width="16" Padding="0" CornerRadius="2"><FontIcon Glyph="&#xE70D;" FontSize="8"/></RepeatButton></StackPanel></Grid>
+                                        </StackPanel>
+                                        <StackPanel Grid.Column="2" Spacing="2">
+                                            <TextBlock Text="Far" FontSize="10" Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
+                                            <Grid ColumnSpacing="2"><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions><TextBox x:Name="AvPinFarRadius" Text="0.000000" TextChanged="AvPinField_TextChanged" FontSize="11" MinHeight="24" Padding="4,2"/><StackPanel Grid.Column="1" Spacing="1"><RepeatButton Click="AvPinFarRadius_Up" Height="12" Width="16" Padding="0" CornerRadius="2"><FontIcon Glyph="&#xE70E;" FontSize="8"/></RepeatButton><RepeatButton Click="AvPinFarRadius_Down" Height="12" Width="16" Padding="0" CornerRadius="2"><FontIcon Glyph="&#xE70D;" FontSize="8"/></RepeatButton></StackPanel></Grid>
+                                        </StackPanel>
+                                    </Grid>
+                                </StackPanel>
+
+                                <!-- Save -->
+                                <Button Content="Save .avpins"
+                                        HorizontalAlignment="Stretch"
+                                        Style="{StaticResource AccentButtonStyle}"
+                                        Click="SaveAvPins_Click"
+                                        FontSize="12" MinHeight="28"/>
+
+                            </StackPanel>
+                        </Expander>
+
+                    </StackPanel>
+                </ScrollViewer>
+            </Grid>
+        </Border>
+
+        <!-- Left Panel Toggle Strip (always visible, page column 1) -->
+        <Border Grid.Row="1" Grid.Column="1"
+                BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
+                BorderThickness="1,0,1,0"
+                Background="{ThemeResource LayerFillColorDefaultBrush}">
+            <Button x:Name="LeftPanelToggleBtn"
+                    Click="LeftPanelToggle_Click"
+                    ToolTipService.ToolTip="Collapse panel"
+                    Style="{StaticResource SubtleButtonStyle}"
+                    HorizontalAlignment="Stretch"
+                    VerticalAlignment="Stretch"
+                    Padding="0">
+                <FontIcon x:Name="LeftPanelToggleIcon" Glyph="&#xE76B;" FontSize="10"/>
+            </Button>
+        </Border>
+
+        <!-- Command Bar (spans full page width) -->
+        <CommandBar Grid.Row="0" Grid.ColumnSpan="3"
+                    DefaultLabelPosition="Right"
+                    Background="{ThemeResource LayerFillColorDefaultBrush}">
+            <CommandBar.Content>
+                <Border VerticalAlignment="Stretch" Padding="8,0,16,0">
+                    <TextBlock Text="3D Viewer"
+                               FontSize="32"
+                               FontWeight="SemiBold"
+                               VerticalAlignment="Center"/>
+                </Border>
+            </CommandBar.Content>
+
+            <!-- File: Open / Save / Save As -->
+            <AppBarButton Click="OpenFiles_Click"
+                          Label="Open"
+                          ToolTipService.ToolTip="Open new files (Ctrl+O)">
+                <AppBarButton.Icon>
+                    <FontIcon Glyph="&#xE8E5;"/>
+                </AppBarButton.Icon>
+                <AppBarButton.KeyboardAccelerators>
+                    <KeyboardAccelerator Modifiers="Control" Key="O"/>
+                </AppBarButton.KeyboardAccelerators>
+            </AppBarButton>
+
+            <AppBarButton Label="Save" Click="SaveCurrentModel_Click"
+                          ToolTipService.ToolTip="Save (Ctrl+S)">
+                <AppBarButton.Icon>
+                    <FontIcon Glyph="&#xE74E;"/>
+                </AppBarButton.Icon>
+                <AppBarButton.KeyboardAccelerators>
+                    <KeyboardAccelerator Modifiers="Control" Key="S"/>
+                </AppBarButton.KeyboardAccelerators>
+            </AppBarButton>
+
+            <AppBarButton Label="Save As" Click="SaveCurrentModelAs_Click"
+                          ToolTipService.ToolTip="Save As (Ctrl+Shift+S)">
+                <AppBarButton.Icon>
+                    <FontIcon Glyph="&#xE792;"/>
+                </AppBarButton.Icon>
+                <AppBarButton.KeyboardAccelerators>
+                    <KeyboardAccelerator Modifiers="Control,Shift" Key="S"/>
+                </AppBarButton.KeyboardAccelerators>
+            </AppBarButton>
+
+            <AppBarSeparator/>
+
+            <!-- Edit: Undo / Redo -->
+            <AppBarButton x:Name="UndoBtn"
+                          Label="Undo"
+                          Click="Undo_Click"
+                          IsEnabled="False"
+                          ToolTipService.ToolTip="Undo (Ctrl+Z)">
+                <AppBarButton.Icon>
+                    <FontIcon Glyph="&#xE7A7;"/>
+                </AppBarButton.Icon>
+                <AppBarButton.KeyboardAccelerators>
+                    <KeyboardAccelerator Modifiers="Control" Key="Z"/>
+                </AppBarButton.KeyboardAccelerators>
+            </AppBarButton>
+
+            <AppBarButton x:Name="RedoBtn"
+                          Label="Redo"
+                          Click="Redo_Click"
+                          IsEnabled="False"
+                          ToolTipService.ToolTip="Redo (Ctrl+Y / Ctrl+Shift+Z)">
+                <AppBarButton.Icon>
+                    <FontIcon Glyph="&#xE7A6;"/>
+                </AppBarButton.Icon>
+                <AppBarButton.KeyboardAccelerators>
+                    <KeyboardAccelerator Modifiers="Control" Key="Y"/>
+                    <KeyboardAccelerator Modifiers="Control,Shift" Key="Z"/>
+                </AppBarButton.KeyboardAccelerators>
+            </AppBarButton>
+
+            <AppBarSeparator/>
+
+            <!-- Export / Close -->
+            <AppBarButton Label="Export OBJ" ToolTipService.ToolTip="Export OBJ">
+                <AppBarButton.Icon>
+                    <FontIcon Glyph="&#xEDE1;"/>
+                </AppBarButton.Icon>
+                <AppBarButton.Flyout>
+                    <MenuFlyout>
+                        <MenuFlyoutItem Text="Export Whole Scene" Click="ExportObjScene_Click">
+                            <MenuFlyoutItem.Icon><FontIcon Glyph="&#xE81C;"/></MenuFlyoutItem.Icon>
+                        </MenuFlyoutItem>
+                        <MenuFlyoutItem Text="Export Selected Model" Click="ExportObjSelected_Click">
+                            <MenuFlyoutItem.Icon><FontIcon Glyph="&#xE722;"/></MenuFlyoutItem.Icon>
+                        </MenuFlyoutItem>
+                    </MenuFlyout>
+                </AppBarButton.Flyout>
+            </AppBarButton>
+
+            <AppBarButton Command="{x:Bind ViewModel.CloseSelectedCommand}"
+                          Label="Close Selected"
+                          ToolTipService.ToolTip="Close Selected (Ctrl+W)">
+                <AppBarButton.Icon>
+                    <FontIcon Glyph="&#xE711;"/>
+                </AppBarButton.Icon>
+                <AppBarButton.KeyboardAccelerators>
+                    <KeyboardAccelerator Modifiers="Control" Key="W"/>
+                </AppBarButton.KeyboardAccelerators>
+            </AppBarButton>
+
+            <AppBarButton Command="{x:Bind ViewModel.CloseAllCommand}"
+                          Label="Close All"
+                          ToolTipService.ToolTip="Close All Files (Ctrl+Shift+W)">
+                <AppBarButton.Icon>
+                    <FontIcon Glyph="&#xE74D;"/>
+                </AppBarButton.Icon>
+                <AppBarButton.KeyboardAccelerators>
+                    <KeyboardAccelerator Modifiers="Control,Shift" Key="W"/>
+                </AppBarButton.KeyboardAccelerators>
+            </AppBarButton>
+
+            <AppBarSeparator/>
+
+            <!-- Selection / Filter -->
+            <AppBarToggleButton x:Name="SelectionModeToggle"
+                                Label="Selection Mode"
+                                Icon="SelectAll"
+                                ToolTipService.ToolTip="Toggle between Mesh and Modelbin selection"/>
+
+            <AppBarButton x:Name="SelectedBtn"
+                          Label="Filter"
+                          ToolTipService.ToolTip="Filter viewport visibility">
+                <AppBarButton.Icon>
+                    <FontIcon Glyph="&#xE762;"/>
+                </AppBarButton.Icon>
+                <AppBarButton.Flyout>
+                    <MenuFlyout>
+                        <MenuFlyoutItem Text="Hide Selected" Click="HideSelected_Click">
+                            <MenuFlyoutItem.Icon><FontIcon Glyph="&#xED1A;"/></MenuFlyoutItem.Icon>
+                            <MenuFlyoutItem.KeyboardAccelerators>
+                                <KeyboardAccelerator Modifiers="Control" Key="H"/>
+                            </MenuFlyoutItem.KeyboardAccelerators>
+                        </MenuFlyoutItem>
+                        <MenuFlyoutItem Text="Isolate Selected" Click="IsolateSelected_Click">
+                            <MenuFlyoutItem.Icon><FontIcon Glyph="&#xE7C9;"/></MenuFlyoutItem.Icon>
+                            <MenuFlyoutItem.KeyboardAccelerators>
+                                <KeyboardAccelerator Modifiers="Control" Key="I"/>
+                            </MenuFlyoutItem.KeyboardAccelerators>
+                        </MenuFlyoutItem>
+                        <MenuFlyoutItem Text="Unhide Hidden" Click="UnhideHidden_Click">
+                            <MenuFlyoutItem.Icon><FontIcon Glyph="&#xE7B3;"/></MenuFlyoutItem.Icon>
+                            <MenuFlyoutItem.KeyboardAccelerators>
+                                <KeyboardAccelerator Modifiers="Control,Shift" Key="H"/>
+                            </MenuFlyoutItem.KeyboardAccelerators>
+                        </MenuFlyoutItem>
+                        <MenuFlyoutSeparator/>
+                        <MenuFlyoutItem Text="Materials" Click="Materials_Click">
+                            <MenuFlyoutItem.Icon><FontIcon Glyph="&#xE790;"/></MenuFlyoutItem.Icon>
+                        </MenuFlyoutItem>
+                        <MenuFlyoutItem Text="Objects" Click="Objects_Click">
+                            <MenuFlyoutItem.Icon><FontIcon Glyph="&#xE8B9;"/></MenuFlyoutItem.Icon>
+                        </MenuFlyoutItem>
+                    </MenuFlyout>
+                </AppBarButton.Flyout>
+            </AppBarButton>
+
+            <AppBarSeparator/>
+
+            <!-- View / Camera / Options -->
+            <AppBarButton Label="View" ToolTipService.ToolTip="View options">
+                <AppBarButton.Icon>
+                    <FontIcon Glyph="&#xE890;"/>
+                </AppBarButton.Icon>
+                <AppBarButton.Flyout>
+                    <MenuFlyout>
+                        <ToggleMenuFlyoutItem x:Name="Lod0Item" Text="LOD 0" IsChecked="True" Click="LOD_Click"/>
+                        <ToggleMenuFlyoutItem x:Name="Lod1Item" Text="LOD 1" Click="LOD_Click"/>
+                        <ToggleMenuFlyoutItem x:Name="Lod2Item" Text="LOD 2" Click="LOD_Click"/>
+                        <ToggleMenuFlyoutItem x:Name="Lod3Item" Text="LOD 3" Click="LOD_Click"/>
+                        <ToggleMenuFlyoutItem x:Name="Lod4Item" Text="LOD 4" Click="LOD_Click"/>
+                        <ToggleMenuFlyoutItem x:Name="Lod5Item" Text="LOD 5" Click="LOD_Click"/>
+                        <MenuFlyoutSeparator/>
+                        <ToggleMenuFlyoutItem x:Name="ShadowsItem" Text="Shadows" Click="LOD_Click"/>
+                        <MenuFlyoutSeparator/>
+                        <ToggleMenuFlyoutItem x:Name="LightsItem" Text="Lights" IsChecked="True" Click="ViewType_Click"/>
+                        <ToggleMenuFlyoutItem x:Name="LocatorsItem" Text="Locators" IsChecked="True" Click="ViewType_Click"/>
+                        <ToggleMenuFlyoutItem x:Name="PhysicsItem" Text="Physics" IsChecked="True" Click="ViewType_Click"/>
+                        <ToggleMenuFlyoutItem x:Name="SkeletonsItem" Text="Skeletons" IsChecked="True" Click="ViewType_Click"/>
+                        <MenuFlyoutSeparator/>
+                        <ToggleMenuFlyoutItem x:Name="DamageModelItem" Text="Damage Model" IsChecked="False" Click="DamageModel_Click"/>
+                        <MenuFlyoutSeparator/>
+                        <ToggleMenuFlyoutItem x:Name="WireframeItem" Text="Wireframe" Click="WireframeToggle_Click"/>
+                        <ToggleMenuFlyoutItem x:Name="NormalsItem" Text="Normals" Click="NormalsToggle_Click"/>
+                        <ToggleMenuFlyoutItem x:Name="BoundingBoxItem" Text="Bounding Boxes" Click="BoundingBoxToggle_Click"/>
+                    </MenuFlyout>
+                </AppBarButton.Flyout>
+            </AppBarButton>
+
+            <AppBarButton x:Name="CameraOptionsBtn" Label="Camera" ToolTipService.ToolTip="Camera options">
+                <AppBarButton.Icon>
+                    <FontIcon Glyph="&#xE781;"/>
+                </AppBarButton.Icon>
+                <AppBarButton.Flyout>
+                    <Flyout Placement="Bottom">
+                        <ScrollViewer VerticalScrollBarVisibility="Auto" MaxHeight="700">
+                            <StackPanel Spacing="10" Width="300" Padding="4,0,4,8">
+
+                                <!-- Snap / Focus -->
+                                <TextBlock Text="Snap / Focus" FontWeight="SemiBold" FontSize="13" Margin="0,4,0,0"/>
+                                <Grid ColumnSpacing="6">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*"/>
+                                        <ColumnDefinition Width="*"/>
+                                        <ColumnDefinition Width="*"/>
+                                    </Grid.ColumnDefinitions>
+                                    <Button Grid.Column="0" Content="Focus Selected"
+                                            Click="FocusOnSelected_Click"
+                                            HorizontalAlignment="Stretch"
+                                            FontSize="11" Padding="4,6"
+                                            ToolTipService.ToolTip="Snap camera to the selected model/mesh (F)"/>
+                                    <Button Grid.Column="1" Content="Fit All"
+                                            Click="FitAll_Click"
+                                            HorizontalAlignment="Stretch"
+                                            FontSize="11" Padding="4,6"
+                                            ToolTipService.ToolTip="Fit the whole scene into view"/>
+                                    <Button Grid.Column="2" Content="Reset Camera"
+                                            Click="ResetCamera_Click"
+                                            HorizontalAlignment="Stretch"
+                                            FontSize="11" Padding="4,6"
+                                            ToolTipService.ToolTip="Reset camera to default position"/>
+                                </Grid>
+
+                                <NavigationViewItemSeparator/>
+
+                                <!-- Navigation -->
+                                <TextBlock Text="Navigation" FontWeight="SemiBold" FontSize="13"/>
+                                <Grid ColumnSpacing="16">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*"/>
+                                        <ColumnDefinition Width="*"/>
+                                    </Grid.ColumnDefinitions>
+                                    <!-- Rotation Mode -->
+                                    <StackPanel Spacing="4">
+                                        <TextBlock Text="Rotation Mode" FontSize="12" Opacity="0.7"/>
+                                        <RadioButton x:Name="RotModeturntable" Content="Turntable" Tag="Turntable"
+                                                     GroupName="RotationMode" IsChecked="True" FontSize="12"
+                                                     Checked="CameraRotationMode_Changed"/>
+                                        <RadioButton x:Name="RotModeTrackball" Content="Trackball" Tag="Trackball"
+                                                     GroupName="RotationMode" FontSize="12"
+                                                     Checked="CameraRotationMode_Changed"/>
+                                    </StackPanel>
+                                    <!-- Camera Mode -->
+                                    <StackPanel Grid.Column="1" Spacing="4">
+                                        <TextBlock Text="Camera Mode" FontSize="12" Opacity="0.7"/>
+                                        <RadioButton x:Name="CamModeInspect" Content="Inspect" Tag="Inspect"
+                                                     GroupName="CameraMode" IsChecked="True" FontSize="12"
+                                                     Checked="CameraMode_Changed"/>
+                                        <RadioButton x:Name="CamModeWalkAround" Content="Walk Around" Tag="WalkAround"
+                                                     GroupName="CameraMode" FontSize="12"
+                                                     Checked="CameraMode_Changed"/>
+                                        <RadioButton x:Name="CamModeFixed" Content="Fixed Position" Tag="FixedPosition"
+                                                     GroupName="CameraMode" FontSize="12"
+                                                     Checked="CameraMode_Changed"/>
+                                    </StackPanel>
+                                </Grid>
+                                <CheckBox x:Name="RotateAroundMouseDownToggle"
+                                          Content="Rotate Around Mouse Down Point"
+                                          FontSize="12"
+                                          Click="CameraToggle_Click"/>
+                                <CheckBox x:Name="ZoomAroundMouseDownToggle"
+                                          Content="Zoom Around Mouse Down Point"
+                                          FontSize="12"
+                                          Click="CameraToggle_Click"/>
+                                <CheckBox x:Name="InertiaToggle"
+                                          Content="Enable Inertia"
+                                          IsChecked="True"
+                                          FontSize="12"
+                                          Click="CameraToggle_Click"/>
+
+                                <NavigationViewItemSeparator/>
+
+                                <!-- Sensitivity -->
+                                <TextBlock Text="Sensitivity" FontWeight="SemiBold" FontSize="13"/>
+
+                                <StackPanel Spacing="2">
+                                    <Grid>
+                                        <TextBlock Text="Zoom Sensitivity" FontSize="11" Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
+                                        <TextBlock x:Name="ZoomSensLabel" Text="1.0" FontSize="11"
+                                                   HorizontalAlignment="Right"
+                                                   Foreground="{ThemeResource AccentTextFillColorPrimaryBrush}"/>
+                                    </Grid>
+                                    <Slider x:Name="ZoomSensSlider"
+                                            Minimum="0.1" Maximum="10" StepFrequency="0.1" Value="1"
+                                            ValueChanged="CameraSlider_Changed"/>
+                                </StackPanel>
+
+                                <StackPanel Spacing="2">
+                                    <Grid>
+                                        <TextBlock Text="Rotation Sensitivity" FontSize="11" Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
+                                        <TextBlock x:Name="RotSensLabel" Text="1.0" FontSize="11"
+                                                   HorizontalAlignment="Right"
+                                                   Foreground="{ThemeResource AccentTextFillColorPrimaryBrush}"/>
+                                    </Grid>
+                                    <Slider x:Name="RotSensSlider"
+                                            Minimum="0.1" Maximum="5" StepFrequency="0.1" Value="1"
+                                            ValueChanged="CameraSlider_Changed"/>
+                                </StackPanel>
+
+                                <StackPanel Spacing="2">
+                                    <Grid>
+                                        <TextBlock Text="Pan Sensitivity" FontSize="11" Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
+                                        <TextBlock x:Name="PanSensLabel" Text="1.0" FontSize="11"
+                                                   HorizontalAlignment="Right"
+                                                   Foreground="{ThemeResource AccentTextFillColorPrimaryBrush}"/>
+                                    </Grid>
+                                    <Slider x:Name="PanSensSlider"
+                                            Minimum="0.1" Maximum="5" StepFrequency="0.1" Value="1"
+                                            ValueChanged="CameraSlider_Changed"/>
+                                </StackPanel>
+
+                                <StackPanel Spacing="2">
+                                    <Grid>
+                                        <TextBlock Text="Inertia Factor" FontSize="11" Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
+                                        <TextBlock x:Name="InertiaLabel" Text="0.93" FontSize="11"
+                                                   HorizontalAlignment="Right"
+                                                   Foreground="{ThemeResource AccentTextFillColorPrimaryBrush}"/>
+                                    </Grid>
+                                    <Slider x:Name="InertiaSlider"
+                                            Minimum="0" Maximum="0.99" StepFrequency="0.01" Value="0.93"
+                                            ValueChanged="CameraSlider_Changed"/>
+                                </StackPanel>
+
+                                <NavigationViewItemSeparator/>
+
+                                <!-- Clipping Planes -->
+                                <TextBlock Text="Clipping Planes" FontWeight="SemiBold" FontSize="13"/>
+
+                                <StackPanel Spacing="2">
+                                    <Grid>
+                                        <TextBlock Text="Near Plane" FontSize="11" Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
+                                        <TextBlock x:Name="NearPlaneLabel" Text="0.1" FontSize="11"
+                                                   HorizontalAlignment="Right"
+                                                   Foreground="{ThemeResource AccentTextFillColorPrimaryBrush}"/>
+                                    </Grid>
+                                    <Slider x:Name="NearPlaneSlider"
+                                            Minimum="0.001" Maximum="100" StepFrequency="0.001" Value="0.1"
+                                            ValueChanged="CameraSlider_Changed"/>
+                                </StackPanel>
+
+                                <StackPanel Spacing="2">
+                                    <Grid>
+                                        <TextBlock Text="Far Plane" FontSize="11" Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
+                                        <TextBlock x:Name="FarPlaneLabel" Text="50000" FontSize="11"
+                                                   HorizontalAlignment="Right"
+                                                   Foreground="{ThemeResource AccentTextFillColorPrimaryBrush}"/>
+                                    </Grid>
+                                    <Slider x:Name="FarPlaneSlider"
+                                            Minimum="1000" Maximum="2000000" StepFrequency="1000" Value="50000"
+                                            ValueChanged="CameraSlider_Changed"/>
+                                </StackPanel>
+
+                                <Button Content="Auto Near/Far (Fit Scene)"
+                                        HorizontalAlignment="Stretch"
+                                        Click="AutoNearFar_Click"
+                                        FontSize="12" MinHeight="28"
+                                        ToolTipService.ToolTip="Automatically set near/far planes based on scene bounds"/>
+
+                                <NavigationViewItemSeparator/>
+
+                                <!-- Projection -->
+                                <TextBlock Text="Projection" FontWeight="SemiBold" FontSize="13"/>
+
+                                <CheckBox x:Name="OrthographicToggle"
+                                          Content="Orthographic Mode"
+                                          FontSize="12"
+                                          Click="CameraToggle_Click"/>
+
+                                <StackPanel Spacing="2">
+                                    <Grid>
+                                        <TextBlock Text="Field of View (°)" FontSize="11" Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
+                                        <TextBlock x:Name="FovLabel" Text="45°" FontSize="11"
+                                                   HorizontalAlignment="Right"
+                                                   Foreground="{ThemeResource AccentTextFillColorPrimaryBrush}"/>
+                                    </Grid>
+                                    <Slider x:Name="FovSlider"
+                                            Minimum="10" Maximum="120" StepFrequency="1" Value="45"
+                                            ValueChanged="CameraSlider_Changed"/>
+                                </StackPanel>
+
+                                <NavigationViewItemSeparator/>
+
+                                <!-- Zoom Limits -->
+                                <TextBlock Text="Zoom Limits" FontWeight="SemiBold" FontSize="13"/>
+
+                                <StackPanel Spacing="2">
+                                    <Grid>
+                                        <TextBlock Text="Zoom Near Limit" FontSize="11" Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
+                                        <TextBlock x:Name="ZoomNearLimitLabel" Text="0.01" FontSize="11"
+                                                   HorizontalAlignment="Right"
+                                                   Foreground="{ThemeResource AccentTextFillColorPrimaryBrush}"/>
+                                    </Grid>
+                                    <Slider x:Name="ZoomNearLimitSlider"
+                                            Minimum="0.001" Maximum="100" StepFrequency="0.001" Value="0.01"
+                                            ValueChanged="CameraSlider_Changed"/>
+                                </StackPanel>
+
+                            </StackPanel>
+                        </ScrollViewer>
+                    </Flyout>
+                </AppBarButton.Flyout>
+            </AppBarButton>
+
+            <AppBarButton Label="Options" ToolTipService.ToolTip="Options">
+                <AppBarButton.Icon>
+                    <FontIcon Glyph="&#xE713;"/>
+                </AppBarButton.Icon>
+                <AppBarButton.Flyout>
+                    <Flyout>
+                        <StackPanel Spacing="12" Width="280">
+                            <CheckBox x:Name="GridToggle" Content="Show Grid" IsChecked="True" Click="GridToggle_Click"/>
+                            <CheckBox x:Name="SingleColorToggle" Content="Use Single Color" IsChecked="True" Click="SingleColorToggle_Click"/>
+                            <CheckBox x:Name="ConvertLodsToLod0Toggle" Content="Convert LODS to LOD0" IsChecked="True"/>
+
+                            <NavigationViewItemSeparator/>
+
+                            <!-- Scene light toggle and angle controls -->
+                            <StackPanel Orientation="Horizontal" Spacing="16">
+                                <CheckBox x:Name="SceneLightToggle" Content="Scene Light" IsChecked="True" Click="SceneLightToggle_Click"/>
+                                <CheckBox x:Name="FullbrightToggle" Content="Fully Lit Scene" IsChecked="False" Click="FullbrightToggle_Click"/>
+                            </StackPanel>
+
+                            <StackPanel Spacing="2">
+                                <Grid>
+                                    <TextBlock Text="Light Horizontal (°)" FontSize="11" Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
+                                    <TextBlock x:Name="LightHorizontalLabel" Text="315°" FontSize="11"
+                                               HorizontalAlignment="Right"
+                                               Foreground="{ThemeResource AccentTextFillColorPrimaryBrush}"/>
+                                </Grid>
+                                <Slider x:Name="LightHorizontalSlider"
+                                        Minimum="0" Maximum="360" StepFrequency="1" Value="315"
+                                        ValueChanged="LightAngleSlider_Changed"/>
+                            </StackPanel>
+
+                            <StackPanel Spacing="2">
+                                <Grid>
+                                    <TextBlock Text="Light Vertical (°)" FontSize="11" Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
+                                    <TextBlock x:Name="LightVerticalLabel" Text="45°" FontSize="11"
+                                               HorizontalAlignment="Right"
+                                               Foreground="{ThemeResource AccentTextFillColorPrimaryBrush}"/>
+                                </Grid>
+                                <Slider x:Name="LightVerticalSlider"
+                                        Minimum="0" Maximum="360" StepFrequency="1" Value="45"
+                                        ValueChanged="LightAngleSlider_Changed"/>
+                            </StackPanel>
+
+                            <TextBlock Text="Single Color" FontWeight="SemiBold" Margin="0,8,0,0"/>
+                            <ColorPicker x:Name="MeshColorPicker"
+                                         ColorChanged="MeshColorPicker_ColorChanged"
+                                         ColorSpectrumShape="Ring"
+                                         IsMoreButtonVisible="False"
+                                         IsColorSliderVisible="True"
+                                         IsColorChannelTextInputVisible="False"
+                                         IsHexInputVisible="False"
+                                         IsAlphaEnabled="False"
+                                         Color="#FF808080"/>
+
+                            <TextBlock Text="Scene Opacity" FontWeight="SemiBold" Margin="0,8,0,0"/>
+                            <Slider x:Name="SceneOpacitySlider"
+                                    Minimum="0.1"
+                                    Maximum="1.0"
+                                    StepFrequency="0.05"
+                                    Value="1.0"
+                                    ValueChanged="SceneOpacitySlider_ValueChanged"/>
+                        </StackPanel>
+                    </Flyout>
+                </AppBarButton.Flyout>
+            </AppBarButton>
+
+        </CommandBar>
+
+        <!-- Right Panel - 3D Viewport -->
+        <Grid Grid.Row="1" Grid.Column="2" Background="{ThemeResource LayerFillColorDefaultBrush}">
+            <!-- 3D Viewport -->
+            <Grid x:Name="ViewportContainer" Background="{ThemeResource LayerFillColorDefaultBrush}"
+                  IsTabStop="True">
+                <!-- Stats Overlay -->
+                <Border x:Name="StatsOverlay"
+                        Background="#80000000"
+                        HorizontalAlignment="Left"
+                        VerticalAlignment="Bottom"
+                        CornerRadius="4"
+                        Padding="8,4"
+                        Margin="8"
+                        Canvas.ZIndex="3">
+                    <TextBlock x:Name="StatsText"
+                               Text="Meshes: 0  |  Verts: 0  |  Tris: 0"
+                               Foreground="White"
+                               FontSize="11"
+                               FontFamily="Consolas"
+                               Opacity="0.85"/>
+                </Border>
+
+                <!-- Drag-and-Drop Overlay -->
+                <Border x:Name="DragDropOverlay"
+                        Background="#40000000"
+                        Visibility="Collapsed"
+                        Canvas.ZIndex="5">
+                    <StackPanel HorizontalAlignment="Center" 
+                                VerticalAlignment="Center" 
+                                Spacing="12">
+                        <FontIcon Glyph="&#xE8B7;" 
+                                  FontSize="64" 
+                                  Foreground="{ThemeResource AccentFillColorDefaultBrush}"/>
+                        <TextBlock Text="Drop files here" 
+                                   FontSize="20" 
+                                   FontWeight="SemiBold"
+                                   Foreground="White"/>
+                        <TextBlock Text="Supported: .modelbin, .bin (lights/physics), .zip, .xml (locators), .gr2, .gsf" 
+                                   FontSize="14" 
+                                   Foreground="White"
+                                   Opacity="0.8"/>
+                    </StackPanel>
+                </Border>
+                
+            </Grid>
+        </Grid>
+
+        <!-- Full-page loading / saving overlay — spans both columns so it covers the entire page -->
+        <Grid Grid.RowSpan="2" Grid.ColumnSpan="3"
+              Background="#B2000000"
+              Visibility="{x:Bind IsLoading, Mode=OneWay}"
+              Canvas.ZIndex="20">
+            <Border Background="{ThemeResource LayerFillColorDefaultBrush}"
+                    CornerRadius="8"
+                    Padding="40,32"
+                    HorizontalAlignment="Center"
+                    VerticalAlignment="Center"
+                    MinWidth="220">
+                <StackPanel HorizontalAlignment="Center"
+                            VerticalAlignment="Center"
+                            Spacing="20">
+                    <ProgressRing IsActive="True" Width="52" Height="52"
+                                  HorizontalAlignment="Center"/>
+                    <TextBlock Text="{x:Bind LoadingStatus, Mode=OneWay}"
+                               FontSize="15"
+                               HorizontalAlignment="Center"
+                               TextAlignment="Center"
+                               TextWrapping="Wrap"/>
+                </StackPanel>
+            </Border>
+        </Grid>
+    </Grid>
+</Page>

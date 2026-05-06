@@ -1,0 +1,10 @@
+{
+  "profiles": {
+    "ForzaTechStudio (Package)": {
+      "commandName": "MsixPackage"
+    },
+    "ForzaTechStudio (Unpackaged)": {
+      "commandName": "Project"
+    }
+  }
+}

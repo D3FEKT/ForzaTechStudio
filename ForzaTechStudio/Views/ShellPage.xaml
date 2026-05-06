@@ -1,0 +1,164 @@
+<Page
+    x:Class="ForzaTechStudio.Views.ShellPage"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+    xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+    mc:Ignorable="d">
+
+    <Page.Resources>
+        <Thickness x:Key="NavigationViewContentMargin">0</Thickness>
+        <Thickness x:Key="NavigationViewContentGridBorderThickness">0</Thickness>
+    </Page.Resources>
+
+    <Grid>
+        <Border x:Name="AppBackground">
+            <Border.Background>
+                <SolidColorBrush Color="{ThemeResource LayerFillColorDefault}"/>
+            </Border.Background>
+        </Border>
+
+        <NavigationView x:Name="NavView"
+                        PaneDisplayMode="Left"
+                        IsPaneOpen="True"
+                        OpenPaneLength="270"
+                        IsSettingsVisible="True"
+                        IsBackButtonVisible="Auto"
+                        SelectionChanged="NavView_SelectionChanged"
+                        ItemInvoked="NavView_ItemInvoked"
+                        BackRequested="NavView_BackRequested"
+                        Background="{x:Null}"> 
+
+
+            <NavigationView.PaneHeader>
+                <StackPanel Orientation="Horizontal" Spacing="3" Margin="4,4,0,0" VerticalAlignment="Center">
+                    <Image Source="/Assets/FTS_icon.ico" Width="28" Height="28" VerticalAlignment="Center" Margin="0,0,10,0"/>
+                    <TextBlock Text="ForzaTech" VerticalAlignment="Center" FontWeight="SemiBold" FontSize="14"/>
+                    <TextBlock Text="Studio" VerticalAlignment="Center" FontWeight="Light" FontSize="14"/>
+                </StackPanel>
+            </NavigationView.PaneHeader>
+
+            <NavigationView.MenuItems>
+                <NavigationViewItem Content="Home" Tag="Home">
+                    <NavigationViewItem.Icon>
+                        <FontIcon Glyph="&#xE80F;" />
+                    </NavigationViewItem.Icon>
+                </NavigationViewItem>
+
+                <NavigationViewItem Content="3D Viewer" Tag="ModelView">
+                    <NavigationViewItem.Icon>
+                        <FontIcon Glyph="&#xF158;" />
+                    </NavigationViewItem.Icon>
+                </NavigationViewItem>
+
+                <NavigationViewItem Content="Model Tools" SelectsOnInvoked="False">
+                    <NavigationViewItem.Icon>
+                        <FontIcon Glyph="&#xF163;" />
+                    </NavigationViewItem.Icon>
+                    <NavigationViewItem.MenuItems>
+                        <NavigationViewItem Content="Modelbin Editor" Tag="ModelBinViewer">
+                            <NavigationViewItem.Icon>
+                                <FontIcon Glyph="&#xE8E5;" />
+                            </NavigationViewItem.Icon>
+                        </NavigationViewItem>
+                        <!--modelbin creator-->
+                        <!--<NavigationViewItem Tag="CreateModelBinPage" Content="Modelbin Creator">
+                            <NavigationViewItem.Icon>
+                                <FontIcon Glyph="&#xE710;" />
+                            </NavigationViewItem.Icon>
+                        </NavigationViewItem>-->
+                        <NavigationViewItem Tag="ConversionTool" Content="Conversion Tool">
+                            <NavigationViewItem.Icon>
+                                <FontIcon Glyph="&#xE8AB;" />
+                            </NavigationViewItem.Icon>
+                        </NavigationViewItem>
+                        <NavigationViewItem Tag="PhysicsDefinitionPage" Content="Physics Definition Creator">
+                            <NavigationViewItem.Icon>
+                                <FontIcon Glyph="&#xE945;" />
+                            </NavigationViewItem.Icon>
+                        </NavigationViewItem>
+                    </NavigationViewItem.MenuItems>
+                </NavigationViewItem>
+
+                <NavigationViewItem Content="Material Tools" SelectsOnInvoked="False">
+                    <NavigationViewItem.Icon>
+                        <FontIcon Glyph="&#xE8F1;" />
+                    </NavigationViewItem.Icon>
+                    <NavigationViewItem.MenuItems>
+                        <NavigationViewItem Content="Material Extractor" Tag="Materials">
+                            <NavigationViewItem.Icon>
+                                <FontIcon Glyph="&#xE8F1;" />
+                            </NavigationViewItem.Icon>
+                        </NavigationViewItem>
+                        <NavigationViewItem Content="Materials &amp; Shaders" Tag="MaterialsAndShaders">
+                            <NavigationViewItem.Icon>
+                                <FontIcon Glyph="&#xEA86;" />
+                            </NavigationViewItem.Icon>
+                        </NavigationViewItem>
+                        <NavigationViewItem Tag="ManufacturerColors" Content="Manufacturer Colors">
+                            <NavigationViewItem.Icon>
+                                <FontIcon Glyph="&#xE8FD;" />
+                            </NavigationViewItem.Icon>
+                        </NavigationViewItem>
+                        <NavigationViewItem Content="Swatchbin Editor" Tag="SwatchbinViewer">
+                            <NavigationViewItem.Icon>
+                                <FontIcon Glyph="&#xE790;" />
+                            </NavigationViewItem.Icon>
+                        </NavigationViewItem>
+                    </NavigationViewItem.MenuItems>
+                </NavigationViewItem>
+
+                <NavigationViewItem Tag="CarbinEditorPage" Content="Carbin Editor">
+                    <NavigationViewItem.Icon>
+                        <FontIcon Glyph="&#xE81F;" />
+                    </NavigationViewItem.Icon>
+                </NavigationViewItem>
+
+                <NavigationViewItem Tag="CreateZip" Content="Zip Viewer">
+                    <NavigationViewItem.Icon>
+                        <FontIcon Glyph="&#xF012;" />
+                    </NavigationViewItem.Icon>
+                </NavigationViewItem>
+
+                <NavigationViewItem Tag="LightsPage" Content="Lights Editor">
+                    <NavigationViewItem.Icon>
+                        <FontIcon Glyph="&#xEA80;" />
+                    </NavigationViewItem.Icon>
+                </NavigationViewItem>
+
+                <NavigationViewItem Tag="FxbViewer" Content="FXB Editor">
+                    <NavigationViewItem.Icon>
+                        <FontIcon Glyph="&#xE9F9;" />
+                    </NavigationViewItem.Icon>
+                </NavigationViewItem>
+
+                <NavigationViewItem Content="XML Tools" SelectsOnInvoked="False">
+                    <NavigationViewItem.Icon>
+                        <FontIcon Glyph="&#xE8D5;" />
+                    </NavigationViewItem.Icon>
+                    <NavigationViewItem.MenuItems>
+                        <NavigationViewItem Tag="BXMLEditor" Content="BXML Editor">
+                            <NavigationViewItem.Icon>
+                                <FontIcon Glyph="&#xE8D5;" />
+                            </NavigationViewItem.Icon>
+                        </NavigationViewItem>
+                        <NavigationViewItem Tag="CarSceneXml" Content="Car Scene XML">
+                            <NavigationViewItem.Icon>
+                                <FontIcon Glyph="&#xE8A5;" />
+                            </NavigationViewItem.Icon>
+                        </NavigationViewItem>
+                    </NavigationViewItem.MenuItems>
+                </NavigationViewItem>
+
+                <NavigationViewItem Tag="StringTables" Content="String Tables">
+                    <NavigationViewItem.Icon>
+                        <FontIcon Glyph="&#xE8A5;" />
+                    </NavigationViewItem.Icon>
+                </NavigationViewItem>
+
+            </NavigationView.MenuItems>
+
+            <Frame x:Name="ContentFrame"/>
+        </NavigationView>
+    </Grid>
+</Page>

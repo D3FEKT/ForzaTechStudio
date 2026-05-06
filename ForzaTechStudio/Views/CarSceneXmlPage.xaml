@@ -1,0 +1,1846 @@
+﻿<Page
+    x:Class="ForzaTechStudio.Views.CarSceneXmlPage"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+    xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+    xmlns:models="using:ForzaTechStudio.Models"
+    xmlns:services="using:ForzaTechStudio.Services"
+    xmlns:views="using:ForzaTechStudio.Views"
+    xmlns:controls="using:ForzaTechStudio.Views.Controls"
+    mc:Ignorable="d"
+    AllowDrop="True"
+    DragOver="Page_DragOver"
+    Drop="Page_Drop">
+
+    <Page.Resources>
+        <views:BoolToVisibilityConverter    x:Key="BoolToVis"/>
+        <views:InvertedBoolToVisibilityConverter x:Key="InvertedBoolToVis"/>
+        <views:NullToVisibilityConverter    x:Key="NullToVis"/>
+        <views:NullToBoolConverter          x:Key="NullToBool"/>
+        <views:StringToVisibilityConverter  x:Key="StringToVis"/>
+
+        <Style x:Key="CardStyle" TargetType="Border">
+            <Setter Property="Background"      Value="{ThemeResource CardBackgroundFillColorDefaultBrush}"/>
+            <Setter Property="BorderBrush"     Value="{ThemeResource SurfaceStrokeColorDefaultBrush}"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="CornerRadius"    Value="8"/>
+            <Setter Property="Padding"         Value="12"/>
+            <Setter Property="Margin"          Value="0,0,0,8"/>
+        </Style>
+
+        <Style x:Key="SectionHeaderStyle" TargetType="TextBlock"
+               BasedOn="{StaticResource BodyStrongTextBlockStyle}"/>
+
+        <Style x:Key="PropLabelStyle" TargetType="TextBlock">
+            <Setter Property="Opacity"           Value="0.65"/>
+            <Setter Property="FontSize"          Value="11"/>
+            <Setter Property="FontWeight"        Value="SemiBold"/>
+            <Setter Property="VerticalAlignment" Value="Center"/>
+        </Style>
+
+        <Style x:Key="HDividerStyle" TargetType="Border">
+            <Setter Property="Height"     Value="1"/>
+            <Setter Property="Background" Value="{ThemeResource DividerStrokeColorDefaultBrush}"/>
+            <Setter Property="Margin"     Value="0,0,0,8"/>
+        </Style>
+    </Page.Resources>
+
+    <Grid Padding="12">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+        </Grid.RowDefinitions>
+
+        <!-- Standard page header -->
+        <controls:StandardPageHeader Grid.Row="0"
+            Title="Car Scene XML"
+            Description="ShakeBones • CarAttributes • GlobalCarAttributes • IKAnchorBones • Locators • .avpins"
+            Margin="0,0,0,12">
+            <controls:StandardPageHeader.HeaderCommands>
+                <StackPanel Orientation="Horizontal" Spacing="8">
+
+                    <Button Style="{StaticResource GhostAccentButtonStyle}"
+                            Command="{x:Bind ViewModel.OpenFileCommand}">
+                        <StackPanel Orientation="Horizontal" Spacing="8">
+                            <FontIcon Glyph="&#xE8E5;" FontSize="14"/>
+                            <TextBlock Text="Open"/>
+                        </StackPanel>
+                        <Button.KeyboardAccelerators>
+                            <KeyboardAccelerator Modifiers="Control" Key="O"/>
+                        </Button.KeyboardAccelerators>
+                    </Button>
+
+                    <Button Style="{StaticResource GhostAccentButtonStyle}"
+                            Command="{x:Bind ViewModel.SaveCommand}"
+                            IsEnabled="{x:Bind ViewModel.IsNotBusy, Mode=OneWay}">
+                        <StackPanel Orientation="Horizontal" Spacing="8">
+                            <FontIcon Glyph="&#xE74E;" FontSize="14"/>
+                            <TextBlock Text="Save"/>
+                        </StackPanel>
+                        <Button.KeyboardAccelerators>
+                            <KeyboardAccelerator Modifiers="Control" Key="S"/>
+                        </Button.KeyboardAccelerators>
+                    </Button>
+
+                    <Button Style="{StaticResource GhostAccentButtonStyle}"
+                            Command="{x:Bind ViewModel.SaveAsCommand}"
+                            IsEnabled="{x:Bind ViewModel.IsNotBusy, Mode=OneWay}">
+                        <StackPanel Orientation="Horizontal" Spacing="8">
+                            <FontIcon Glyph="&#xE792;" FontSize="14"/>
+                            <TextBlock Text="Save As"/>
+                        </StackPanel>
+                        <Button.KeyboardAccelerators>
+                            <KeyboardAccelerator Modifiers="Control,Shift" Key="S"/>
+                        </Button.KeyboardAccelerators>
+                    </Button>
+
+                    <Border Width="1" Background="{ThemeResource DividerStrokeColorDefaultBrush}" Margin="4,8"/>
+
+                    <Button Style="{StaticResource GhostAccentButtonStyle}"
+                            Command="{x:Bind ViewModel.CloseFileCommand}"
+                            IsEnabled="{x:Bind ViewModel.IsContentVisible, Mode=OneWay}">
+                        <StackPanel Orientation="Horizontal" Spacing="8">
+                            <FontIcon Glyph="&#xE711;" FontSize="14"/>
+                            <TextBlock Text="Close"/>
+                        </StackPanel>
+                        <Button.KeyboardAccelerators>
+                            <KeyboardAccelerator Modifiers="Control" Key="W"/>
+                        </Button.KeyboardAccelerators>
+                    </Button>
+
+                    <Border Width="1" Background="{ThemeResource DividerStrokeColorDefaultBrush}" Margin="4,8"/>
+
+                    <StackPanel Orientation="Horizontal" Spacing="12" VerticalAlignment="Center">
+                        <TextBlock Text="{x:Bind ViewModel.LoadedFileName, Mode=OneWay}"
+                                   FontWeight="SemiBold" VerticalAlignment="Center"
+                                   Visibility="{x:Bind ViewModel.IsContentVisible, Mode=OneWay, Converter={StaticResource BoolToVis}}"/>
+                        <TextBlock Text="{x:Bind ViewModel.StatusMessage, Mode=OneWay}"
+                                   Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                                   VerticalAlignment="Center" Opacity="0.8"
+                                   TextTrimming="CharacterEllipsis" MaxWidth="500"/>
+                    </StackPanel>
+                </StackPanel>
+            </controls:StandardPageHeader.HeaderCommands>
+        </controls:StandardPageHeader>
+
+        <!-- Busy indicator -->
+        <ProgressBar Grid.Row="1"
+                     IsIndeterminate="{x:Bind ViewModel.IsBusy, Mode=OneWay}"
+                     Visibility="{x:Bind ViewModel.IsBusy, Mode=OneWay, Converter={StaticResource BoolToVis}}"
+                     Margin="0,0,0,8"/>
+
+        <!-- Empty state -->
+        <Grid Grid.Row="2"
+              AllowDrop="True"
+              DragOver="Page_DragOver"
+              Drop="Page_Drop"
+              Visibility="{x:Bind ViewModel.IsContentVisible, Mode=OneWay, Converter={StaticResource InvertedBoolToVis}}">
+            <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center" Spacing="12">
+                <FontIcon Glyph="&#xE8A5;" FontSize="52"
+                          Foreground="{ThemeResource TextFillColorTertiaryBrush}"
+                          HorizontalAlignment="Center"/>
+                <TextBlock Text="Drag &amp; drop a supported file here, or use Open (ShakeBones.xml, Locators.xml, CarAttributes.xml, GlobalCarAttributes.xml, IKAnchorBones.xml, *.avpins)"
+                           Style="{StaticResource BodyTextBlockStyle}"
+                           Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                           HorizontalAlignment="Center"/>
+            </StackPanel>
+        </Grid>
+
+        <!-- Content: Pivot -->
+        <Pivot Grid.Row="2" Padding="0"
+               Visibility="{x:Bind ViewModel.IsContentVisible, Mode=OneWay, Converter={StaticResource BoolToVis}}">
+
+            <!-- TAB 1 — Parsed Editor -->
+            <PivotItem Header="Editor">
+                <!-- Outer container: all format panels layered; only the active one is visible -->
+                <Grid Margin="0,8,0,0">
+
+                    <!-- SHAKEBONES PANEL  (existing — visibility-gated) -->
+                    <Grid Visibility="{x:Bind ViewModel.IsShakeBonesMode, Converter={StaticResource BoolToVis}, Mode=OneWay}">
+                        <Grid.ColumnDefinitions>
+                            <!-- Left: hierarchy panel -->
+                            <ColumnDefinition Width="320" MinWidth="200" MaxWidth="480"/>
+                            <!-- Splitter -->
+                            <ColumnDefinition Width="1"/>
+                            <!-- Right: property editor -->
+                            <ColumnDefinition Width="*"/>
+                        </Grid.ColumnDefinitions>
+
+                    <!-- Left: Hierarchy -->
+                    <ScrollViewer Grid.Column="0" VerticalScrollBarVisibility="Auto">
+                        <StackPanel Spacing="8">
+
+                            <!-- FILE VERSION section -->
+                            <Border Style="{StaticResource CardStyle}">
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*"/>
+                                        <ColumnDefinition Width="Auto"/>
+                                    </Grid.ColumnDefinitions>
+                                    <StackPanel Grid.Column="0" Spacing="2" VerticalAlignment="Center">
+                                        <TextBlock Text="File Version" Style="{StaticResource PropLabelStyle}"/>
+                                        <!-- Preview of the root element that will be written -->
+                                        <TextBlock FontSize="11" FontFamily="Consolas"
+                                                   Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                                                   Text="&lt;ShakeBoneSettings&gt;"
+                                                   Visibility="{x:Bind ViewModel.UseVersion2, Mode=OneWay, Converter={StaticResource InvertedBoolToVis}}"/>
+                                        <TextBlock FontSize="11" FontFamily="Consolas"
+                                                   Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                                                   Text="&lt;ShakeBoneSettings Version=&quot;2&quot;&gt;"
+                                                   Visibility="{x:Bind ViewModel.UseVersion2, Mode=OneWay, Converter={StaticResource BoolToVis}}"/>
+                                    </StackPanel>
+                                    <ToggleSwitch Grid.Column="1"
+                                                  IsOn="{x:Bind ViewModel.UseVersion2, Mode=TwoWay}"
+                                                  OnContent="Version 2"
+                                                  OffContent="Original"
+                                                  Margin="8,0,0,0"/>
+                                </Grid>
+                            </Border>
+
+                            <!-- CAMERAS section -->
+                            <Border Style="{StaticResource CardStyle}">
+                                <StackPanel Spacing="6">
+                                    <Grid>
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="*"/>
+                                            <ColumnDefinition Width="Auto"/>
+                                        </Grid.ColumnDefinitions>
+                                        <TextBlock Grid.Column="0" Text="Cameras"
+                                                   Style="{StaticResource SectionHeaderStyle}"
+                                                   VerticalAlignment="Center"/>
+                                        <Button Grid.Column="1"
+                                                Command="{x:Bind ViewModel.AddCameraCommand}"
+                                                ToolTipService.ToolTip="Add Camera"
+                                                Style="{StaticResource GhostAccentButtonStyle}"
+                                                Width="30" Height="30">
+                                            <FontIcon Glyph="&#xE710;" FontSize="12"/>
+                                        </Button>
+                                    </Grid>
+                                    <Border Style="{StaticResource HDividerStyle}"/>
+
+                                    <ListView x:Name="CameraList"
+                                              ItemsSource="{x:Bind ViewModel.Cameras}"
+                                              SelectedItem="{x:Bind ViewModel.SelectedCamera, Mode=TwoWay}"
+                                              SelectionMode="Single"
+                                              MinHeight="60">
+                                        <ListView.ItemTemplate>
+                                            <DataTemplate x:DataType="models:ShakeBonesCamera">
+                                                <StackPanel Orientation="Vertical" Spacing="1" Padding="0,3">
+                                                    <TextBlock Text="{x:Bind Name, Mode=OneWay}"
+                                                               FontWeight="SemiBold"
+                                                               TextTrimming="CharacterEllipsis"/>
+                                                    <TextBlock FontSize="11"
+                                                               Foreground="{ThemeResource TextFillColorSecondaryBrush}">
+                                                        <Run Text="{x:Bind Bones.Count, Mode=OneWay}"/>
+                                                        <Run Text="bone(s)"/>
+                                                    </TextBlock>
+                                                </StackPanel>
+                                            </DataTemplate>
+                                        </ListView.ItemTemplate>
+                                    </ListView>
+
+                                    <!-- Delete camera button -->
+                                    <Button Command="{x:Bind ViewModel.DeleteCameraCommand}"
+                                            IsEnabled="{x:Bind ViewModel.IsCameraSelected, Mode=OneWay}"
+                                            HorizontalAlignment="Right"
+                                            ToolTipService.ToolTip="Delete selected camera">
+                                        <StackPanel Orientation="Horizontal" Spacing="6">
+                                            <FontIcon Glyph="&#xE74D;" FontSize="12"/>
+                                            <TextBlock Text="Delete Camera" FontSize="12"/>
+                                        </StackPanel>
+                                    </Button>
+                                </StackPanel>
+                            </Border>
+
+                            <!-- BONES section (shown when a camera is selected) -->
+                            <Border Style="{StaticResource CardStyle}"
+                                    Visibility="{x:Bind ViewModel.IsCameraSelected, Mode=OneWay, Converter={StaticResource BoolToVis}}">
+                                <StackPanel Spacing="6">
+                                    <Grid>
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="*"/>
+                                            <ColumnDefinition Width="Auto"/>
+                                        </Grid.ColumnDefinitions>
+                                        <TextBlock Grid.Column="0" Text="Bones"
+                                                   Style="{StaticResource SectionHeaderStyle}"
+                                                   VerticalAlignment="Center"/>
+                                        <Button Grid.Column="1"
+                                                Command="{x:Bind ViewModel.AddBoneCommand}"
+                                                ToolTipService.ToolTip="Add Bone"
+                                                Style="{StaticResource GhostAccentButtonStyle}"
+                                                Width="30" Height="30">
+                                            <FontIcon Glyph="&#xE710;" FontSize="12"/>
+                                        </Button>
+                                    </Grid>
+                                    <Border Style="{StaticResource HDividerStyle}"/>
+
+                                    <ListView x:Name="BoneList"
+                                              ItemsSource="{x:Bind ViewModel.SelectedCamera.Bones, Mode=OneWay}"
+                                              SelectedItem="{x:Bind ViewModel.SelectedBone, Mode=TwoWay}"
+                                              SelectionMode="Single"
+                                              MinHeight="60">
+                                        <ListView.ItemTemplate>
+                                            <DataTemplate x:DataType="models:ShakeBonesbone">
+                                                <StackPanel Orientation="Vertical" Spacing="1" Padding="0,3">
+                                                    <TextBlock Text="{x:Bind Name, Mode=OneWay}"
+                                                               FontWeight="SemiBold"
+                                                               TextTrimming="CharacterEllipsis"/>
+                                                    <TextBlock FontSize="11"
+                                                               Foreground="{ThemeResource TextFillColorSecondaryBrush}">
+                                                        <Run Text="{x:Bind Transforms.Count, Mode=OneWay}"/>
+                                                        <Run Text="transform(s)"/>
+                                                    </TextBlock>
+                                                </StackPanel>
+                                            </DataTemplate>
+                                        </ListView.ItemTemplate>
+                                    </ListView>
+
+                                    <!-- Delete bone button -->
+                                    <Button Command="{x:Bind ViewModel.DeleteBoneCommand}"
+                                            IsEnabled="{x:Bind ViewModel.IsBoneSelected, Mode=OneWay}"
+                                            HorizontalAlignment="Right"
+                                            ToolTipService.ToolTip="Delete selected bone">
+                                        <StackPanel Orientation="Horizontal" Spacing="6">
+                                            <FontIcon Glyph="&#xE74D;" FontSize="12"/>
+                                            <TextBlock Text="Delete Bone" FontSize="12"/>
+                                        </StackPanel>
+                                    </Button>
+                                </StackPanel>
+                            </Border>
+
+                        </StackPanel>
+                    </ScrollViewer>
+
+                    <!-- Splitter -->
+                    <Border Grid.Column="1"
+                            Background="{ThemeResource SurfaceStrokeColorDefaultBrush}"
+                            Margin="0,8"/>
+
+                    <!-- Right: Property editor -->
+                    <ScrollViewer Grid.Column="2" Padding="12,0,0,0" VerticalScrollBarVisibility="Auto">
+                        <StackPanel Spacing="8">
+
+                            <!-- No selection placeholder -->
+                            <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center"
+                                        Spacing="8" Margin="0,80,0,0"
+                                        Visibility="{x:Bind ViewModel.IsCameraSelected, Mode=OneWay, Converter={StaticResource InvertedBoolToVis}}">
+                                <FontIcon Glyph="&#xE762;" FontSize="36"
+                                          Foreground="{ThemeResource TextFillColorTertiaryBrush}"
+                                          HorizontalAlignment="Center"/>
+                                <TextBlock Text="Select a camera, bone or transform to edit its properties"
+                                           Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                                           TextAlignment="Center" TextWrapping="WrapWholeWords" MaxWidth="280"/>
+                            </StackPanel>
+
+                            <!-- Camera properties -->
+                            <Border Style="{StaticResource CardStyle}"
+                                    Visibility="{x:Bind ViewModel.IsCameraSelected, Mode=OneWay, Converter={StaticResource BoolToVis}}">
+                                <StackPanel Spacing="10">
+                                    <TextBlock Text="Camera" Style="{StaticResource SectionHeaderStyle}"/>
+                                    <Border Style="{StaticResource HDividerStyle}"/>
+
+                                    <Grid ColumnSpacing="12" RowSpacing="8">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="140"/>
+                                            <ColumnDefinition Width="*"/>
+                                        </Grid.ColumnDefinitions>
+                                        <Grid.RowDefinitions>
+                                            <RowDefinition Height="Auto"/>
+                                        </Grid.RowDefinitions>
+
+                                        <TextBlock Grid.Row="0" Grid.Column="0"
+                                                   Text="Name (CSV)" Style="{StaticResource PropLabelStyle}"/>
+                                        <TextBox Grid.Row="0" Grid.Column="1"
+                                                 Text="{x:Bind ViewModel.SelectedCamera.Name, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                                                 PlaceholderText="Chase,Hood,Base"
+                                                 TextChanged="CameraName_TextChanged"/>
+                                    </Grid>
+
+                                    <TextBlock Text="The name is a CSV list of camera mode tokens (e.g. Chase,Hood,Base). Use 'Base' to apply to all cameras."
+                                               FontSize="11"
+                                               TextWrapping="WrapWholeWords"
+                                               Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
+                                </StackPanel>
+                            </Border>
+
+                            <!-- Bone properties + inline transforms -->
+                            <Border Style="{StaticResource CardStyle}"
+                                    Visibility="{x:Bind ViewModel.IsBoneSelected, Mode=OneWay, Converter={StaticResource BoolToVis}}">
+                                <StackPanel Spacing="10">
+                                    <TextBlock Text="Bone Properties" Style="{StaticResource SectionHeaderStyle}"/>
+                                    <Border Style="{StaticResource HDividerStyle}"/>
+
+                                    <Grid ColumnSpacing="12" RowSpacing="10">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="180"/>
+                                            <ColumnDefinition Width="*"/>
+                                        </Grid.ColumnDefinitions>
+                                        <Grid.RowDefinitions>
+                                            <RowDefinition Height="Auto"/>
+                                            <RowDefinition Height="Auto"/>
+                                            <RowDefinition Height="Auto"/>
+                                            <RowDefinition Height="Auto"/>
+                                            <RowDefinition Height="Auto"/>
+                                        </Grid.RowDefinitions>
+
+                                        <TextBlock Grid.Row="0" Grid.Column="0"
+                                                   Text="Bone Name" Style="{StaticResource PropLabelStyle}"/>
+                                        <TextBox Grid.Row="0" Grid.Column="1"
+                                                 Text="{x:Bind ViewModel.SelectedBone.Name, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                                                 PlaceholderText="bone_name"
+                                                 TextChanged="BoneProperty_TextChanged"/>
+
+                                        <TextBlock Grid.Row="1" Grid.Column="0"
+                                                   Text="Translation Noise Index" Style="{StaticResource PropLabelStyle}"/>
+                                        <NumberBox Grid.Row="1" Grid.Column="1"
+                                                   Value="{x:Bind ViewModel.SelectedBone.TranslationNoiseIndex, Mode=TwoWay}"
+                                                   Minimum="0" Maximum="4" SmallChange="1"
+                                                   SpinButtonPlacementMode="Inline"
+                                                   ValueChanged="BoneNumberBox_ValueChanged"/>
+
+                                        <TextBlock Grid.Row="2" Grid.Column="0"
+                                                   Text="Rotation Noise Index" Style="{StaticResource PropLabelStyle}"/>
+                                        <NumberBox Grid.Row="2" Grid.Column="1"
+                                                   Value="{x:Bind ViewModel.SelectedBone.RotationNoiseIndex, Mode=TwoWay}"
+                                                   Minimum="0" Maximum="4" SmallChange="1"
+                                                   SpinButtonPlacementMode="Inline"
+                                                   ValueChanged="BoneNumberBox_ValueChanged"/>
+
+                                        <TextBlock Grid.Row="3" Grid.Column="0"
+                                                   Text="Translation Noise Lag (s)" Style="{StaticResource PropLabelStyle}"/>
+                                        <NumberBox Grid.Row="3" Grid.Column="1"
+                                                   Value="{x:Bind ViewModel.SelectedBone.TranslationNoiseLagS, Mode=TwoWay}"
+                                                   Minimum="0" Maximum="100"
+                                                   SmallChange="0.001" LargeChange="0.01"
+                                                   SpinButtonPlacementMode="Hidden"
+                                                   ValueChanged="BoneNumberBox_ValueChanged"/>
+
+                                        <TextBlock Grid.Row="4" Grid.Column="0"
+                                                   Text="Rotation Noise Lag (s)" Style="{StaticResource PropLabelStyle}"/>
+                                        <NumberBox Grid.Row="4" Grid.Column="1"
+                                                   Value="{x:Bind ViewModel.SelectedBone.RotationNoiseLagS, Mode=TwoWay}"
+                                                   Minimum="0" Maximum="100"
+                                                   SmallChange="0.001" LargeChange="0.01"
+                                                   SpinButtonPlacementMode="Hidden"
+                                                   ValueChanged="BoneNumberBox_ValueChanged"/>
+                                    </Grid>
+
+                                    <TextBlock Text="Noise index 0–4 selects one of the 5 XYZ (translation) or YPR (rotation) noise channels."
+                                               FontSize="11" TextWrapping="WrapWholeWords"
+                                               Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
+
+                                    <!-- Transforms sub-section -->
+                                    <Border Height="1" Background="{ThemeResource DividerStrokeColorDefaultBrush}" Margin="0,4,0,0"/>
+
+                                    <Grid Margin="0,2,0,0">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="*"/>
+                                            <ColumnDefinition Width="Auto"/>
+                                        </Grid.ColumnDefinitions>
+                                        <TextBlock Grid.Column="0" Text="Transforms"
+                                                   Style="{StaticResource SectionHeaderStyle}"
+                                                   VerticalAlignment="Center"/>
+                                        <Button Grid.Column="1"
+                                                Command="{x:Bind ViewModel.AddTransformCommand}"
+                                                Style="{StaticResource GhostAccentButtonStyle}"
+                                                ToolTipService.ToolTip="Add a new transform axis">
+                                            <StackPanel Orientation="Horizontal" Spacing="6">
+                                                <FontIcon Glyph="&#xE710;" FontSize="12"/>
+                                                <TextBlock Text="Add" FontSize="12"/>
+                                            </StackPanel>
+                                        </Button>
+                                    </Grid>
+
+                                    <!-- Column header row -->
+                                    <Grid ColumnSpacing="6" Margin="2,0">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="128"/>
+                                            <ColumnDefinition Width="*"/>
+                                            <ColumnDefinition Width="*"/>
+                                            <ColumnDefinition Width="32"/>
+                                        </Grid.ColumnDefinitions>
+                                        <TextBlock Grid.Column="0" Text="Axis"      Style="{StaticResource PropLabelStyle}"/>
+                                        <TextBlock Grid.Column="1" Text="Min Value" Style="{StaticResource PropLabelStyle}"/>
+                                        <TextBlock Grid.Column="2" Text="Max Value" Style="{StaticResource PropLabelStyle}"/>
+                                    </Grid>
+
+                                    <!-- Inline editable transform rows -->
+                                    <ItemsControl ItemsSource="{x:Bind ViewModel.SelectedBone.Transforms, Mode=OneWay}">
+                                        <ItemsControl.ItemTemplate>
+                                            <DataTemplate x:DataType="models:ShakeBonesTransform">
+                                                <Grid ColumnSpacing="6" Margin="0,3,0,0">
+                                                    <Grid.ColumnDefinitions>
+                                                        <ColumnDefinition Width="128"/>
+                                                        <ColumnDefinition Width="*"/>
+                                                        <ColumnDefinition Width="*"/>
+                                                        <ColumnDefinition Width="32"/>
+                                                    </Grid.ColumnDefinitions>
+
+                                                    <ComboBox Grid.Column="0"
+                                                              SelectedItem="{x:Bind Name, Mode=TwoWay}"
+                                                              SelectionChanged="InlineAxis_SelectionChanged"
+                                                              HorizontalAlignment="Stretch"
+                                                              Padding="8,4">
+                                                        <x:String>translateX</x:String>
+                                                        <x:String>translateY</x:String>
+                                                        <x:String>translateZ</x:String>
+                                                        <x:String>rotateX</x:String>
+                                                        <x:String>rotateY</x:String>
+                                                        <x:String>rotateZ</x:String>
+                                                    </ComboBox>
+
+                                                    <NumberBox Grid.Column="1"
+                                                               Value="{x:Bind MinVal, Mode=TwoWay}"
+                                                               SmallChange="0.001" LargeChange="0.01"
+                                                               ValidationMode="InvalidInputOverwritten"
+                                                               SpinButtonPlacementMode="Hidden"
+                                                               ValueChanged="InlineTransformValue_Changed"/>
+
+                                                    <NumberBox Grid.Column="2"
+                                                               Value="{x:Bind MaxVal, Mode=TwoWay}"
+                                                               SmallChange="0.001" LargeChange="0.01"
+                                                               ValidationMode="InvalidInputOverwritten"
+                                                               SpinButtonPlacementMode="Hidden"
+                                                               ValueChanged="InlineTransformValue_Changed"/>
+
+                                                    <Button Grid.Column="3"
+                                                            Tag="{x:Bind}"
+                                                            Click="InlineDeleteTransform_Click"
+                                                            Width="28" Height="28"
+                                                            Background="Transparent"
+                                                            BorderThickness="0"
+                                                            CornerRadius="4"
+                                                            ToolTipService.ToolTip="Remove this transform"
+                                                            Padding="4">
+                                                        <FontIcon Glyph="&#xE74D;" FontSize="11"
+                                                                  Foreground="{ThemeResource SystemFillColorCriticalBrush}"/>
+                                                    </Button>
+                                                </Grid>
+                                            </DataTemplate>
+                                        </ItemsControl.ItemTemplate>
+                                    </ItemsControl>
+
+                                    <TextBlock Text="translateX/Y/Z are in metres · rotateX/Y/Z are in radians"
+                                               FontSize="11" Margin="2,6,0,0"
+                                               Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
+                                </StackPanel>
+                            </Border>
+
+                        </StackPanel>
+                    </ScrollViewer>
+
+                    </Grid>
+                    <!-- End ShakeBones panel -->
+
+                    <!-- CAR ATTRIBUTES PANEL -->
+                    <ScrollViewer Visibility="{x:Bind ViewModel.IsCarAttributesMode, Converter={StaticResource BoolToVis}, Mode=OneWay}"
+                                  VerticalScrollBarVisibility="Auto" Padding="4,0">
+                        <StackPanel MaxWidth="680" Spacing="8">
+
+                            <TextBlock Text="Windshield Reflection Settings"
+                                       Style="{StaticResource SectionHeaderStyle}" Margin="0,0,0,4"/>
+                            <Border Style="{StaticResource HDividerStyle}"/>
+
+                            <!-- Version toggle -->
+                            <Border Style="{StaticResource CardStyle}">
+                                <Grid ColumnSpacing="12">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="200"/>
+                                        <ColumnDefinition Width="*"/>
+                                    </Grid.ColumnDefinitions>
+                                    <TextBlock Grid.Column="0" Text="WSR Version"
+                                               Style="{StaticResource PropLabelStyle}" VerticalAlignment="Center"/>
+                                    <NumberBox Grid.Column="1"
+                                               Value="{x:Bind ViewModel.CarAttr.Data.WindshieldReflection.Version, Mode=TwoWay}"
+                                               Minimum="1" Maximum="3" SmallChange="1"
+                                               SpinButtonPlacementMode="Inline"
+                                               ValueChanged="AnyNumber_Changed"/>
+                                </Grid>
+                            </Border>
+
+                            <!-- Core fields (all versions) -->
+                            <Border Style="{StaticResource CardStyle}">
+                                <StackPanel Spacing="10">
+                                    <TextBlock Text="Core Fields" Style="{StaticResource SectionHeaderStyle}"/>
+                                    <Border Style="{StaticResource HDividerStyle}"/>
+                                    <Grid ColumnSpacing="12" RowSpacing="8">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="200"/>
+                                            <ColumnDefinition Width="*"/>
+                                        </Grid.ColumnDefinitions>
+                                        <Grid.RowDefinitions>
+                                            <RowDefinition Height="Auto"/>
+                                            <RowDefinition Height="Auto"/>
+                                            <RowDefinition Height="Auto"/>
+                                            <RowDefinition Height="Auto"/>
+                                            <RowDefinition Height="Auto"/>
+                                            <RowDefinition Height="Auto"/>
+                                            <RowDefinition Height="Auto"/>
+                                        </Grid.RowDefinitions>
+
+                                        <TextBlock Grid.Row="0" Grid.Column="0" Text="Eye Offset"         Style="{StaticResource PropLabelStyle}"/>
+                                        <NumberBox Grid.Row="0" Grid.Column="1"
+                                                   Value="{x:Bind ViewModel.CarAttr.Data.WindshieldReflection.EyeOffset, Mode=TwoWay}"
+                                                   SmallChange="0.01" SpinButtonPlacementMode="Hidden" ValueChanged="AnyNumber_Changed"/>
+
+                                        <TextBlock Grid.Row="1" Grid.Column="0" Text="Angle Offset"       Style="{StaticResource PropLabelStyle}"/>
+                                        <NumberBox Grid.Row="1" Grid.Column="1"
+                                                   Value="{x:Bind ViewModel.CarAttr.Data.WindshieldReflection.AngleOffset, Mode=TwoWay}"
+                                                   SmallChange="0.01" SpinButtonPlacementMode="Hidden" ValueChanged="AnyNumber_Changed"/>
+
+                                        <TextBlock Grid.Row="2" Grid.Column="0" Text="Shear Amount"       Style="{StaticResource PropLabelStyle}"/>
+                                        <NumberBox Grid.Row="2" Grid.Column="1"
+                                                   Value="{x:Bind ViewModel.CarAttr.Data.WindshieldReflection.ShearAmount, Mode=TwoWay}"
+                                                   SmallChange="0.01" SpinButtonPlacementMode="Hidden" ValueChanged="AnyNumber_Changed"/>
+
+                                        <TextBlock Grid.Row="3" Grid.Column="0" Text="Texture Offset X"   Style="{StaticResource PropLabelStyle}"/>
+                                        <NumberBox Grid.Row="3" Grid.Column="1"
+                                                   Value="{x:Bind ViewModel.CarAttr.Data.WindshieldReflection.TextureOffsetX, Mode=TwoWay}"
+                                                   SmallChange="0.01" SpinButtonPlacementMode="Hidden" ValueChanged="AnyNumber_Changed"/>
+
+                                        <TextBlock Grid.Row="4" Grid.Column="0" Text="Texture Offset Y"   Style="{StaticResource PropLabelStyle}"/>
+                                        <NumberBox Grid.Row="4" Grid.Column="1"
+                                                   Value="{x:Bind ViewModel.CarAttr.Data.WindshieldReflection.TextureOffsetY, Mode=TwoWay}"
+                                                   SmallChange="0.01" SpinButtonPlacementMode="Hidden" ValueChanged="AnyNumber_Changed"/>
+
+                                        <TextBlock Grid.Row="5" Grid.Column="0" Text="Texture Scale X"    Style="{StaticResource PropLabelStyle}"/>
+                                        <NumberBox Grid.Row="5" Grid.Column="1"
+                                                   Value="{x:Bind ViewModel.CarAttr.Data.WindshieldReflection.TextureScaleX, Mode=TwoWay}"
+                                                   SmallChange="0.01" SpinButtonPlacementMode="Hidden" ValueChanged="AnyNumber_Changed"/>
+
+                                        <TextBlock Grid.Row="6" Grid.Column="0" Text="Texture Scale Y"    Style="{StaticResource PropLabelStyle}"/>
+                                        <NumberBox Grid.Row="6" Grid.Column="1"
+                                                   Value="{x:Bind ViewModel.CarAttr.Data.WindshieldReflection.TextureScaleY, Mode=TwoWay}"
+                                                   SmallChange="0.01" SpinButtonPlacementMode="Hidden" ValueChanged="AnyNumber_Changed"/>
+                                    </Grid>
+                                </StackPanel>
+                            </Border>
+
+                            <!-- v2+ fields -->
+                            <Border Style="{StaticResource CardStyle}"
+                                    Visibility="{x:Bind ViewModel.CarAttr.Data.WindshieldReflection.Version, Converter={StaticResource NullToVis}, Mode=OneWay}">
+                                <StackPanel Spacing="10">
+                                    <TextBlock Text="Version 2+ Fields (FadeStart / FadeEnd / MaxAmount)"
+                                               Style="{StaticResource SectionHeaderStyle}"/>
+                                    <Border Style="{StaticResource HDividerStyle}"/>
+                                    <Grid ColumnSpacing="12" RowSpacing="8">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="200"/>
+                                            <ColumnDefinition Width="*"/>
+                                        </Grid.ColumnDefinitions>
+                                        <Grid.RowDefinitions>
+                                            <RowDefinition Height="Auto"/>
+                                            <RowDefinition Height="Auto"/>
+                                            <RowDefinition Height="Auto"/>
+                                        </Grid.RowDefinitions>
+                                        <TextBlock Grid.Row="0" Grid.Column="0" Text="Fade Start"   Style="{StaticResource PropLabelStyle}"/>
+                                        <NumberBox Grid.Row="0" Grid.Column="1"
+                                                   Value="{x:Bind ViewModel.CarAttr.Data.WindshieldReflection.FadeStart, Mode=TwoWay}"
+                                                   SmallChange="0.01" SpinButtonPlacementMode="Hidden" ValueChanged="AnyNumber_Changed"/>
+                                        <TextBlock Grid.Row="1" Grid.Column="0" Text="Fade End"     Style="{StaticResource PropLabelStyle}"/>
+                                        <NumberBox Grid.Row="1" Grid.Column="1"
+                                                   Value="{x:Bind ViewModel.CarAttr.Data.WindshieldReflection.FadeEnd, Mode=TwoWay}"
+                                                   SmallChange="0.01" SpinButtonPlacementMode="Hidden" ValueChanged="AnyNumber_Changed"/>
+                                        <TextBlock Grid.Row="2" Grid.Column="0" Text="Max Amount"   Style="{StaticResource PropLabelStyle}"/>
+                                        <NumberBox Grid.Row="2" Grid.Column="1"
+                                                   Value="{x:Bind ViewModel.CarAttr.Data.WindshieldReflection.MaxAmount, Mode=TwoWay}"
+                                                   SmallChange="0.01" SpinButtonPlacementMode="Hidden" ValueChanged="AnyNumber_Changed"/>
+                                    </Grid>
+                                </StackPanel>
+                            </Border>
+                        </StackPanel>
+                    </ScrollViewer>
+
+                    <!-- GLOBAL CAR ATTRIBUTES PANEL -->
+                    <Grid Visibility="{x:Bind ViewModel.IsGlobalCarAttrMode, Converter={StaticResource BoolToVis}, Mode=OneWay}">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="250" MinWidth="160" MaxWidth="380"/>
+                            <ColumnDefinition Width="1"/>
+                            <ColumnDefinition Width="*"/>
+                        </Grid.ColumnDefinitions>
+
+                        <!-- Left: Section list -->
+                        <ScrollViewer Grid.Column="0" VerticalScrollBarVisibility="Auto">
+                            <StackPanel Spacing="8">
+                                <Border Style="{StaticResource CardStyle}">
+                                    <StackPanel Spacing="6">
+                                        <TextBlock Text="Sections" Style="{StaticResource SectionHeaderStyle}"/>
+                                        <Border Style="{StaticResource HDividerStyle}"/>
+                                        <ListView ItemsSource="{x:Bind ViewModel.GlobalCarAttr.Data.Sections, Mode=OneWay}"
+                                                  SelectedItem="{x:Bind ViewModel.GlobalCarAttr.SelectedSection, Mode=TwoWay}"
+                                                  SelectionMode="Single" MinHeight="120">
+                                            <ListView.ItemTemplate>
+                                                <DataTemplate x:DataType="models:GlobalCarAttributeSection">
+                                                    <StackPanel Padding="0,3" Spacing="1">
+                                                        <TextBlock Text="{x:Bind DisplayName, Mode=OneWay}"
+                                                                   FontWeight="SemiBold" TextTrimming="CharacterEllipsis"/>
+                                                        <TextBlock FontSize="11"
+                                                                   Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                                                                   Visibility="{x:Bind SectionVersion, Mode=OneWay, Converter={StaticResource StringToVis}}">
+                                                            <Run Text="v"/><Run Text="{x:Bind SectionVersion, Mode=OneWay}"/>
+                                                        </TextBlock>
+                                                    </StackPanel>
+                                                </DataTemplate>
+                                            </ListView.ItemTemplate>
+                                        </ListView>
+                                    </StackPanel>
+                                </Border>
+
+                                <Border Style="{StaticResource CardStyle}">
+                                    <StackPanel Spacing="4">
+                                        <TextBlock Text="File Version" Style="{StaticResource PropLabelStyle}"/>
+                                        <NumberBox Value="{x:Bind ViewModel.GlobalCarAttr.Data.RootVersion, Mode=TwoWay}"
+                                                   Minimum="1" Maximum="20" SmallChange="1"
+                                                   SpinButtonPlacementMode="Inline"
+                                                   ValueChanged="AnyNumber_Changed"/>
+                                    </StackPanel>
+                                </Border>
+                            </StackPanel>
+                        </ScrollViewer>
+
+                        <!-- Splitter -->
+                        <Border Grid.Column="1" Background="{ThemeResource SurfaceStrokeColorDefaultBrush}" Margin="0,8"/>
+
+                        <!-- Right: Selected section attribute editor -->
+                        <ScrollViewer Grid.Column="2" Padding="12,0,0,0" VerticalScrollBarVisibility="Auto">
+                            <StackPanel Spacing="8"
+                                        Visibility="{x:Bind ViewModel.GlobalCarAttr.SelectedSection, Converter={StaticResource NullToVis}, Mode=OneWay}">
+
+                                <!-- Section title + version -->
+                                <StackPanel Spacing="2">
+                                    <TextBlock Text="{x:Bind ViewModel.GlobalCarAttr.SelectedSection.DisplayName, Mode=OneWay}"
+                                               Style="{StaticResource SectionHeaderStyle}"/>
+                                    <TextBox Text="{x:Bind ViewModel.GlobalCarAttr.SelectedSection.SectionVersion, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                                             PlaceholderText="Version (leave blank if absent)"
+                                             Width="200" HorizontalAlignment="Left"
+                                             TextChanged="AnyText_Changed"/>
+                                </StackPanel>
+                                <Border Style="{StaticResource HDividerStyle}"/>
+
+                                <!-- Sub-element caution -->
+                                <InfoBar IsOpen="{x:Bind ViewModel.GlobalCarAttr.SelectedSection.HasChildElements, Mode=OneWay}"
+                                         IsClosable="False" Severity="Informational"
+                                         Title="This section has child elements (e.g. Denting/Scraping). Edit them in the Raw XML tab."/>
+
+                                <!-- Attribute key-value grid -->
+                                <ItemsControl ItemsSource="{x:Bind ViewModel.GlobalCarAttr.SelectedSection.Attributes, Mode=OneWay}">
+                                    <ItemsControl.ItemTemplate>
+                                        <DataTemplate x:DataType="models:SectionAttribute">
+                                            <Grid ColumnSpacing="12" Margin="0,4,0,0">
+                                                <Grid.ColumnDefinitions>
+                                                    <ColumnDefinition Width="220"/>
+                                                    <ColumnDefinition Width="*"/>
+                                                </Grid.ColumnDefinitions>
+                                                <TextBlock Grid.Column="0" Text="{x:Bind Key}"
+                                                           Style="{StaticResource PropLabelStyle}"
+                                                           VerticalAlignment="Center"
+                                                           TextTrimming="CharacterEllipsis"
+                                                           ToolTipService.ToolTip="{x:Bind Key}"/>
+                                                <TextBox Grid.Column="1"
+                                                         Text="{x:Bind Value, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                                                         TextChanged="AnyText_Changed"/>
+                                            </Grid>
+                                        </DataTemplate>
+                                    </ItemsControl.ItemTemplate>
+                                </ItemsControl>
+
+                            </StackPanel>
+                        </ScrollViewer>
+                    </Grid>
+
+                    <!-- IK ANCHOR BONES PANEL -->
+                    <Grid Visibility="{x:Bind ViewModel.IsIKAnchorBonesMode, Converter={StaticResource BoolToVis}, Mode=OneWay}">
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="*"/>
+                        </Grid.RowDefinitions>
+
+                        <!-- Root floats -->
+                        <Border Grid.Row="0" Style="{StaticResource CardStyle}" MaxWidth="680">
+                            <Grid ColumnSpacing="12" RowSpacing="8">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="180"/>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="180"/>
+                                    <ColumnDefinition Width="*"/>
+                                </Grid.ColumnDefinitions>
+                                <TextBlock Grid.Column="0" Text="Hand Grip Amount" Style="{StaticResource PropLabelStyle}" VerticalAlignment="Center"/>
+                                <NumberBox Grid.Column="1"
+                                           Value="{x:Bind ViewModel.IKAnchorBones.HandGripAmount, Mode=TwoWay}"
+                                           Minimum="0" Maximum="1" SmallChange="0.05"
+                                           SpinButtonPlacementMode="Hidden" ValueChanged="AnyNumber_Changed"/>
+                                <TextBlock Grid.Column="2" Text="Recline Amount" Style="{StaticResource PropLabelStyle}" VerticalAlignment="Center"/>
+                                <NumberBox Grid.Column="3"
+                                           Value="{x:Bind ViewModel.IKAnchorBones.ReclineAmount, Mode=TwoWay}"
+                                           Minimum="0" Maximum="1" SmallChange="0.05"
+                                           SpinButtonPlacementMode="Hidden" ValueChanged="AnyNumber_Changed"/>
+                            </Grid>
+                        </Border>
+
+                        <!-- Bone list header -->
+                        <Border Grid.Row="1" Style="{StaticResource CardStyle}">
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="Auto"/>
+                                    <ColumnDefinition Width="Auto"/>
+                                </Grid.ColumnDefinitions>
+                                <TextBlock Grid.Column="0" Text="Bones" Style="{StaticResource SectionHeaderStyle}" VerticalAlignment="Center"/>
+                                <Button Grid.Column="1"
+                                        Command="{x:Bind ViewModel.IKAnchorBones.AddBoneCommand}"
+                                        Style="{StaticResource GhostAccentButtonStyle}"
+                                        ToolTipService.ToolTip="Add bone" Margin="0,0,8,0">
+                                    <StackPanel Orientation="Horizontal" Spacing="6">
+                                        <FontIcon Glyph="&#xE710;" FontSize="12"/>
+                                        <TextBlock Text="Add" FontSize="12"/>
+                                    </StackPanel>
+                                </Button>
+                                <Button Grid.Column="2"
+                                        Command="{x:Bind ViewModel.IKAnchorBones.DeleteBoneCommand}"
+                                        IsEnabled="{x:Bind ViewModel.IKAnchorBones.SelectedBone, Converter={StaticResource NullToBool}, Mode=OneWay}"
+                                        ToolTipService.ToolTip="Delete selected bone">
+                                    <StackPanel Orientation="Horizontal" Spacing="6">
+                                        <FontIcon Glyph="&#xE74D;" FontSize="12" Foreground="{ThemeResource SystemFillColorCriticalBrush}"/>
+                                        <TextBlock Text="Delete" FontSize="12"/>
+                                    </StackPanel>
+                                </Button>
+                            </Grid>
+                        </Border>
+
+                        <!-- Bone rows -->
+                        <ScrollViewer Grid.Row="2" VerticalScrollBarVisibility="Auto">
+                            <StackPanel Spacing="4">
+                                <!-- Column headers -->
+                                <Grid ColumnSpacing="8" Margin="4,0">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*"/>
+                                        <ColumnDefinition Width="100"/>
+                                        <ColumnDefinition Width="100"/>
+                                        <ColumnDefinition Width="100"/>
+                                    </Grid.ColumnDefinitions>
+                                    <TextBlock Grid.Column="0" Text="Bone Name"  Style="{StaticResource PropLabelStyle}"/>
+                                    <TextBlock Grid.Column="1" Text="Offset X"   Style="{StaticResource PropLabelStyle}"/>
+                                    <TextBlock Grid.Column="2" Text="Offset Y"   Style="{StaticResource PropLabelStyle}"/>
+                                    <TextBlock Grid.Column="3" Text="Offset Z"   Style="{StaticResource PropLabelStyle}"/>
+                                </Grid>
+
+                                <ListView ItemsSource="{x:Bind ViewModel.IKAnchorBones.Data.Bones, Mode=OneWay}"
+                                          SelectedItem="{x:Bind ViewModel.IKAnchorBones.SelectedBone, Mode=TwoWay}"
+                                          SelectionMode="Single">
+                                    <ListView.ItemTemplate>
+                                        <DataTemplate x:DataType="models:IKAnchorBone">
+                                            <Grid ColumnSpacing="8" Margin="0,2">
+                                                <Grid.ColumnDefinitions>
+                                                    <ColumnDefinition Width="*"/>
+                                                    <ColumnDefinition Width="100"/>
+                                                    <ColumnDefinition Width="100"/>
+                                                    <ColumnDefinition Width="100"/>
+                                                </Grid.ColumnDefinitions>
+                                                <TextBox Grid.Column="0"
+                                                         Text="{x:Bind Name, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                                                         PlaceholderText="bone_name"
+                                                         TextChanged="AnyText_Changed"/>
+                                                <NumberBox Grid.Column="1"
+                                                           Value="{x:Bind OffsetX, Mode=TwoWay}"
+                                                           SmallChange="0.001" SpinButtonPlacementMode="Hidden"
+                                                           ValidationMode="InvalidInputOverwritten"
+                                                           ValueChanged="AnyNumber_Changed"/>
+                                                <NumberBox Grid.Column="2"
+                                                           Value="{x:Bind OffsetY, Mode=TwoWay}"
+                                                           SmallChange="0.001" SpinButtonPlacementMode="Hidden"
+                                                           ValidationMode="InvalidInputOverwritten"
+                                                           ValueChanged="AnyNumber_Changed"/>
+                                                <NumberBox Grid.Column="3"
+                                                           Value="{x:Bind OffsetZ, Mode=TwoWay}"
+                                                           SmallChange="0.001" SpinButtonPlacementMode="Hidden"
+                                                           ValidationMode="InvalidInputOverwritten"
+                                                           ValueChanged="AnyNumber_Changed"/>
+                                            </Grid>
+                                        </DataTemplate>
+                                    </ListView.ItemTemplate>
+                                </ListView>
+                            </StackPanel>
+                        </ScrollViewer>
+                    </Grid>
+
+                    <!-- LOCATORS PANEL -->
+                    <Grid Visibility="{x:Bind ViewModel.IsLocatorsMode, Converter={StaticResource BoolToVis}, Mode=OneWay}">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="320" MinWidth="200" MaxWidth="480"/>
+                            <ColumnDefinition Width="1"/>
+                            <ColumnDefinition Width="*"/>
+                        </Grid.ColumnDefinitions>
+
+                        <!-- Left: search + list -->
+                        <ScrollViewer Grid.Column="0" VerticalScrollBarVisibility="Auto">
+                            <StackPanel Spacing="8">
+                                <Border Style="{StaticResource CardStyle}">
+                                    <StackPanel Spacing="6">
+                                        <TextBlock Text="Locators" Style="{StaticResource SectionHeaderStyle}"/>
+                                        <Border Style="{StaticResource HDividerStyle}"/>
+                                        <TextBox Text="{x:Bind ViewModel.Locators.SearchText, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                                                 PlaceholderText="&#xE721;  Search by name..."
+                                                 Margin="0,0,0,4"/>
+                                        <ListView ItemsSource="{x:Bind ViewModel.Locators.Locators, Mode=OneWay}"
+                                                  SelectedItem="{x:Bind ViewModel.Locators.SelectedLocator, Mode=TwoWay}"
+                                                  SelectionMode="Single" MinHeight="120">
+                                            <ListView.ItemTemplate>
+                                                <DataTemplate x:DataType="services:LocatorEntry">
+                                                    <StackPanel Padding="0,3" Spacing="1">
+                                                        <TextBlock Text="{x:Bind Name, Mode=OneTime}"
+                                                                   FontWeight="SemiBold"
+                                                                   TextTrimming="CharacterEllipsis"/>
+                                                        <TextBlock FontSize="11"
+                                                                   Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                                                                   Text="{x:Bind AttachToBoneName, Mode=OneTime}"
+                                                                   TextTrimming="CharacterEllipsis"/>
+                                                    </StackPanel>
+                                                </DataTemplate>
+                                            </ListView.ItemTemplate>
+                                        </ListView>
+                                    </StackPanel>
+                                </Border>
+                            </StackPanel>
+                        </ScrollViewer>
+
+                        <!-- Splitter -->
+                        <Border Grid.Column="1" Background="{ThemeResource SurfaceStrokeColorDefaultBrush}" Margin="0,8"/>
+
+                        <!-- Right: detail editor -->
+                        <ScrollViewer Grid.Column="2" Padding="12,0,0,0" VerticalScrollBarVisibility="Auto">
+                            <StackPanel Spacing="8"
+                                        Visibility="{x:Bind ViewModel.Locators.SelectedLocator, Converter={StaticResource NullToVis}, Mode=OneWay}">
+
+                                <!-- Identity -->
+                                <Border Style="{StaticResource CardStyle}">
+                                    <StackPanel Spacing="8">
+                                        <TextBlock Text="Identity" Style="{StaticResource SectionHeaderStyle}"/>
+                                        <Border Style="{StaticResource HDividerStyle}"/>
+                                        <Grid ColumnSpacing="12" RowSpacing="8">
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="140"/>
+                                                <ColumnDefinition Width="*"/>
+                                            </Grid.ColumnDefinitions>
+                                            <Grid.RowDefinitions>
+                                                <RowDefinition Height="Auto"/>
+                                                <RowDefinition Height="Auto"/>
+                                                <RowDefinition Height="Auto"/>
+                                            </Grid.RowDefinitions>
+                                            <TextBlock Grid.Row="0" Grid.Column="0" Text="Name"     Style="{StaticResource PropLabelStyle}"/>
+                                            <TextBox   Grid.Row="0" Grid.Column="1"
+                                                       Text="{x:Bind ViewModel.Locators.SelectedLocator.Name, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                                                       TextChanged="AnyText_Changed"/>
+                                            <TextBlock Grid.Row="1" Grid.Column="0" Text="GUID"     Style="{StaticResource PropLabelStyle}"/>
+                                            <TextBlock Grid.Row="1" Grid.Column="1"
+                                                       Text="{x:Bind ViewModel.Locators.SelectedLocator.Guid, Mode=OneWay}"
+                                                       FontFamily="Consolas" FontSize="12"
+                                                       Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                                                       TextTrimming="CharacterEllipsis"/>
+                                            <TextBlock Grid.Row="2" Grid.Column="0" Text="Src GUID" Style="{StaticResource PropLabelStyle}"/>
+                                            <TextBlock Grid.Row="2" Grid.Column="1"
+                                                       Text="{x:Bind ViewModel.Locators.SelectedLocator.SrcGuid, Mode=OneWay}"
+                                                       FontFamily="Consolas" FontSize="12"
+                                                       Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                                                       TextTrimming="CharacterEllipsis"/>
+                                        </Grid>
+                                    </StackPanel>
+                                </Border>
+
+                                <!-- Attach To Bone -->
+                                <Border Style="{StaticResource CardStyle}">
+                                    <StackPanel Spacing="8">
+                                        <TextBlock Text="Attach To Bone" Style="{StaticResource SectionHeaderStyle}"/>
+                                        <Border Style="{StaticResource HDividerStyle}"/>
+                                        <Grid ColumnSpacing="12" RowSpacing="8">
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="140"/>
+                                                <ColumnDefinition Width="*"/>
+                                            </Grid.ColumnDefinitions>
+                                            <Grid.RowDefinitions>
+                                                <RowDefinition Height="Auto"/>
+                                                <RowDefinition Height="Auto"/>
+                                            </Grid.RowDefinitions>
+                                            <TextBlock Grid.Row="0" Grid.Column="0" Text="Bone Name" Style="{StaticResource PropLabelStyle}"/>
+                                            <TextBox   Grid.Row="0" Grid.Column="1"
+                                                       Text="{x:Bind ViewModel.Locators.SelectedLocator.AttachToBoneName, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                                                       TextChanged="AnyText_Changed"/>
+                                            <TextBlock Grid.Row="1" Grid.Column="0" Text="Snap"      Style="{StaticResource PropLabelStyle}"/>
+                                            <NumberBox Grid.Row="1" Grid.Column="1"
+                                                       Value="{x:Bind ViewModel.Locators.SelectedLocator.AttachSnap, Mode=TwoWay}"
+                                                       Minimum="0" Maximum="1" SmallChange="1"
+                                                       SpinButtonPlacementMode="Inline"
+                                                       ValueChanged="AnyNumber_Changed"/>
+                                        </Grid>
+                                    </StackPanel>
+                                </Border>
+
+                                <!-- Upgrade Info -->
+                                <Border Style="{StaticResource CardStyle}">
+                                    <StackPanel Spacing="8">
+                                        <TextBlock Text="Upgrade Info" Style="{StaticResource SectionHeaderStyle}"/>
+                                        <Border Style="{StaticResource HDividerStyle}"/>
+                                        <Grid ColumnSpacing="12" RowSpacing="8">
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="160"/>
+                                                <ColumnDefinition Width="*"/>
+                                            </Grid.ColumnDefinitions>
+                                            <Grid.RowDefinitions>
+                                                <RowDefinition Height="Auto"/>
+                                                <RowDefinition Height="Auto"/>
+                                                <RowDefinition Height="Auto"/>
+                                                <RowDefinition Height="Auto"/>
+                                                <RowDefinition Height="Auto"/>
+                                            </Grid.RowDefinitions>
+                                            <TextBlock Grid.Row="0" Grid.Column="0" Text="Is Upgradable" Style="{StaticResource PropLabelStyle}"/>
+                                            <NumberBox Grid.Row="0" Grid.Column="1"
+                                                       Value="{x:Bind ViewModel.Locators.SelectedLocator.IsUpgradable, Mode=TwoWay}"
+                                                       Minimum="0" Maximum="1" SmallChange="1"
+                                                       SpinButtonPlacementMode="Inline"
+                                                       ValueChanged="AnyNumber_Changed"/>
+                                            <TextBlock Grid.Row="1" Grid.Column="0" Text="Part Type"     Style="{StaticResource PropLabelStyle}"/>
+                                            <TextBox   Grid.Row="1" Grid.Column="1"
+                                                       Text="{x:Bind ViewModel.Locators.SelectedLocator.PartType, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                                                       TextChanged="AnyText_Changed"/>
+                                            <TextBlock Grid.Row="2" Grid.Column="0" Text="Upgrade Level"  Style="{StaticResource PropLabelStyle}"/>
+                                            <NumberBox Grid.Row="2" Grid.Column="1"
+                                                       Value="{x:Bind ViewModel.Locators.SelectedLocator.UpgradeLevel, Mode=TwoWay}"
+                                                       SpinButtonPlacementMode="Hidden"
+                                                       ValueChanged="AnyNumber_Changed"/>
+                                            <TextBlock Grid.Row="3" Grid.Column="0" Text="Part ID"        Style="{StaticResource PropLabelStyle}"/>
+                                            <NumberBox Grid.Row="3" Grid.Column="1"
+                                                       Value="{x:Bind ViewModel.Locators.SelectedLocator.PartId, Mode=TwoWay}"
+                                                       SpinButtonPlacementMode="Hidden"
+                                                       ValueChanged="AnyNumber_Changed"/>
+                                            <TextBlock Grid.Row="4" Grid.Column="0" Text="Parent Upgrade ID" Style="{StaticResource PropLabelStyle}"/>
+                                            <NumberBox Grid.Row="4" Grid.Column="1"
+                                                       Value="{x:Bind ViewModel.Locators.SelectedLocator.ParentUpgradeId, Mode=TwoWay}"
+                                                       SpinButtonPlacementMode="Hidden"
+                                                       ValueChanged="AnyNumber_Changed"/>
+                                        </Grid>
+                                    </StackPanel>
+                                </Border>
+
+                                <!-- Scene Transform (M11-M44) -->
+                                <Expander Header="Scene Transform (4×4 Matrix)" HorizontalAlignment="Stretch"
+                                          HorizontalContentAlignment="Stretch">
+                                    <Border Style="{StaticResource CardStyle}" Margin="0,8,0,0">
+                                        <StackPanel Spacing="6">
+                                            <TextBlock Text="Use the Raw XML tab to edit individual matrix values"
+                                                       FontSize="11" Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                                                       TextWrapping="WrapWholeWords"/>
+                                        </StackPanel>
+                                    </Border>
+                                </Expander>
+
+                            </StackPanel>
+                        </ScrollViewer>
+                    </Grid>
+
+                    <!-- AVPINS PANEL -->
+                    <Grid Visibility="{x:Bind ViewModel.IsAvPinsMode, Converter={StaticResource BoolToVis}, Mode=OneWay}">
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="*"/>
+                        </Grid.RowDefinitions>
+
+                        <!-- Top: Template field -->
+                        <Border Grid.Row="0" Style="{StaticResource CardStyle}" Margin="0,0,0,8">
+                            <Grid ColumnSpacing="12">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="Auto"/>
+                                    <ColumnDefinition Width="280"/>
+                                </Grid.ColumnDefinitions>
+                                <TextBlock Grid.Column="0" Text="Template" Style="{StaticResource PropLabelStyle}" VerticalAlignment="Center"/>
+                                <TextBox Grid.Column="1"
+                                         Text="{x:Bind ViewModel.AvPins.Template, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                                         PlaceholderText="Default"
+                                         TextChanged="AnyText_Changed"/>
+                            </Grid>
+                        </Border>
+
+                        <!-- Main two-column split -->
+                        <Grid Grid.Row="1">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="320" MinWidth="200" MaxWidth="460"/>
+                                <ColumnDefinition Width="1"/>
+                                <ColumnDefinition Width="*"/>
+                            </Grid.ColumnDefinitions>
+
+                            <!-- Left column: Views + POIs  -->
+                            <ScrollViewer Grid.Column="0" VerticalScrollBarVisibility="Auto">
+                                <StackPanel Spacing="8">
+
+                                    <!-- Views card -->
+                                    <Border Style="{StaticResource CardStyle}">
+                                        <StackPanel Spacing="6">
+                                            <Grid>
+                                                <Grid.ColumnDefinitions>
+                                                    <ColumnDefinition Width="*"/>
+                                                    <ColumnDefinition Width="Auto"/>
+                                                    <ColumnDefinition Width="Auto"/>
+                                                </Grid.ColumnDefinitions>
+                                                <TextBlock Grid.Column="0" Text="Views"
+                                                           Style="{StaticResource SectionHeaderStyle}" VerticalAlignment="Center"/>
+                                                <Button Grid.Column="1" Command="{x:Bind ViewModel.AvPins.AddViewCommand}"
+                                                        Style="{StaticResource GhostAccentButtonStyle}"
+                                                        Width="30" Height="30" Margin="0,0,4,0"
+                                                        ToolTipService.ToolTip="Add view">
+                                                    <FontIcon Glyph="&#xE710;" FontSize="12"/>
+                                                </Button>
+                                                <Button Grid.Column="2" Command="{x:Bind ViewModel.AvPins.DeleteViewCommand}"
+                                                        ToolTipService.ToolTip="Delete selected view"
+                                                        Width="30" Height="30">
+                                                    <FontIcon Glyph="&#xE74D;" FontSize="12" Foreground="{ThemeResource SystemFillColorCriticalBrush}"/>
+                                                </Button>
+                                            </Grid>
+                                            <Border Style="{StaticResource HDividerStyle}"/>
+
+                                            <!-- View list -->
+                                            <ListView ItemsSource="{x:Bind ViewModel.AvPins.Data.Views, Mode=OneWay}"
+                                                      SelectedItem="{x:Bind ViewModel.AvPins.SelectedView, Mode=TwoWay}"
+                                                      SelectionMode="Single" MaxHeight="160">
+                                                <ListView.ItemTemplate>
+                                                    <DataTemplate x:DataType="models:PoiViewEntry">
+                                                        <TextBlock Text="{x:Bind Name, Mode=OneWay}"
+                                                                   TextTrimming="CharacterEllipsis" Padding="0,3"/>
+                                                    </DataTemplate>
+                                                </ListView.ItemTemplate>
+                                            </ListView>
+
+                                            <!-- Inline view editor (only when a view is selected) -->
+                                            <StackPanel Spacing="8"
+                                                        Visibility="{x:Bind ViewModel.AvPins.SelectedView, Converter={StaticResource NullToVis}, Mode=OneWay}">
+                                                <Border Style="{StaticResource HDividerStyle}" Margin="0,4,0,0"/>
+                                                <TextBlock Text="Selected View" FontSize="11" FontWeight="SemiBold"
+                                                           Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
+                                                <Grid ColumnSpacing="8" RowSpacing="6">
+                                                    <Grid.ColumnDefinitions>
+                                                        <ColumnDefinition Width="90"/>
+                                                        <ColumnDefinition Width="*"/>
+                                                    </Grid.ColumnDefinitions>
+                                                    <Grid.RowDefinitions>
+                                                        <RowDefinition Height="Auto"/>
+                                                        <RowDefinition Height="Auto"/>
+                                                        <RowDefinition Height="Auto"/>
+                                                        <RowDefinition Height="Auto"/>
+                                                        <RowDefinition Height="Auto"/>
+                                                        <RowDefinition Height="Auto"/>
+                                                        <RowDefinition Height="Auto"/>
+                                                    </Grid.RowDefinitions>
+
+                                                    <TextBlock Grid.Row="0" Grid.Column="0" Text="Name" Style="{StaticResource PropLabelStyle}"/>
+                                                    <TextBox   Grid.Row="0" Grid.Column="1"
+                                                               Text="{x:Bind ViewModel.AvPins.SelectedView.Name, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                                                               TextChanged="AnyText_Changed"/>
+
+                                                    <TextBlock Grid.Row="1" Grid.Column="0" Text="Locator" Style="{StaticResource PropLabelStyle}"/>
+                                                    <TextBox   Grid.Row="1" Grid.Column="1"
+                                                               Text="{x:Bind ViewModel.AvPins.SelectedView.Locator, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                                                               TextChanged="AnyText_Changed"/>
+
+                                                    <TextBlock Grid.Row="2" Grid.Column="0" Text="Pos X/Y/Z" Style="{StaticResource PropLabelStyle}"/>
+                                                    <StackPanel Grid.Row="2" Grid.Column="1" Orientation="Horizontal" Spacing="4">
+                                                        <NumberBox Value="{x:Bind ViewModel.AvPins.SelectedView.PosX, Mode=TwoWay}"
+                                                                   SmallChange="0.001" SpinButtonPlacementMode="Compact" Width="72"
+                                                                   Header="X" ValueChanged="AnyNumber_Changed"/>
+                                                        <NumberBox Value="{x:Bind ViewModel.AvPins.SelectedView.PosY, Mode=TwoWay}"
+                                                                   SmallChange="0.001" SpinButtonPlacementMode="Compact" Width="72"
+                                                                   Header="Y" ValueChanged="AnyNumber_Changed"/>
+                                                        <NumberBox Value="{x:Bind ViewModel.AvPins.SelectedView.PosZ, Mode=TwoWay}"
+                                                                   SmallChange="0.001" SpinButtonPlacementMode="Compact" Width="72"
+                                                                   Header="Z" ValueChanged="AnyNumber_Changed"/>
+                                                    </StackPanel>
+
+                                                    <TextBlock Grid.Row="3" Grid.Column="0" Text="Dir Yaw" Style="{StaticResource PropLabelStyle}"/>
+                                                    <NumberBox Grid.Row="3" Grid.Column="1"
+                                                               Value="{x:Bind ViewModel.AvPins.SelectedView.DirectionYaw, Mode=TwoWay}"
+                                                               SmallChange="0.5" SpinButtonPlacementMode="Inline"
+                                                               ValueChanged="AnyNumber_Changed"/>
+
+                                                    <TextBlock Grid.Row="4" Grid.Column="0" Text="Size Width" Style="{StaticResource PropLabelStyle}"/>
+                                                    <NumberBox Grid.Row="4" Grid.Column="1"
+                                                               Value="{x:Bind ViewModel.AvPins.SelectedView.SizeWidth, Mode=TwoWay}"
+                                                               SmallChange="0.01" Minimum="0" SpinButtonPlacementMode="Inline"
+                                                               ValueChanged="AnyNumber_Changed"/>
+
+                                                    <TextBlock Grid.Row="5" Grid.Column="0" Text="Yaw Min/Max" Style="{StaticResource PropLabelStyle}"/>
+                                                    <StackPanel Grid.Row="5" Grid.Column="1" Orientation="Horizontal" Spacing="4">
+                                                        <NumberBox Value="{x:Bind ViewModel.AvPins.SelectedView.MinYaw, Mode=TwoWay}"
+                                                                   SmallChange="1" SpinButtonPlacementMode="Compact" Width="84"
+                                                                   Header="Min" ValueChanged="AnyNumber_Changed"/>
+                                                        <NumberBox Value="{x:Bind ViewModel.AvPins.SelectedView.MaxYaw, Mode=TwoWay}"
+                                                                   SmallChange="1" SpinButtonPlacementMode="Compact" Width="84"
+                                                                   Header="Max" ValueChanged="AnyNumber_Changed"/>
+                                                    </StackPanel>
+
+                                                    <TextBlock Grid.Row="6" Grid.Column="0" Text="Pitch Min/Max" Style="{StaticResource PropLabelStyle}"/>
+                                                    <StackPanel Grid.Row="6" Grid.Column="1" Orientation="Horizontal" Spacing="4">
+                                                        <NumberBox Value="{x:Bind ViewModel.AvPins.SelectedView.MinPitch, Mode=TwoWay}"
+                                                                   SmallChange="1" SpinButtonPlacementMode="Compact" Width="84"
+                                                                   Header="Min" ValueChanged="AnyNumber_Changed"/>
+                                                        <NumberBox Value="{x:Bind ViewModel.AvPins.SelectedView.MaxPitch, Mode=TwoWay}"
+                                                                   SmallChange="1" SpinButtonPlacementMode="Compact" Width="84"
+                                                                   Header="Max" ValueChanged="AnyNumber_Changed"/>
+                                                    </StackPanel>
+                                                </Grid>
+                                            </StackPanel>
+                                        </StackPanel>
+                                    </Border>
+
+                                    <!-- POIs card -->
+                                    <Border Style="{StaticResource CardStyle}">
+                                        <StackPanel Spacing="6">
+                                            <Grid>
+                                                <Grid.ColumnDefinitions>
+                                                    <ColumnDefinition Width="*"/>
+                                                    <ColumnDefinition Width="Auto"/>
+                                                    <ColumnDefinition Width="Auto"/>
+                                                </Grid.ColumnDefinitions>
+                                                <TextBlock Grid.Column="0" Text="Points of Interest"
+                                                           Style="{StaticResource SectionHeaderStyle}" VerticalAlignment="Center"/>
+                                                <Button Grid.Column="1" Command="{x:Bind ViewModel.AvPins.AddPOICommand}"
+                                                        Style="{StaticResource GhostAccentButtonStyle}"
+                                                        Width="30" Height="30" Margin="0,0,4,0"
+                                                        ToolTipService.ToolTip="Add POI">
+                                                    <FontIcon Glyph="&#xE710;" FontSize="12"/>
+                                                </Button>
+                                                <Button Grid.Column="2" Command="{x:Bind ViewModel.AvPins.DeletePOICommand}"
+                                                        ToolTipService.ToolTip="Delete selected POI"
+                                                        Width="30" Height="30">
+                                                    <FontIcon Glyph="&#xE74D;" FontSize="12" Foreground="{ThemeResource SystemFillColorCriticalBrush}"/>
+                                                </Button>
+                                            </Grid>
+                                            <Border Style="{StaticResource HDividerStyle}"/>
+                                            <ListView ItemsSource="{x:Bind ViewModel.AvPins.Data.POIs, Mode=OneWay}"
+                                                      SelectedItem="{x:Bind ViewModel.AvPins.SelectedPOI, Mode=TwoWay}"
+                                                      SelectionMode="Single" MinHeight="80">
+                                                <ListView.ItemTemplate>
+                                                    <DataTemplate x:DataType="models:PointOfInterest">
+                                                        <Grid Padding="0,3" ColumnSpacing="6">
+                                                            <Grid.ColumnDefinitions>
+                                                                <ColumnDefinition Width="*"/>
+                                                                <ColumnDefinition Width="Auto"/>
+                                                            </Grid.ColumnDefinitions>
+                                                            <StackPanel Grid.Column="0" Spacing="1">
+                                                                <TextBlock Text="{x:Bind Name, Mode=OneWay}"
+                                                                           FontWeight="SemiBold"
+                                                                           TextTrimming="CharacterEllipsis"/>
+                                                                <TextBlock Text="{x:Bind PoiType, Mode=OneWay}"
+                                                                           FontSize="11"
+                                                                           Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
+                                                            </StackPanel>
+                                                            <Border Grid.Column="1"
+                                                                    Background="{ThemeResource AccentFillColorTertiaryBrush}"
+                                                                    CornerRadius="4" Padding="4,1"
+                                                                    VerticalAlignment="Center">
+                                                                <TextBlock Text="{x:Bind OverrideMode, Mode=OneWay}"
+                                                                           FontSize="10"/>
+                                                            </Border>
+                                                        </Grid>
+                                                    </DataTemplate>
+                                                </ListView.ItemTemplate>
+                                            </ListView>
+                                        </StackPanel>
+                                    </Border>
+
+                                </StackPanel>
+                            </ScrollViewer>
+
+                            <!-- Splitter -->
+                            <Border Grid.Column="1" Background="{ThemeResource SurfaceStrokeColorDefaultBrush}" Margin="0,8"/>
+
+                            <!-- Right column: POI detail cards -->
+                            <ScrollViewer Grid.Column="2" Padding="12,0,0,0" VerticalScrollBarVisibility="Auto">
+                                <StackPanel Spacing="8"
+                                            Visibility="{x:Bind ViewModel.AvPins.SelectedPOI, Converter={StaticResource NullToVis}, Mode=OneWay}">
+
+                                    <!-- ─ Card 1: Identity ─ -->
+                                    <Border Style="{StaticResource CardStyle}">
+                                        <StackPanel Spacing="10">
+                                            <TextBlock Text="Identity" Style="{StaticResource SectionHeaderStyle}"/>
+                                            <Border Style="{StaticResource HDividerStyle}"/>
+                                            <Grid ColumnSpacing="12" RowSpacing="8">
+                                                <Grid.ColumnDefinitions>
+                                                    <ColumnDefinition Width="160"/>
+                                                    <ColumnDefinition Width="*"/>
+                                                </Grid.ColumnDefinitions>
+                                                <Grid.RowDefinitions>
+                                                    <RowDefinition Height="Auto"/>
+                                                    <RowDefinition Height="Auto"/>
+                                                    <RowDefinition Height="Auto"/>
+                                                    <RowDefinition Height="Auto"/>
+                                                    <RowDefinition Height="Auto"/>
+                                                    <RowDefinition Height="Auto"/>
+                                                    <RowDefinition Height="Auto"/>
+                                                    <RowDefinition Height="Auto"/>
+                                                </Grid.RowDefinitions>
+
+                                                <TextBlock Grid.Row="0" Grid.Column="0" Text="Name" Style="{StaticResource PropLabelStyle}"/>
+                                                <TextBox   Grid.Row="0" Grid.Column="1"
+                                                           Text="{x:Bind ViewModel.AvPins.SelectedPOI.Name, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                                                           TextChanged="AnyText_Changed"/>
+
+                                                <TextBlock Grid.Row="1" Grid.Column="0" Text="Override Mode" Style="{StaticResource PropLabelStyle}"/>
+                                                <ComboBox  Grid.Row="1" Grid.Column="1"
+                                                           SelectedItem="{x:Bind ViewModel.AvPins.SelectedPOI.OverrideMode, Mode=TwoWay}"
+                                                           HorizontalAlignment="Stretch" SelectionChanged="AnyCombo_Changed">
+                                                    <x:String>Add</x:String>
+                                                    <x:String>Replace</x:String>
+                                                    <x:String>Remove</x:String>
+                                                </ComboBox>
+
+                                                <TextBlock Grid.Row="2" Grid.Column="0" Text="Type" Style="{StaticResource PropLabelStyle}"/>
+                                                <ComboBox  Grid.Row="2" Grid.Column="1"
+                                                           SelectedItem="{x:Bind ViewModel.AvPins.SelectedPOI.PoiType, Mode=TwoWay}"
+                                                           HorizontalAlignment="Stretch" SelectionChanged="AnyCombo_Changed">
+                                                    <x:String>Pin</x:String>
+                                                    <x:String>Space</x:String>
+                                                </ComboBox>
+
+                                                <TextBlock Grid.Row="3" Grid.Column="0" Text="Icon" Style="{StaticResource PropLabelStyle}"/>
+                                                <TextBox   Grid.Row="3" Grid.Column="1"
+                                                           Text="{x:Bind ViewModel.AvPins.SelectedPOI.Icon, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                                                           PlaceholderText="Optional override icon"
+                                                           TextChanged="AnyText_Changed"/>
+
+                                                <TextBlock Grid.Row="4" Grid.Column="0" Text="Icon Path" Style="{StaticResource PropLabelStyle}"/>
+                                                <TextBox   Grid.Row="4" Grid.Column="1"
+                                                           Text="{x:Bind ViewModel.AvPins.SelectedPOI.IconPath, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                                                           PlaceholderText="Pin_Icon"
+                                                           TextChanged="AnyText_Changed"/>
+
+                                                <TextBlock Grid.Row="5" Grid.Column="0" Text="Icon Type" Style="{StaticResource PropLabelStyle}"/>
+                                                <ComboBox  Grid.Row="5" Grid.Column="1"
+                                                           SelectedItem="{x:Bind ViewModel.AvPins.SelectedPOI.IconType, Mode=TwoWay}"
+                                                           SelectionChanged="AnyCombo_Changed"
+                                                           HorizontalAlignment="Stretch">
+                                                    <x:String>None</x:String>
+                                                    <x:String>CarInteraction</x:String>
+                                                    <x:String>Tour</x:String>
+                                                    <x:String>Community</x:String>
+                                                    <x:String>Customize</x:String>
+                                                </ComboBox>
+
+                                                <TextBlock Grid.Row="6" Grid.Column="0" Text="Tutorial Audio ID" Style="{StaticResource PropLabelStyle}"/>
+                                                <TextBox   Grid.Row="6" Grid.Column="1"
+                                                           Text="{x:Bind ViewModel.AvPins.SelectedPOI.TutorialAudioId, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                                                           TextChanged="AnyText_Changed"/>
+
+                                                <TextBlock Grid.Row="7" Grid.Column="0" Text="Tutorial Text ID" Style="{StaticResource PropLabelStyle}"/>
+                                                <TextBox   Grid.Row="7" Grid.Column="1"
+                                                           Text="{x:Bind ViewModel.AvPins.SelectedPOI.TutorialTextId, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                                                           TextChanged="AnyText_Changed"/>
+                                            </Grid>
+                                        </StackPanel>
+                                    </Border>
+
+                                    <!-- ─ Card 2: Flags ─ -->
+                                    <Border Style="{StaticResource CardStyle}">
+                                        <StackPanel Spacing="10">
+                                            <TextBlock Text="Flags" Style="{StaticResource SectionHeaderStyle}"/>
+                                            <Border Style="{StaticResource HDividerStyle}"/>
+                                            <Grid ColumnSpacing="16" RowSpacing="4">
+                                                <Grid.ColumnDefinitions>
+                                                    <ColumnDefinition Width="*"/>
+                                                    <ColumnDefinition Width="*"/>
+                                                </Grid.ColumnDefinitions>
+                                                <Grid.RowDefinitions>
+                                                    <RowDefinition Height="Auto"/>
+                                                    <RowDefinition Height="Auto"/>
+                                                    <RowDefinition Height="Auto"/>
+                                                    <RowDefinition Height="Auto"/>
+                                                </Grid.RowDefinitions>
+                                                <ToggleSwitch Grid.Row="0" Grid.Column="0" Header="PG Pin"
+                                                              IsOn="{x:Bind ViewModel.AvPins.SelectedPOI.PgPin, Mode=TwoWay}"
+                                                              Toggled="AnyToggle_Toggled" OnContent="Yes" OffContent="No"/>
+                                                <ToggleSwitch Grid.Row="0" Grid.Column="1" Header="Autovista Lite"
+                                                              IsOn="{x:Bind ViewModel.AvPins.SelectedPOI.AutovistaLite, Mode=TwoWay}"
+                                                              Toggled="AnyToggle_Toggled" OnContent="Yes" OffContent="No"/>
+                                                <ToggleSwitch Grid.Row="1" Grid.Column="0" Header="Is Actionable"
+                                                              IsOn="{x:Bind ViewModel.AvPins.SelectedPOI.IsActionable, Mode=TwoWay}"
+                                                              Toggled="AnyToggle_Toggled" OnContent="Yes" OffContent="No"/>
+                                                <ToggleSwitch Grid.Row="1" Grid.Column="1" Header="Handles Back"
+                                                              IsOn="{x:Bind ViewModel.AvPins.SelectedPOI.HandlesBack, Mode=TwoWay}"
+                                                              Toggled="AnyToggle_Toggled" OnContent="Yes" OffContent="No"/>
+                                                <ToggleSwitch Grid.Row="2" Grid.Column="0" Header="Handles Engine Off"
+                                                              IsOn="{x:Bind ViewModel.AvPins.SelectedPOI.HandlesEngineOff, Mode=TwoWay}"
+                                                              Toggled="AnyToggle_Toggled" OnContent="Yes" OffContent="No"/>
+                                                <ToggleSwitch Grid.Row="2" Grid.Column="1" Header="Handles Explode"
+                                                              IsOn="{x:Bind ViewModel.AvPins.SelectedPOI.HandlesExplode, Mode=TwoWay}"
+                                                              Toggled="AnyToggle_Toggled" OnContent="Yes" OffContent="No"/>
+                                                <ToggleSwitch Grid.Row="3" Grid.Column="0" Header="Handles Implode"
+                                                              IsOn="{x:Bind ViewModel.AvPins.SelectedPOI.HandlesImplode, Mode=TwoWay}"
+                                                              Toggled="AnyToggle_Toggled" OnContent="Yes" OffContent="No"/>
+                                            </Grid>
+                                        </StackPanel>
+                                    </Border>
+
+                                    <!-- ─ Card 3: Space Properties (only for Space type) ─ -->
+                                    <Border Style="{StaticResource CardStyle}"
+                                            Visibility="{x:Bind ViewModel.AvPins.IsPoiTypeSpace, Converter={StaticResource BoolToVis}, Mode=OneWay}">
+                                        <StackPanel Spacing="10">
+                                            <TextBlock Text="Space Properties" Style="{StaticResource SectionHeaderStyle}"/>
+                                            <Border Style="{StaticResource HDividerStyle}"/>
+                                            <Grid ColumnSpacing="12" RowSpacing="8">
+                                                <Grid.ColumnDefinitions>
+                                                    <ColumnDefinition Width="160"/>
+                                                    <ColumnDefinition Width="*"/>
+                                                </Grid.ColumnDefinitions>
+                                                <Grid.RowDefinitions>
+                                                    <RowDefinition Height="Auto"/>
+                                                    <RowDefinition Height="Auto"/>
+                                                </Grid.RowDefinitions>
+                                                <TextBlock Grid.Row="0" Grid.Column="0" Text="Controller Angle" Style="{StaticResource PropLabelStyle}"/>
+                                                <NumberBox Grid.Row="0" Grid.Column="1"
+                                                           Value="{x:Bind ViewModel.AvPins.SelectedPOI.SpaceControllerAngle, Mode=TwoWay}"
+                                                           SmallChange="0.1" SpinButtonPlacementMode="Inline"
+                                                           ValueChanged="AnyNumber_Changed"/>
+                                                <TextBlock Grid.Row="1" Grid.Column="0" Text="Angle Error" Style="{StaticResource PropLabelStyle}"/>
+                                                <NumberBox Grid.Row="1" Grid.Column="1"
+                                                           Value="{x:Bind ViewModel.AvPins.SelectedPOI.SpaceControllerAngleError, Mode=TwoWay}"
+                                                           SmallChange="0.1" SpinButtonPlacementMode="Inline"
+                                                           ValueChanged="AnyNumber_Changed"/>
+                                            </Grid>
+                                        </StackPanel>
+                                    </Border>
+
+                                    <!-- ─ Card 4: Visibility ─ -->
+                                    <Border Style="{StaticResource CardStyle}">
+                                        <StackPanel Spacing="10">
+                                            <TextBlock Text="Visibility" Style="{StaticResource SectionHeaderStyle}"/>
+                                            <Border Style="{StaticResource HDividerStyle}"/>
+                                            <Grid ColumnSpacing="12" RowSpacing="8">
+                                                <Grid.ColumnDefinitions>
+                                                    <ColumnDefinition Width="160"/>
+                                                    <ColumnDefinition Width="*"/>
+                                                </Grid.ColumnDefinitions>
+                                                <Grid.RowDefinitions>
+                                                    <RowDefinition Height="Auto"/>
+                                                    <RowDefinition Height="Auto"/>
+                                                    <RowDefinition Height="Auto"/>
+                                                    <RowDefinition Height="Auto"/>
+                                                    <RowDefinition Height="Auto"/>
+                                                    <RowDefinition Height="Auto"/>
+                                                    <RowDefinition Height="Auto"/>
+                                                    <RowDefinition Height="Auto"/>
+                                                    <RowDefinition Height="Auto"/>
+                                                    <RowDefinition Height="Auto"/>
+                                                    <RowDefinition Height="Auto"/>
+                                                    <RowDefinition Height="Auto"/>
+                                                    <RowDefinition Height="Auto"/>
+                                                    <RowDefinition Height="Auto"/>
+                                                    <RowDefinition Height="Auto"/>
+                                                    <RowDefinition Height="Auto"/>
+                                                </Grid.RowDefinitions>
+
+                                                <TextBlock Grid.Row="0" Grid.Column="0" Text="Enabled" Style="{StaticResource PropLabelStyle}"/>
+                                                <ToggleSwitch Grid.Row="0" Grid.Column="1"
+                                                              IsOn="{x:Bind ViewModel.AvPins.SelectedPOI.Visibility.Enabled, Mode=TwoWay}"
+                                                              Toggled="AnyToggle_Toggled" OnContent="Yes" OffContent="No"
+                                                              Margin="0,-8,0,-4"/>
+
+                                                <TextBlock Grid.Row="1" Grid.Column="0" Text="Instant Select" Style="{StaticResource PropLabelStyle}"/>
+                                                <ToggleSwitch Grid.Row="1" Grid.Column="1"
+                                                              IsOn="{x:Bind ViewModel.AvPins.SelectedPOI.Visibility.InstantSelect, Mode=TwoWay}"
+                                                              Toggled="AnyToggle_Toggled" OnContent="Yes" OffContent="No"
+                                                              Margin="0,-8,0,-4"/>
+
+                                                <TextBlock Grid.Row="2" Grid.Column="0" Text="Icon Scale" Style="{StaticResource PropLabelStyle}"/>
+                                                <NumberBox Grid.Row="2" Grid.Column="1"
+                                                           Value="{x:Bind ViewModel.AvPins.SelectedPOI.Visibility.IconScale, Mode=TwoWay}"
+                                                           SmallChange="0.05" Minimum="0" SpinButtonPlacementMode="Inline"
+                                                           ValueChanged="AnyNumber_Changed"/>
+
+                                                <TextBlock Grid.Row="3" Grid.Column="0" Text="Locator" Style="{StaticResource PropLabelStyle}"/>
+                                                <TextBox   Grid.Row="3" Grid.Column="1"
+                                                           Text="{x:Bind ViewModel.AvPins.SelectedPOI.Visibility.Locator, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                                                           TextChanged="AnyText_Changed"/>
+
+                                                <TextBlock Grid.Row="4" Grid.Column="0" Text="Pos X/Y/Z" Style="{StaticResource PropLabelStyle}"/>
+                                                <StackPanel Grid.Row="4" Grid.Column="1" Orientation="Horizontal" Spacing="4">
+                                                    <NumberBox Value="{x:Bind ViewModel.AvPins.SelectedPOI.Visibility.PosX, Mode=TwoWay}"
+                                                               SmallChange="0.001" SpinButtonPlacementMode="Compact" Width="72"
+                                                               Header="X" ValueChanged="AnyNumber_Changed"/>
+                                                    <NumberBox Value="{x:Bind ViewModel.AvPins.SelectedPOI.Visibility.PosY, Mode=TwoWay}"
+                                                               SmallChange="0.001" SpinButtonPlacementMode="Compact" Width="72"
+                                                               Header="Y" ValueChanged="AnyNumber_Changed"/>
+                                                    <NumberBox Value="{x:Bind ViewModel.AvPins.SelectedPOI.Visibility.PosZ, Mode=TwoWay}"
+                                                               SmallChange="0.001" SpinButtonPlacementMode="Compact" Width="72"
+                                                               Header="Z" ValueChanged="AnyNumber_Changed"/>
+                                                </StackPanel>
+
+                                                <TextBlock Grid.Row="5" Grid.Column="0" Text="Axis Yaw/Pitch" Style="{StaticResource PropLabelStyle}"/>
+                                                <StackPanel Grid.Row="5" Grid.Column="1" Orientation="Horizontal" Spacing="4">
+                                                    <NumberBox Value="{x:Bind ViewModel.AvPins.SelectedPOI.Visibility.AxisYaw, Mode=TwoWay}"
+                                                               SmallChange="0.5" SpinButtonPlacementMode="Compact" Width="84"
+                                                               Header="Yaw" ValueChanged="AnyNumber_Changed"/>
+                                                    <NumberBox Value="{x:Bind ViewModel.AvPins.SelectedPOI.Visibility.AxisPitch, Mode=TwoWay}"
+                                                               SmallChange="0.5" SpinButtonPlacementMode="Compact" Width="84"
+                                                               Header="Pitch" ValueChanged="AnyNumber_Changed"/>
+                                                </StackPanel>
+
+                                                <TextBlock Grid.Row="6" Grid.Column="0" Text="Apex Yaw/Pitch" Style="{StaticResource PropLabelStyle}"/>
+                                                <StackPanel Grid.Row="6" Grid.Column="1" Orientation="Horizontal" Spacing="4">
+                                                    <NumberBox Value="{x:Bind ViewModel.AvPins.SelectedPOI.Visibility.ApexYaw, Mode=TwoWay}"
+                                                               SmallChange="0.5" SpinButtonPlacementMode="Compact" Width="84"
+                                                               Header="Yaw" ValueChanged="AnyNumber_Changed"/>
+                                                    <NumberBox Value="{x:Bind ViewModel.AvPins.SelectedPOI.Visibility.ApexPitch, Mode=TwoWay}"
+                                                               SmallChange="0.5" SpinButtonPlacementMode="Compact" Width="84"
+                                                               Header="Pitch" ValueChanged="AnyNumber_Changed"/>
+                                                </StackPanel>
+
+                                                <TextBlock Grid.Row="7" Grid.Column="0" Text="Active Apex" Style="{StaticResource PropLabelStyle}"/>
+                                                <StackPanel Grid.Row="7" Grid.Column="1" Orientation="Horizontal" Spacing="4">
+                                                    <NumberBox Value="{x:Bind ViewModel.AvPins.SelectedPOI.Visibility.ActiveApexYaw, Mode=TwoWay}"
+                                                               SmallChange="0.5" SpinButtonPlacementMode="Compact" Width="84"
+                                                               Header="Yaw" ValueChanged="AnyNumber_Changed"/>
+                                                    <NumberBox Value="{x:Bind ViewModel.AvPins.SelectedPOI.Visibility.ActiveApexPitch, Mode=TwoWay}"
+                                                               SmallChange="0.5" SpinButtonPlacementMode="Compact" Width="84"
+                                                               Header="Pitch" ValueChanged="AnyNumber_Changed"/>
+                                                </StackPanel>
+
+                                                <TextBlock Grid.Row="8" Grid.Column="0" Text="Mid Apex" Style="{StaticResource PropLabelStyle}"/>
+                                                <StackPanel Grid.Row="8" Grid.Column="1" Orientation="Horizontal" Spacing="4">
+                                                    <NumberBox Value="{x:Bind ViewModel.AvPins.SelectedPOI.Visibility.MidApexYaw, Mode=TwoWay}"
+                                                               SmallChange="0.5" SpinButtonPlacementMode="Compact" Width="84"
+                                                               Header="Yaw" ValueChanged="AnyNumber_Changed"/>
+                                                    <NumberBox Value="{x:Bind ViewModel.AvPins.SelectedPOI.Visibility.MidApexPitch, Mode=TwoWay}"
+                                                               SmallChange="0.5" SpinButtonPlacementMode="Compact" Width="84"
+                                                               Header="Pitch" ValueChanged="AnyNumber_Changed"/>
+                                                </StackPanel>
+
+                                                <TextBlock Grid.Row="9" Grid.Column="0" Text="Distance Near/Mid/Far" Style="{StaticResource PropLabelStyle}"/>
+                                                <StackPanel Grid.Row="9" Grid.Column="1" Orientation="Horizontal" Spacing="4">
+                                                    <NumberBox Value="{x:Bind ViewModel.AvPins.SelectedPOI.Visibility.NearRadius, Mode=TwoWay}"
+                                                               SmallChange="0.5" Minimum="0" SpinButtonPlacementMode="Compact" Width="72"
+                                                               Header="Near" ValueChanged="AnyNumber_Changed"/>
+                                                    <NumberBox Value="{x:Bind ViewModel.AvPins.SelectedPOI.Visibility.MidRadius, Mode=TwoWay}"
+                                                               SmallChange="0.5" Minimum="0" SpinButtonPlacementMode="Compact" Width="72"
+                                                               Header="Mid" ValueChanged="AnyNumber_Changed"/>
+                                                    <NumberBox Value="{x:Bind ViewModel.AvPins.SelectedPOI.Visibility.FarRadius, Mode=TwoWay}"
+                                                               SmallChange="0.5" Minimum="0" SpinButtonPlacementMode="Compact" Width="72"
+                                                               Header="Far" ValueChanged="AnyNumber_Changed"/>
+                                                </StackPanel>
+
+                                                <!-- Camera sub-group -->
+                                                <ToggleSwitch Grid.Row="10" Grid.Column="0"
+                                                              Header="Has Camera"
+                                                              IsOn="{x:Bind ViewModel.AvPins.SelectedPOI.Visibility.HasCamera, Mode=TwoWay}"
+                                                              Toggled="AnyToggle_Toggled" OnContent="Yes" OffContent="No"
+                                                              Margin="0,-8,0,-4"/>
+                                                <StackPanel Grid.Row="10" Grid.Column="1" Spacing="4" Orientation="Horizontal">
+                                                    <NumberBox Value="{x:Bind ViewModel.AvPins.SelectedPOI.Visibility.CameraFovScale, Mode=TwoWay}"
+                                                               SmallChange="0.05" SpinButtonPlacementMode="Compact" Width="84"
+                                                               Header="FOV Scale" ValueChanged="AnyNumber_Changed"/>
+                                                    <NumberBox Value="{x:Bind ViewModel.AvPins.SelectedPOI.Visibility.CameraWalkSpeedScale, Mode=TwoWay}"
+                                                               SmallChange="0.05" SpinButtonPlacementMode="Compact" Width="84"
+                                                               Header="Walk Speed" ValueChanged="AnyNumber_Changed"/>
+                                                </StackPanel>
+
+                                                <!-- LookAt sub-group -->
+                                                <ToggleSwitch Grid.Row="11" Grid.Column="0"
+                                                              Header="Has LookAt"
+                                                              IsOn="{x:Bind ViewModel.AvPins.SelectedPOI.Visibility.HasLookAt, Mode=TwoWay}"
+                                                              Toggled="AnyToggle_Toggled" OnContent="Yes" OffContent="No"
+                                                              Margin="0,-8,0,-4"/>
+                                                <StackPanel Grid.Row="11" Grid.Column="1" Spacing="4" Orientation="Horizontal">
+                                                    <NumberBox Value="{x:Bind ViewModel.AvPins.SelectedPOI.Visibility.LookAtHeightBoost, Mode=TwoWay}"
+                                                               SmallChange="0.01" SpinButtonPlacementMode="Compact" Width="80"
+                                                               Header="Ht Boost" ValueChanged="AnyNumber_Changed"/>
+                                                    <NumberBox Value="{x:Bind ViewModel.AvPins.SelectedPOI.Visibility.LookAtBlend, Mode=TwoWay}"
+                                                               SmallChange="0.01" SpinButtonPlacementMode="Compact" Width="72"
+                                                               Header="Blend" ValueChanged="AnyNumber_Changed"/>
+                                                </StackPanel>
+
+                                                <!-- Cursor sub-group -->
+                                                <ToggleSwitch Grid.Row="12" Grid.Column="0"
+                                                              Header="Has Cursor"
+                                                              IsOn="{x:Bind ViewModel.AvPins.SelectedPOI.Visibility.HasCursor, Mode=TwoWay}"
+                                                              Toggled="AnyToggle_Toggled" OnContent="Yes" OffContent="No"
+                                                              Margin="0,-8,0,-4"/>
+                                                <NumberBox Grid.Row="12" Grid.Column="1"
+                                                           Value="{x:Bind ViewModel.AvPins.SelectedPOI.Visibility.CursorMinActivateZ, Mode=TwoWay}"
+                                                           SmallChange="0.001" SpinButtonPlacementMode="Inline"
+                                                           Header="Min Activate Z" Width="160"
+                                                           IsEnabled="{x:Bind ViewModel.AvPins.SelectedPOI.Visibility.HasCursor, Mode=OneWay}"
+                                                           HorizontalAlignment="Left"
+                                                           ValueChanged="AnyNumber_Changed"/>
+                                            </Grid>
+                                        </StackPanel>
+                                    </Border>
+
+                                    <!-- ─ Card 5: Action ─ -->
+                                    <Border Style="{StaticResource CardStyle}">
+                                        <StackPanel Spacing="10">
+                                            <TextBlock Text="Action" Style="{StaticResource SectionHeaderStyle}"/>
+                                            <Border Style="{StaticResource HDividerStyle}"/>
+                                            <Grid ColumnSpacing="12" RowSpacing="8">
+                                                <Grid.ColumnDefinitions>
+                                                    <ColumnDefinition Width="160"/>
+                                                    <ColumnDefinition Width="*"/>
+                                                </Grid.ColumnDefinitions>
+                                                <Grid.RowDefinitions>
+                                                    <RowDefinition Height="Auto"/>
+                                                    <RowDefinition Height="Auto"/>
+                                                    <RowDefinition Height="Auto"/>
+                                                    <RowDefinition Height="Auto"/>
+                                                    <RowDefinition Height="Auto"/>
+                                                    <RowDefinition Height="Auto"/>
+                                                    <RowDefinition Height="Auto"/>
+                                                    <RowDefinition Height="Auto"/>
+                                                    <RowDefinition Height="Auto"/>
+                                                </Grid.RowDefinitions>
+
+                                                <TextBlock Grid.Row="0" Grid.Column="0" Text="Cinematic" Style="{StaticResource PropLabelStyle}"/>
+                                                <TextBox   Grid.Row="0" Grid.Column="1"
+                                                           Text="{x:Bind ViewModel.AvPins.SelectedPOI.Action.Cinematic, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                                                           TextChanged="AnyText_Changed"/>
+
+                                                <TextBlock Grid.Row="1" Grid.Column="0" Text="Scene Name" Style="{StaticResource PropLabelStyle}"/>
+                                                <TextBox   Grid.Row="1" Grid.Column="1"
+                                                           Text="{x:Bind ViewModel.AvPins.SelectedPOI.Action.SceneName, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                                                           TextChanged="AnyText_Changed"/>
+
+                                                <TextBlock Grid.Row="2" Grid.Column="0" Text="Should Hide UI" Style="{StaticResource PropLabelStyle}"/>
+                                                <ToggleSwitch Grid.Row="2" Grid.Column="1"
+                                                              IsOn="{x:Bind ViewModel.AvPins.SelectedPOI.Action.ShouldHideUI, Mode=TwoWay}"
+                                                              Toggled="AnyToggle_Toggled" OnContent="Yes" OffContent="No"
+                                                              Margin="0,-8,0,-4"/>
+
+                                                <TextBlock Grid.Row="3" Grid.Column="0" Text="Restore Anim State" Style="{StaticResource PropLabelStyle}"/>
+                                                <ToggleSwitch Grid.Row="3" Grid.Column="1"
+                                                              IsOn="{x:Bind ViewModel.AvPins.SelectedPOI.Action.RestoreAnimationState, Mode=TwoWay}"
+                                                              Toggled="AnyToggle_Toggled" OnContent="Yes" OffContent="No"
+                                                              Margin="0,-8,0,-4"/>
+
+                                                <TextBlock Grid.Row="4" Grid.Column="0" Text="FadeOut UI Trans." Style="{StaticResource PropLabelStyle}"/>
+                                                <ToggleSwitch Grid.Row="4" Grid.Column="1"
+                                                              IsOn="{x:Bind ViewModel.AvPins.SelectedPOI.Action.FadeOutUITransition, Mode=TwoWay}"
+                                                              Toggled="AnyToggle_Toggled" OnContent="Yes" OffContent="No"
+                                                              Margin="0,-8,0,-4"/>
+
+                                                <!-- SetView sub-group -->
+                                                <Border Grid.Row="5" Grid.Column="0" Grid.ColumnSpan="2"
+                                                        Style="{StaticResource HDividerStyle}" Margin="0,4"/>
+
+                                                <TextBlock Grid.Row="6" Grid.Column="0" Text="Set View Name" Style="{StaticResource PropLabelStyle}"/>
+                                                <TextBox   Grid.Row="6" Grid.Column="1"
+                                                           Text="{x:Bind ViewModel.AvPins.SelectedPOI.Action.SetViewName, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                                                           TextChanged="AnyText_Changed"/>
+
+                                                <TextBlock Grid.Row="7" Grid.Column="0" Text="Set View Locator" Style="{StaticResource PropLabelStyle}"/>
+                                                <TextBox   Grid.Row="7" Grid.Column="1"
+                                                           Text="{x:Bind ViewModel.AvPins.SelectedPOI.Action.SetViewTransitionLocator, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                                                           TextChanged="AnyText_Changed"/>
+
+                                                <TextBlock Grid.Row="8" Grid.Column="0" Text="Transition X/Y/Z/W" Style="{StaticResource PropLabelStyle}"/>
+                                                <StackPanel Grid.Row="8" Grid.Column="1" Orientation="Horizontal" Spacing="4">
+                                                    <NumberBox Value="{x:Bind ViewModel.AvPins.SelectedPOI.Action.TransitionX, Mode=TwoWay}"
+                                                               SmallChange="0.001" SpinButtonPlacementMode="Compact" Width="62"
+                                                               Header="X" ValueChanged="AnyNumber_Changed"/>
+                                                    <NumberBox Value="{x:Bind ViewModel.AvPins.SelectedPOI.Action.TransitionY, Mode=TwoWay}"
+                                                               SmallChange="0.001" SpinButtonPlacementMode="Compact" Width="62"
+                                                               Header="Y" ValueChanged="AnyNumber_Changed"/>
+                                                    <NumberBox Value="{x:Bind ViewModel.AvPins.SelectedPOI.Action.TransitionZ, Mode=TwoWay}"
+                                                               SmallChange="0.001" SpinButtonPlacementMode="Compact" Width="62"
+                                                               Header="Z" ValueChanged="AnyNumber_Changed"/>
+                                                    <NumberBox Value="{x:Bind ViewModel.AvPins.SelectedPOI.Action.TransitionW, Mode=TwoWay}"
+                                                               SmallChange="0.001" SpinButtonPlacementMode="Compact" Width="62"
+                                                               Header="W" ValueChanged="AnyNumber_Changed"/>
+                                                </StackPanel>
+                                            </Grid>
+
+                                            <!-- Required POIs list -->
+                                            <Border Style="{StaticResource HDividerStyle}"/>
+                                            <TextBlock Text="Required POIs" FontSize="12" FontWeight="SemiBold"/>
+                                            <ListView ItemsSource="{x:Bind ViewModel.AvPins.SelectedPOI.Action.RequiredPOIs, Mode=OneWay}"
+                                                      MinHeight="40" MaxHeight="120" SelectionMode="None">
+                                                <ListView.ItemTemplate>
+                                                    <DataTemplate x:DataType="x:String">
+                                                        <TextBlock Text="{x:Bind}" Padding="0,2"/>
+                                                    </DataTemplate>
+                                                </ListView.ItemTemplate>
+                                            </ListView>
+                                        </StackPanel>
+                                    </Border>
+
+                                    <!-- ─ Card 6: Pre-Conditions ─ -->
+                                    <Border Style="{StaticResource CardStyle}">
+                                        <StackPanel Spacing="8">
+                                            <Grid>
+                                                <Grid.ColumnDefinitions>
+                                                    <ColumnDefinition Width="*"/>
+                                                    <ColumnDefinition Width="Auto"/>
+                                                    <ColumnDefinition Width="Auto"/>
+                                                </Grid.ColumnDefinitions>
+                                                <TextBlock Grid.Column="0" Text="Pre-Conditions" Style="{StaticResource SectionHeaderStyle}" VerticalAlignment="Center"/>
+                                                <Button Grid.Column="1" Command="{x:Bind ViewModel.AvPins.AddPreConditionCommand}"
+                                                        Style="{StaticResource GhostAccentButtonStyle}"
+                                                        Width="30" Height="30" Margin="0,0,4,0"
+                                                        ToolTipService.ToolTip="Add condition">
+                                                    <FontIcon Glyph="&#xE710;" FontSize="12"/>
+                                                </Button>
+                                                <Button Grid.Column="2" Command="{x:Bind ViewModel.AvPins.DeletePreConditionCommand}"
+                                                        ToolTipService.ToolTip="Delete selected condition"
+                                                        Width="30" Height="30">
+                                                    <FontIcon Glyph="&#xE74D;" FontSize="12" Foreground="{ThemeResource SystemFillColorCriticalBrush}"/>
+                                                </Button>
+                                            </Grid>
+                                            <Border Style="{StaticResource HDividerStyle}"/>
+                                            <ListView ItemsSource="{x:Bind ViewModel.AvPins.SelectedPOI.PreConditions, Mode=OneWay}"
+                                                      SelectedItem="{x:Bind ViewModel.AvPins.SelectedPreCondition, Mode=TwoWay}"
+                                                      SelectionMode="Single" MinHeight="40" MaxHeight="150">
+                                                <ListView.ItemTemplate>
+                                                    <DataTemplate x:DataType="models:PoiCondition">
+                                                        <Grid ColumnSpacing="8" Padding="0,4">
+                                                            <Grid.ColumnDefinitions>
+                                                                <ColumnDefinition Width="Auto"/>
+                                                                <ColumnDefinition Width="*"/>
+                                                                <ColumnDefinition Width="80"/>
+                                                            </Grid.ColumnDefinitions>
+                                                            <ToggleSwitch Grid.Column="0"
+                                                                          IsOn="{x:Bind IsSet, Mode=TwoWay}"
+                                                                          OnContent="Set" OffContent="UnSet"
+                                                                          Margin="0,-12,0,-12"/>
+                                                            <TextBox Grid.Column="1"
+                                                                     Text="{x:Bind State, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                                                                     PlaceholderText="State name"/>
+                                                            <ComboBox Grid.Column="2"
+                                                                      SelectedItem="{x:Bind OverrideMode, Mode=TwoWay}"
+                                                                      HorizontalAlignment="Stretch">
+                                                                <x:String>Add</x:String>
+                                                                <x:String>Replace</x:String>
+                                                                <x:String>Remove</x:String>
+                                                            </ComboBox>
+                                                        </Grid>
+                                                    </DataTemplate>
+                                                </ListView.ItemTemplate>
+                                            </ListView>
+                                        </StackPanel>
+                                    </Border>
+
+                                    <!-- ─ Card 7: Post-Conditions ─ -->
+                                    <Border Style="{StaticResource CardStyle}">
+                                        <StackPanel Spacing="8">
+                                            <Grid>
+                                                <Grid.ColumnDefinitions>
+                                                    <ColumnDefinition Width="*"/>
+                                                    <ColumnDefinition Width="Auto"/>
+                                                    <ColumnDefinition Width="Auto"/>
+                                                </Grid.ColumnDefinitions>
+                                                <TextBlock Grid.Column="0" Text="Post-Conditions" Style="{StaticResource SectionHeaderStyle}" VerticalAlignment="Center"/>
+                                                <Button Grid.Column="1" Command="{x:Bind ViewModel.AvPins.AddPostConditionCommand}"
+                                                        Style="{StaticResource GhostAccentButtonStyle}"
+                                                        Width="30" Height="30" Margin="0,0,4,0"
+                                                        ToolTipService.ToolTip="Add condition">
+                                                    <FontIcon Glyph="&#xE710;" FontSize="12"/>
+                                                </Button>
+                                                <Button Grid.Column="2" Command="{x:Bind ViewModel.AvPins.DeletePostConditionCommand}"
+                                                        ToolTipService.ToolTip="Delete selected condition"
+                                                        Width="30" Height="30">
+                                                    <FontIcon Glyph="&#xE74D;" FontSize="12" Foreground="{ThemeResource SystemFillColorCriticalBrush}"/>
+                                                </Button>
+                                            </Grid>
+                                            <Border Style="{StaticResource HDividerStyle}"/>
+                                            <ListView ItemsSource="{x:Bind ViewModel.AvPins.SelectedPOI.PostConditions, Mode=OneWay}"
+                                                      SelectedItem="{x:Bind ViewModel.AvPins.SelectedPostCondition, Mode=TwoWay}"
+                                                      SelectionMode="Single" MinHeight="40" MaxHeight="150">
+                                                <ListView.ItemTemplate>
+                                                    <DataTemplate x:DataType="models:PoiCondition">
+                                                        <Grid ColumnSpacing="8" Padding="0,4">
+                                                            <Grid.ColumnDefinitions>
+                                                                <ColumnDefinition Width="Auto"/>
+                                                                <ColumnDefinition Width="*"/>
+                                                                <ColumnDefinition Width="80"/>
+                                                            </Grid.ColumnDefinitions>
+                                                            <ToggleSwitch Grid.Column="0"
+                                                                          IsOn="{x:Bind IsSet, Mode=TwoWay}"
+                                                                          OnContent="Set" OffContent="UnSet"
+                                                                          Margin="0,-12,0,-12"/>
+                                                            <TextBox Grid.Column="1"
+                                                                     Text="{x:Bind State, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                                                                     PlaceholderText="State name"/>
+                                                            <ComboBox Grid.Column="2"
+                                                                      SelectedItem="{x:Bind OverrideMode, Mode=TwoWay}"
+                                                                      HorizontalAlignment="Stretch">
+                                                                <x:String>Add</x:String>
+                                                                <x:String>Replace</x:String>
+                                                                <x:String>Remove</x:String>
+                                                            </ComboBox>
+                                                        </Grid>
+                                                    </DataTemplate>
+                                                </ListView.ItemTemplate>
+                                            </ListView>
+                                        </StackPanel>
+                                    </Border>
+
+                                </StackPanel>
+                            </ScrollViewer>
+                        </Grid>
+                    </Grid>
+
+                </Grid>
+            </PivotItem>
+
+            <!-- TAB 2 — Raw XML-->
+            <PivotItem Header="Raw XML">
+                <Grid Margin="0,8,0,0">
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="*"/>
+                    </Grid.RowDefinitions>
+
+                    <!-- Toolbar -->
+                    <StackPanel Grid.Row="0" Orientation="Horizontal" Spacing="8" Margin="0,0,0,8">
+                        <Button Style="{StaticResource GhostAccentButtonStyle}" Click="RefreshXml_Click">
+                            <StackPanel Orientation="Horizontal" Spacing="6">
+                                <FontIcon Glyph="&#xE72C;" FontSize="13"/>
+                                <TextBlock Text="Refresh from Model" FontSize="13"/>
+                            </StackPanel>
+                        </Button>
+                        <Button Style="{StaticResource GhostAccentButtonStyle}" Click="ApplyXml_Click">
+                            <StackPanel Orientation="Horizontal" Spacing="6">
+                                <FontIcon Glyph="&#xE73E;" FontSize="13"/>
+                                <TextBlock Text="Apply Changes" FontSize="13"/>
+                            </StackPanel>
+                        </Button>
+                        <Border Width="1" Background="{ThemeResource DividerStrokeColorDefaultBrush}" Margin="4,6"/>
+                        <TextBlock Text="Edit the XML directly, then click Apply Changes to update the editor."
+                                   FontSize="12"
+                                   Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                                   VerticalAlignment="Center"/>
+                    </StackPanel>
+
+                    <!-- Error indicator -->
+                    <TextBlock Grid.Row="1"
+                               Text="{x:Bind ViewModel.XmlError, Mode=OneWay}"
+                               Visibility="{x:Bind ViewModel.XmlError, Mode=OneWay, Converter={StaticResource StringToVis}}"
+                               Foreground="{ThemeResource SystemFillColorCriticalBrush}"
+                               FontSize="12"
+                               Margin="2,0,0,8"
+                               TextWrapping="WrapWholeWords"/>
+
+                    <!-- Editable XML TextBox -->
+                    <TextBox Grid.Row="2"
+                             x:Name="XmlTextBox"
+                             Text="{x:Bind ViewModel.XmlText, Mode=OneWay}"
+                             FontFamily="Consolas"
+                             FontSize="13"
+                             TextWrapping="NoWrap"
+                             AcceptsReturn="True"
+                             HorizontalAlignment="Stretch"
+                             VerticalAlignment="Stretch"
+                             BorderThickness="1"
+                             BorderBrush="{ThemeResource SurfaceStrokeColorDefaultBrush}"
+                             ScrollViewer.HorizontalScrollBarVisibility="Auto"
+                             ScrollViewer.VerticalScrollBarVisibility="Auto"/>
+                </Grid>
+            </PivotItem>
+
+        </Pivot>
+    </Grid>
+</Page>

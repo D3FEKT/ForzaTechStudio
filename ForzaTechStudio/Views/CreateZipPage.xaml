@@ -1,0 +1,280 @@
+﻿<Page
+    x:Class="ForzaTechStudio.Views.CreateZipPage"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+    xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+    xmlns:vm="using:ForzaTechStudio.ViewModels"
+    xmlns:local="using:ForzaTechStudio.Views"
+    xmlns:controls="using:ForzaTechStudio.Views.Controls"
+    mc:Ignorable="d"
+    AllowDrop="True"
+    DragOver="Page_DragOver"
+    Drop="Page_Drop">
+
+    <Page.Resources>
+        <Style x:Key="ColumnHeaderStyle" TargetType="TextBlock">
+            <Setter Property="FontWeight" Value="SemiBold"/>
+            <Setter Property="FontSize" Value="12"/>
+            <Setter Property="Opacity" Value="0.7"/>
+            <Setter Property="VerticalAlignment" Value="Center"/>
+        </Style>
+
+        <DataTemplate x:Key="FolderTemplate">
+            <Grid Padding="0,4" HorizontalAlignment="Stretch">
+                <Grid.ContextFlyout>
+                    <MenuFlyout>
+                        <MenuFlyoutItem Text="Extract Folder" Icon="Download" 
+                                        Click="ExtractItem_Click"/>
+                    </MenuFlyout>
+                </Grid.ContextFlyout>
+                
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="300" MinWidth="200" MaxWidth="500"/>
+                    <ColumnDefinition Width="100"/>
+                    <ColumnDefinition Width="100"/>
+                    <ColumnDefinition Width="140"/>
+                    <ColumnDefinition Width="80"/>
+                    <ColumnDefinition Width="80"/>
+                    <ColumnDefinition Width="100"/> <!-- Comp Method -->
+                </Grid.ColumnDefinitions>
+
+                <StackPanel Grid.Column="0" Orientation="Horizontal" Spacing="8">
+                    <FontIcon Glyph="&#xE8B7;" FontSize="14" FontFamily="{ThemeResource SymbolThemeFontFamily}" Opacity="0.7" Foreground="{ThemeResource SystemControlForegroundAccentBrush}"/>
+                    <TextBlock Text="{Binding Content.Name}" FontWeight="SemiBold" TextTrimming="CharacterEllipsis"/>
+                </StackPanel>
+
+                <TextBlock Grid.Column="3" Text="{Binding Content.ModifiedDateDisplay}" Opacity="0.6" FontSize="12" VerticalAlignment="Center"/>
+                <TextBlock Grid.Column="4" Text="Folder" Opacity="0.6" FontSize="12" VerticalAlignment="Center"/>
+                <TextBlock Grid.Column="5" Text="{Binding Content.AttributesDisplay}" Opacity="0.6" FontSize="12" VerticalAlignment="Center"/>
+                <!-- Column 6 Empty for Folder -->
+            </Grid>
+        </DataTemplate>
+
+        <DataTemplate x:Key="FileTemplate">
+             <Grid Padding="0,4" HorizontalAlignment="Stretch">
+                <Grid.ContextFlyout>
+                    <MenuFlyout>
+                        <MenuFlyoutItem Text="Extract File" Icon="Download" 
+                                        Click="ExtractItem_Click"/>
+                        <MenuFlyoutItem Text="Replace File" Icon="Edit"
+                                        Click="ReplaceItem_Click"/>
+                    </MenuFlyout>
+                </Grid.ContextFlyout>
+
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="300" MinWidth="200" MaxWidth="500"/>
+                    <ColumnDefinition Width="100"/>
+                    <ColumnDefinition Width="100"/>
+                    <ColumnDefinition Width="140"/>
+                    <ColumnDefinition Width="80"/>
+                    <ColumnDefinition Width="80"/>
+                    <ColumnDefinition Width="100"/> <!-- Comp Method -->
+                </Grid.ColumnDefinitions>
+
+                <StackPanel Grid.Column="0" Orientation="Horizontal" Spacing="8">
+                    <FontIcon Glyph="&#xE8A5;" FontSize="14" FontFamily="{ThemeResource SymbolThemeFontFamily}" Opacity="0.7"/>
+                    <TextBlock Text="{Binding Content.Name}" TextTrimming="CharacterEllipsis"/>
+                </StackPanel>
+
+                <TextBlock Grid.Column="1" Text="{Binding Content.SizeDisplay}" Opacity="0.8" FontSize="12" VerticalAlignment="Center"/>
+                <TextBlock Grid.Column="2" Text="{Binding Content.PackedSizeDisplay}" Opacity="0.8" FontSize="12" VerticalAlignment="Center"/>
+                <TextBlock Grid.Column="3" Text="{Binding Content.ModifiedDateDisplay}" Opacity="0.6" FontSize="12" VerticalAlignment="Center"/>
+                <TextBlock Grid.Column="4" Text="{Binding Content.Type}" Opacity="0.6" FontSize="12" VerticalAlignment="Center"/>
+                <TextBlock Grid.Column="5" Text="{Binding Content.AttributesDisplay}" Opacity="0.6" FontSize="12" VerticalAlignment="Center"/>
+                <TextBlock Grid.Column="6" Text="{Binding Content.CompressionMethodDisplay}" Opacity="0.6" FontSize="12" VerticalAlignment="Center"/>
+            </Grid>
+        </DataTemplate>
+
+        <local:ExplorerItemTemplateSelector x:Key="ExplorerItemTemplateSelector"
+            FolderTemplate="{StaticResource FolderTemplate}"
+            FileTemplate="{StaticResource FileTemplate}" />
+    </Page.Resources>
+
+    <Grid Padding="12" Background="Transparent">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/> <!-- Page Header -->
+            <RowDefinition Height="Auto"/> <!-- Build Settings -->
+            <RowDefinition Height="*"/>    <!-- TreeView -->
+            <RowDefinition Height="Auto"/> <!-- Status Bar -->
+        </Grid.RowDefinitions>
+
+        <!-- Page Header with Commands -->
+        <controls:StandardPageHeader Grid.Row="0" 
+                                     Title="Zip Archives" 
+                                     Description="Open existing Forza zip archives or create a new one."
+                                     Margin="0,0,0,12">
+            <controls:StandardPageHeader.HeaderCommands>
+                <StackPanel Orientation="Horizontal" Spacing="8">
+                    <Button Style="{StaticResource GhostAccentButtonStyle}" 
+                            Command="{x:Bind ViewModel.CreateNewSessionCommand}">
+                        <StackPanel Orientation="Horizontal" Spacing="8">
+                            <FontIcon Glyph="&#xE710;" FontSize="14"/>
+                            <TextBlock Text="New Archive"/>
+                        </StackPanel>
+                        <Button.KeyboardAccelerators>
+                            <KeyboardAccelerator Modifiers="Control" Key="N"/>
+                        </Button.KeyboardAccelerators>
+                    </Button>
+                    <Button Style="{StaticResource GhostAccentButtonStyle}" 
+                            Command="{x:Bind ViewModel.OpenZipCommand}">
+                        <StackPanel Orientation="Horizontal" Spacing="8">
+                            <FontIcon Glyph="&#xE8E5;" FontSize="14"/>
+                            <TextBlock Text="Open Existing"/>
+                        </StackPanel>
+                        <Button.KeyboardAccelerators>
+                            <KeyboardAccelerator Modifiers="Control" Key="O"/>
+                        </Button.KeyboardAccelerators>
+                    </Button>
+                    
+                    <Border Width="1" Background="{ThemeResource DividerStrokeColorDefaultBrush}" Margin="4,8"/>
+                    
+                    <Button Style="{StaticResource GhostAccentButtonStyle}" 
+                            Command="{x:Bind ViewModel.ExtractZipCommand}" 
+                            IsEnabled="{x:Bind ViewModel.IsArchiveLoaded, Mode=OneWay}">
+                        <StackPanel Orientation="Horizontal" Spacing="8">
+                            <FontIcon Glyph="&#xE896;" FontSize="14"/>
+                            <TextBlock Text="Extract"/>
+                        </StackPanel>
+                    </Button>
+                    
+                    <Border Width="1" Background="{ThemeResource DividerStrokeColorDefaultBrush}" Margin="4,8"/>
+
+                    <Button Style="{StaticResource GhostAccentButtonStyle}" 
+                            Command="{x:Bind ViewModel.AddFilesCommand}" 
+                            IsEnabled="{x:Bind ViewModel.IsBuildMode, Mode=OneWay}">
+                        <StackPanel Orientation="Horizontal" Spacing="8">
+                            <FontIcon Glyph="&#xE8A5;" FontSize="14"/>
+                            <TextBlock Text="Add Files"/>
+                        </StackPanel>
+                    </Button>
+                    <Button Style="{StaticResource GhostAccentButtonStyle}" 
+                            Command="{x:Bind ViewModel.AddFolderCommand}" 
+                            IsEnabled="{x:Bind ViewModel.IsBuildMode, Mode=OneWay}">
+                        <StackPanel Orientation="Horizontal" Spacing="8">
+                            <FontIcon Glyph="&#xE8B7;" FontSize="14"/>
+                            <TextBlock Text="Add Folder"/>
+                        </StackPanel>
+                    </Button>
+                    <Button Style="{StaticResource GhostAccentButtonStyle}" 
+                            Command="{x:Bind ViewModel.ClearListCommand}" 
+                            IsEnabled="{x:Bind ViewModel.IsBuildMode, Mode=OneWay}">
+                        <StackPanel Orientation="Horizontal" Spacing="8">
+                            <FontIcon Glyph="&#xE74D;" FontSize="14"/>
+                            <TextBlock Text="Clear"/>
+                        </StackPanel>
+                    </Button>
+                        
+                    <Border Width="1" Background="{ThemeResource DividerStrokeColorDefaultBrush}" Margin="4,8"/>
+
+                    <Button Style="{StaticResource GhostAccentButtonStyle}" 
+                            Command="{x:Bind ViewModel.CreateZipCommand}" 
+                            Visibility="{x:Bind ViewModel.BuildModeVisibility, Mode=OneWay}">
+                        <StackPanel Orientation="Horizontal" Spacing="8">
+                            <FontIcon Glyph="&#xE74E;" FontSize="14"/>
+                            <TextBlock Text="Build Zip"/>
+                        </StackPanel>
+                    </Button>
+
+                    <Border Width="1" Background="{ThemeResource DividerStrokeColorDefaultBrush}" Margin="4,8"
+                            Visibility="{x:Bind ViewModel.IsArchiveLoadedVisibility, Mode=OneWay}"/>
+
+                    <Button Style="{StaticResource GhostAccentButtonStyle}"
+                            Command="{x:Bind ViewModel.CreateNewSessionCommand}"
+                            Visibility="{x:Bind ViewModel.IsArchiveLoadedVisibility, Mode=OneWay}">
+                        <StackPanel Orientation="Horizontal" Spacing="8">
+                            <FontIcon Glyph="&#xE8BB;" FontSize="14"/>
+                            <TextBlock Text="Close"/>
+                        </StackPanel>
+                    </Button>
+                </StackPanel>
+            </controls:StandardPageHeader.HeaderCommands>
+        </controls:StandardPageHeader>
+
+        <!-- Build Settings Panel -->
+        <Border Grid.Row="1" Margin="0,0,0,12" Padding="12" CornerRadius="4" 
+                Background="{ThemeResource LayerFillColorDefaultBrush}"
+                Visibility="{x:Bind ViewModel.BuildModeVisibility, Mode=OneWay}">
+            <Grid ColumnSpacing="16">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto"/>
+                    <ColumnDefinition Width="300"/>
+                    <ColumnDefinition Width="Auto"/>
+                    <ColumnDefinition Width="200"/>
+                </Grid.ColumnDefinitions>
+                
+                <TextBlock Text="Filename:" VerticalAlignment="Center"/>
+                <TextBox Grid.Column="1" Text="{x:Bind ViewModel.ZipName, Mode=TwoWay}" PlaceholderText="Archive Name" />
+                
+                <TextBlock Grid.Column="2" Text="Format:" VerticalAlignment="Center"/>
+                <ComboBox Grid.Column="3" ItemsSource="{x:Bind ViewModel.Formats}" 
+                          SelectedIndex="{x:Bind ViewModel.SelectedFormatIndex, Mode=TwoWay}" 
+                          HorizontalAlignment="Stretch"/>
+            </Grid>
+        </Border>
+
+         <!-- TreeView Container -->
+        <Grid Grid.Row="2" Margin="0,0,0,12" Background="{ThemeResource LayerFillColorDefaultBrush}" CornerRadius="4" BorderThickness="1" BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}">
+            <Grid.RowDefinitions>
+                <RowDefinition Height="32"/>
+                <RowDefinition Height="*"/>
+            </Grid.RowDefinitions>
+
+            <!-- Header Row -->
+            <Grid Background="{ThemeResource LayerFillColorAltBrush}" Padding="12,0" BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="0,0,0,1">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="300" MinWidth="200" MaxWidth="500"/>
+                    <ColumnDefinition Width="100"/>
+                    <ColumnDefinition Width="100"/>
+                    <ColumnDefinition Width="140"/>
+                    <ColumnDefinition Width="80"/>
+                    <ColumnDefinition Width="80"/>
+                    <ColumnDefinition Width="100"/> <!-- Comp Method -->
+                </Grid.ColumnDefinitions>
+                
+                <TextBlock Text="Name" Grid.Column="0" Style="{StaticResource ColumnHeaderStyle}" Margin="12,0,0,0"/>
+                <TextBlock Text="Size" Grid.Column="1" Style="{StaticResource ColumnHeaderStyle}"/>
+                <TextBlock Text="Packed" Grid.Column="2" Style="{StaticResource ColumnHeaderStyle}"/>
+                <TextBlock Text="Modified" Grid.Column="3" Style="{StaticResource ColumnHeaderStyle}"/>
+                <TextBlock Text="Type" Grid.Column="4" Style="{StaticResource ColumnHeaderStyle}"/>
+                <TextBlock Text="Attributes" Grid.Column="5" Style="{StaticResource ColumnHeaderStyle}"/>
+                <TextBlock Text="Method" Grid.Column="6" Style="{StaticResource ColumnHeaderStyle}"/>
+            </Grid>
+
+            <!-- FileTreeView -->
+            <TreeView x:Name="FileTreeView"
+                      Grid.Row="1"
+                      ItemTemplateSelector="{StaticResource ExplorerItemTemplateSelector}"
+                      SelectionMode="Single">
+            </TreeView>
+
+            <!-- Loading Overlay -->
+            <Grid Grid.Row="1"
+                  Visibility="{x:Bind ViewModel.IsLoadingVisibility, Mode=OneWay}"
+                  Background="{ThemeResource LayerFillColorDefaultBrush}"
+                  CornerRadius="0,0,4,4">
+                <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center" Spacing="12">
+                    <ProgressRing IsActive="{x:Bind ViewModel.IsLoading, Mode=OneWay}" Width="40" Height="40"/>
+                    <TextBlock Text="{x:Bind ViewModel.StatusMessage, Mode=OneWay}" 
+                               HorizontalAlignment="Center" Opacity="0.7" FontSize="13"/>
+                </StackPanel>
+            </Grid>
+        </Grid>
+
+        <!-- Status Bar -->
+        <Border Grid.Row="3" Background="{ThemeResource CardBackgroundFillColorDefaultBrush}" Padding="12,4" BorderThickness="0,1,0,0" BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}">
+            <Grid>
+                 <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="Auto"/>
+                </Grid.ColumnDefinitions>
+                <TextBlock Text="{x:Bind ViewModel.StatusMessage, Mode=OneWay}" FontSize="12" Opacity="0.8"/>
+                <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="16">
+                    <TextBlock Text="{x:Bind ViewModel.Items.Count, Mode=OneWay}" FontSize="12" Opacity="0.6">
+                         <Run Text=" items"/>
+                    </TextBlock>
+                </StackPanel>
+            </Grid>
+        </Border>
+    </Grid>
+</Page>

@@ -1,0 +1,217 @@
+﻿<Page
+    x:Name="RootPage"
+    x:Class="ForzaTechStudio.Views.SetupPage"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+    xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+    xmlns:converters="using:ForzaTechStudio.Converters"
+    mc:Ignorable="d">
+
+    <Page.Resources>
+        <converters:StatusToColorConverter x:Key="StatusToColorConverter"/>
+        <converters:StatusToIconConverter x:Key="StatusToIconConverter"/>
+        
+        <Style x:Key="GameCardStyle" TargetType="Border">
+            <Setter Property="Background" Value="{ThemeResource CardBackgroundFillColorDefaultBrush}"/>
+            <Setter Property="BorderBrush" Value="{ThemeResource CardStrokeColorDefaultBrush}"/>
+            <Setter Property="BorderThickness" Value="2"/>
+            <Setter Property="CornerRadius" Value="8"/>
+            <Setter Property="Padding" Value="20"/>
+            <Setter Property="Margin" Value="0,0,0,16"/>
+        </Style>
+
+        <Style x:Key="StatusTextStyle" TargetType="TextBlock">
+            <Setter Property="FontSize" Value="14"/>
+            <Setter Property="FontWeight" Value="SemiBold"/>
+        </Style>
+    </Page.Resources>
+
+    <ScrollViewer VerticalScrollBarVisibility="Auto">
+        <StackPanel Padding="32,24" Spacing="20" MaxWidth="1000" HorizontalAlignment="Center">
+            
+            <!-- Header Section -->
+            <StackPanel Spacing="12">
+                <Grid ColumnSpacing="12">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="Auto"/>
+                        <ColumnDefinition Width="*"/>
+                    </Grid.ColumnDefinitions>
+                    <Button Click="BackButton_Click" 
+                            Width="40" Height="40" Padding="0"
+                            Background="Transparent" BorderThickness="0">
+                        <FontIcon Glyph="&#xE72B;" FontSize="16"/>
+                    </Button>
+                    <TextBlock Grid.Column="1" Style="{StaticResource TitleLargeTextBlockStyle}" VerticalAlignment="Center">
+                        <Run Text="Game Directory Setup"/>
+                    </TextBlock>
+                </Grid>
+                <TextBlock Text="Configure game installation paths" 
+                           Style="{StaticResource BodyTextBlockStyle}" 
+                           Opacity="0.7"/>
+            </StackPanel>
+
+            <!-- Toolbar -->
+            <Grid ColumnSpacing="12">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto"/>
+                    <ColumnDefinition Width="Auto"/>
+                    <ColumnDefinition Width="*"/>
+                </Grid.ColumnDefinitions>
+                
+                <Button Grid.Column="0"
+                        Command="{Binding AutoDetectAllCommand}"
+                        Style="{StaticResource AccentButtonStyle}"
+                        MinWidth="160"
+                        Height="40">
+                    <StackPanel Orientation="Horizontal" Spacing="8">
+                        <ProgressRing IsActive="{Binding IsBusy}" 
+                                      Width="16" 
+                                      Height="16" 
+                                      Visibility="{Binding IsBusy}"/>
+                        <FontIcon Glyph="&#xE721;" FontSize="16"/>
+                        <TextBlock Text="Auto-Detect All"/>
+                    </StackPanel>
+                </Button>
+                
+                <Button Grid.Column="1"
+                        Command="{Binding SavePathsCommand}"
+                        MinWidth="120"
+                        Height="40">
+                    <StackPanel Orientation="Horizontal" Spacing="8">
+                        <FontIcon Glyph="&#xE74E;" FontSize="16"/>
+                        <TextBlock Text="Save"/>
+                    </StackPanel>
+                </Button>
+            </Grid>
+
+            <ItemsControl ItemsSource="{Binding Games}">
+                <ItemsControl.ItemTemplate>
+                    <DataTemplate>
+                        <Border Style="{StaticResource GameCardStyle}"
+                                BorderBrush="{Binding IsValid, Converter={StaticResource StatusToColorConverter}}">
+                            <Grid RowSpacing="12">
+                                <Grid.RowDefinitions>
+                                    <RowDefinition Height="Auto"/>
+                                    <RowDefinition Height="Auto"/>
+                                    <RowDefinition Height="Auto"/>
+                                    <RowDefinition Height="Auto"/>
+                                    <RowDefinition Height="Auto"/>
+                                </Grid.RowDefinitions>
+
+                                <Grid Grid.Row="0">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*"/>
+                                        <ColumnDefinition Width="Auto"/>
+                                    </Grid.ColumnDefinitions>
+
+                                    <TextBlock Text="{Binding DisplayName}"
+                                               Style="{StaticResource SubtitleTextBlockStyle}"/>
+                                    <FontIcon Grid.Column="1"
+                                              Glyph="{Binding IsValid, Converter={StaticResource StatusToIconConverter}}"
+                                              Foreground="{Binding IsValid, Converter={StaticResource StatusToColorConverter}}"
+                                              FontSize="20"/>
+                                </Grid>
+
+                                <Grid Grid.Row="1" ColumnSpacing="8">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="Auto"/>
+                                        <ColumnDefinition Width="*"/>
+                                    </Grid.ColumnDefinitions>
+
+                                    <FontIcon Glyph="&#xE8B7;" Opacity="0.6" FontSize="14"/>
+                                    <TextBlock Grid.Column="1"
+                                               Text="{Binding Path, FallbackValue='Not configured'}"
+                                               FontFamily="Consolas"
+                                               TextWrapping="Wrap"
+                                               Opacity="0.8"/>
+                                </Grid>
+
+                                <TextBlock Grid.Row="2"
+                                           Text="{Binding StatusMessage}"
+                                           Foreground="{Binding IsValid, Converter={StaticResource StatusToColorConverter}}"
+                                           Style="{StaticResource StatusTextStyle}"/>
+
+                                <StackPanel Grid.Row="3" Orientation="Horizontal" Spacing="8">
+                                    <Button Command="{Binding ViewModel.BrowseGamePathCommand, ElementName=RootPage}"
+                                            CommandParameter="{Binding}">
+                                        <StackPanel Orientation="Horizontal" Spacing="4">
+                                            <FontIcon Glyph="&#xE8DA;" FontSize="14"/>
+                                            <TextBlock Text="Browse"/>
+                                        </StackPanel>
+                                    </Button>
+
+                                    <Button Command="{Binding ViewModel.AutoDetectSingleCommand, ElementName=RootPage}"
+                                            CommandParameter="{Binding}">
+                                        <StackPanel Orientation="Horizontal" Spacing="4">
+                                            <FontIcon Glyph="&#xE721;" FontSize="14"/>
+                                            <TextBlock Text="Auto-Detect"/>
+                                        </StackPanel>
+                                    </Button>
+
+                                    <Border Width="1" Background="{ThemeResource DividerStrokeColorDefaultBrush}" Margin="4,4"/>
+
+                                    <Button Command="{Binding ViewModel.BuildDatabaseCommand, ElementName=RootPage}"
+                                            CommandParameter="{Binding}"
+                                            IsEnabled="{Binding IsValid}">
+                                        <StackPanel Orientation="Horizontal" Spacing="4">
+                                            <FontIcon Glyph="&#xEE94;" FontSize="14"/>
+                                            <TextBlock Text="Build Database"/>
+                                        </StackPanel>
+                                    </Button>
+                                </StackPanel>
+
+                                <TextBlock Grid.Row="4"
+                                           Text="{Binding DbStatusText}"
+                                           FontSize="12"
+                                           Opacity="0.6"
+                                           FontFamily="Consolas"/>
+                            </Grid>
+                        </Border>
+                    </DataTemplate>
+                </ItemsControl.ItemTemplate>
+            </ItemsControl>
+
+            <!-- Reset Button -->
+            <Button Command="{Binding ResetAllCommand}"
+                    HorizontalAlignment="Center"
+                    MinWidth="200">
+                <StackPanel Orientation="Horizontal" Spacing="8">
+                    <FontIcon Glyph="&#xE72C;" FontSize="16"/>
+                    <TextBlock Text="Reset All Paths"/>
+                </StackPanel>
+            </Button>
+
+            <!-- Footer Status Bar -->
+            <Border Background="{ThemeResource LayerFillColorDefaultBrush}"
+                    BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
+                    BorderThickness="1"
+                    CornerRadius="8"
+                    Padding="16,12">
+                <Grid ColumnSpacing="16">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="Auto"/>
+                    </Grid.ColumnDefinitions>
+                    
+                    <StackPanel Orientation="Horizontal" Spacing="8">
+                        <FontIcon Glyph="&#xE946;" FontSize="14" Opacity="0.7"/>
+                        <TextBlock Text="{Binding StatusMessage}" 
+                                   Style="{StaticResource CaptionTextBlockStyle}"/>
+                    </StackPanel>
+                    
+                    <TextBlock Grid.Column="1" 
+                               Opacity="0.5"
+                               FontSize="11"
+                               FontFamily="Consolas">
+                        <Run Text="Config:"/>
+                        <Run Text="{Binding SettingsFilePath}"/>
+                    </TextBlock>
+                </Grid>
+            </Border>
+
+        </StackPanel>
+    </ScrollViewer>
+</Page>
+
+

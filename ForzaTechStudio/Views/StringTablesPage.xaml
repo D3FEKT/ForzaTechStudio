@@ -1,0 +1,524 @@
+﻿<Page
+    x:Class="ForzaTechStudio.Views.StringTablesPage"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+    xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+    xmlns:viewmodels="using:ForzaTechStudio.ViewModels"
+    xmlns:controls="using:ForzaTechStudio.Views.Controls"
+    xmlns:converters="using:ForzaTechStudio.Converters"
+    xmlns:views="using:ForzaTechStudio.Views"
+    mc:Ignorable="d"
+    AllowDrop="True"
+    DragOver="Page_DragOver"
+    Drop="Page_Drop">
+
+    <Page.Resources>
+        <views:BoolToVisibilityConverter x:Key="BoolToVis"/>
+        <converters:NotNullToVisibilityConverter x:Key="NotNullToVis"/>
+        <converters:NotNullToVisibilityConverter x:Key="NullToVis" Inverse="True"/>
+
+        <Style x:Key="ColumnHeaderTextStyle" TargetType="TextBlock"
+               BasedOn="{StaticResource CaptionTextBlockStyle}">
+            <Setter Property="FontWeight" Value="SemiBold"/>
+            <Setter Property="Foreground" Value="{ThemeResource TextFillColorSecondaryBrush}"/>
+            <Setter Property="TextTrimming" Value="CharacterEllipsis"/>
+        </Style>
+
+        <Style x:Key="MonoTextStyle" TargetType="TextBlock">
+            <Setter Property="FontFamily" Value="Cascadia Code, Consolas, Courier New"/>
+            <Setter Property="FontSize"   Value="12"/>
+        </Style>
+
+        <Style x:Key="EntryListItemStyle" TargetType="ListViewItem">
+            <Setter Property="HorizontalContentAlignment" Value="Stretch"/>
+            <Setter Property="Padding" Value="12,6"/>
+            <Setter Property="MinHeight" Value="0"/>
+        </Style>
+
+        <Style x:Key="SortHeaderButtonStyle" TargetType="Button">
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="BorderThickness" Value="0"/>
+            <Setter Property="Padding" Value="0"/>
+            <Setter Property="HorizontalAlignment" Value="Stretch"/>
+            <Setter Property="HorizontalContentAlignment" Value="Left"/>
+            <Setter Property="VerticalAlignment" Value="Center"/>
+            <Setter Property="MinWidth" Value="0"/>
+        </Style>
+    </Page.Resources>
+
+    <Grid Padding="12" Background="Transparent" KeyDown="Page_KeyDown">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>  <!-- page header -->
+            <RowDefinition Height="Auto"/>  <!-- file tabs -->
+            <RowDefinition Height="*"/>     <!-- content / empty state -->
+        </Grid.RowDefinitions>
+
+        <!-- Standard page header -->
+        <controls:StandardPageHeader Grid.Row="0"
+            Title="String Tables"
+            Description="Open, edit, save and export Forza .str string table files"
+            Margin="0,0,0,12">
+            <controls:StandardPageHeader.HeaderCommands>
+                <StackPanel Orientation="Horizontal" Spacing="5">
+
+                    <!-- New -->
+                    <Button Style="{StaticResource GhostAccentButtonStyle}"
+                            Click="NewButton_Click">
+                        <StackPanel Orientation="Horizontal" Spacing="5">
+                            <FontIcon Glyph="&#xE710;" FontSize="14"/>
+                            <TextBlock Text="New"/>
+                        </StackPanel>
+                        <Button.KeyboardAccelerators>
+                            <KeyboardAccelerator Modifiers="Control" Key="N"/>
+                        </Button.KeyboardAccelerators>
+                    </Button>
+
+                    <!-- Open -->
+                    <Button Style="{StaticResource GhostAccentButtonStyle}"
+                            Command="{x:Bind ViewModel.OpenFileCommand}">
+                        <StackPanel Orientation="Horizontal" Spacing="5">
+                            <FontIcon Glyph="&#xE8E5;" FontSize="14"/>
+                            <TextBlock Text="Open"/>
+                        </StackPanel>
+                        <Button.KeyboardAccelerators>
+                            <KeyboardAccelerator Modifiers="Control" Key="O"/>
+                        </Button.KeyboardAccelerators>
+                    </Button>
+
+                    <!-- Save -->
+                    <Button Style="{StaticResource GhostAccentButtonStyle}"
+                            Command="{x:Bind ViewModel.SaveCommand}"
+                            IsEnabled="{x:Bind ViewModel.IsNotBusy, Mode=OneWay}">
+                        <StackPanel Orientation="Horizontal" Spacing="5">
+                            <FontIcon Glyph="&#xE74E;" FontSize="14"/>
+                            <TextBlock Text="Save"/>
+                        </StackPanel>
+                        <Button.KeyboardAccelerators>
+                            <KeyboardAccelerator Modifiers="Control" Key="S"/>
+                        </Button.KeyboardAccelerators>
+                    </Button>
+
+                    <!-- Save As -->
+                    <Button Style="{StaticResource GhostAccentButtonStyle}"
+                            Command="{x:Bind ViewModel.SaveAsCommand}"
+                            IsEnabled="{x:Bind ViewModel.IsNotBusy, Mode=OneWay}">
+                        <StackPanel Orientation="Horizontal" Spacing="5">
+                            <FontIcon Glyph="&#xE792;" FontSize="14"/>
+                            <TextBlock Text="Save As"/>
+                        </StackPanel>
+                        <Button.KeyboardAccelerators>
+                            <KeyboardAccelerator Modifiers="Control,Shift" Key="S"/>
+                        </Button.KeyboardAccelerators>
+                    </Button>
+
+                    <Border Width="1" Background="{ThemeResource DividerStrokeColorDefaultBrush}" Margin="2,8"/>
+
+                    <!-- Add Entry -->
+                    <Button Style="{StaticResource GhostAccentButtonStyle}"
+                            Click="AddEntryButton_Click"
+                            IsEnabled="{x:Bind ViewModel.IsFileLoaded, Mode=OneWay}">
+                        <StackPanel Orientation="Horizontal" Spacing="5">
+                            <FontIcon Glyph="&#xE710;" FontSize="14"/>
+                            <TextBlock Text="Add Entry"/>
+                        </StackPanel>
+                    </Button>
+
+                    <!-- Delete Entry -->
+                    <Button Style="{StaticResource GhostAccentButtonStyle}"
+                            Command="{x:Bind ViewModel.DeleteEntryCommand}">
+                        <StackPanel Orientation="Horizontal" Spacing="5">
+                            <FontIcon Glyph="&#xE74D;" FontSize="14"/>
+                            <TextBlock Text="Delete"/>
+                        </StackPanel>
+                    </Button>
+
+                    <Border Width="1" Background="{ThemeResource DividerStrokeColorDefaultBrush}" Margin="2,8"/>
+
+                    <!-- Undo -->
+                    <Button Style="{StaticResource GhostAccentButtonStyle}"
+                            Command="{x:Bind ViewModel.UndoCommand}">
+                        <StackPanel Orientation="Horizontal" Spacing="5">
+                            <FontIcon Glyph="&#xE7A7;" FontSize="14"/>
+                            <TextBlock Text="Undo"/>
+                        </StackPanel>
+                        <Button.KeyboardAccelerators>
+                            <KeyboardAccelerator Modifiers="Control" Key="Z"/>
+                        </Button.KeyboardAccelerators>
+                    </Button>
+
+                    <!-- Redo -->
+                    <Button Style="{StaticResource GhostAccentButtonStyle}"
+                            Command="{x:Bind ViewModel.RedoCommand}">
+                        <StackPanel Orientation="Horizontal" Spacing="5">
+                            <FontIcon Glyph="&#xE7A6;" FontSize="14"/>
+                            <TextBlock Text="Redo"/>
+                        </StackPanel>
+                        <Button.KeyboardAccelerators>
+                            <KeyboardAccelerator Modifiers="Control" Key="Y"/>
+                        </Button.KeyboardAccelerators>
+                    </Button>
+
+                    <Border Width="1" Background="{ThemeResource DividerStrokeColorDefaultBrush}" Margin="2,8"/>
+
+                    <!-- Export CSV -->
+                    <Button Style="{StaticResource GhostAccentButtonStyle}"
+                            Command="{x:Bind ViewModel.SaveCsvCommand}"
+                            IsEnabled="{x:Bind ViewModel.IsNotBusy, Mode=OneWay}">
+                        <StackPanel Orientation="Horizontal" Spacing="5">
+                            <FontIcon Glyph="&#xE7C3;" FontSize="14"/>
+                            <TextBlock Text="Export CSV"/>
+                        </StackPanel>
+                    </Button>
+
+                    <Border Width="1" Background="{ThemeResource DividerStrokeColorDefaultBrush}" Margin="2,8"/>
+
+                    <!-- Close -->
+                    <Button Style="{StaticResource GhostAccentButtonStyle}"
+                            Command="{x:Bind ViewModel.CloseFileCommand}">
+                        <StackPanel Orientation="Horizontal" Spacing="5">
+                            <FontIcon Glyph="&#xE711;" FontSize="14"/>
+                            <TextBlock Text="Close"/>
+                        </StackPanel>
+                        <Button.KeyboardAccelerators>
+                            <KeyboardAccelerator Modifiers="Control" Key="W"/>
+                        </Button.KeyboardAccelerators>
+                    </Button>
+
+                    <Border Width="1" Background="{ThemeResource DividerStrokeColorDefaultBrush}" Margin="2,8"/>
+
+                    <!-- Loaded file name + status -->
+                    <StackPanel Orientation="Horizontal" Spacing="12" VerticalAlignment="Center">
+                        <TextBlock Text="{x:Bind ViewModel.LoadedFileName, Mode=OneWay}"
+                                   FontWeight="SemiBold" VerticalAlignment="Center"
+                                   Visibility="{x:Bind ViewModel.IsFileLoaded, Mode=OneWay,
+                                                Converter={StaticResource BoolToVis}}"/>
+                        <TextBlock Text="{x:Bind ViewModel.StatusMessage, Mode=OneWay}"
+                                   Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                                   VerticalAlignment="Center" Opacity="0.8"
+                                   TextTrimming="CharacterEllipsis" MaxWidth="400"/>
+                        <ProgressRing IsActive="{x:Bind ViewModel.IsBusy, Mode=OneWay}"
+                                      Width="16" Height="16"/>
+                    </StackPanel>
+
+                </StackPanel>
+            </controls:StandardPageHeader.HeaderCommands>
+        </controls:StandardPageHeader>
+
+        <!-- File tabs -->
+        <Border Grid.Row="1" Margin="0,0,0,8"
+                Visibility="{x:Bind ViewModel.HasOpenFiles, Mode=OneWay,
+                             Converter={StaticResource BoolToVis}}">
+            <StackPanel Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
+                <TextBlock Text="Open files:" VerticalAlignment="Center"
+                           Opacity="0.6" FontSize="12"/>
+                <ComboBox ItemsSource="{x:Bind ViewModel.OpenFiles}"
+                          SelectedItem="{x:Bind ViewModel.ActiveFile, Mode=TwoWay}"
+                          MinWidth="200" MaxWidth="400">
+                    <ComboBox.ItemTemplate>
+                        <DataTemplate x:DataType="viewmodels:StrOpenFile">
+                            <TextBlock Text="{x:Bind DisplayName, Mode=OneWay}"/>
+                        </DataTemplate>
+                    </ComboBox.ItemTemplate>
+                </ComboBox>
+                <Button Style="{StaticResource GhostAccentButtonStyle}"
+                        Command="{x:Bind ViewModel.CloseAllFilesCommand}">
+                    <TextBlock Text="Close All" FontSize="12"/>
+                </Button>
+            </StackPanel>
+        </Border>
+
+        <!-- Empty state (no file loaded) -->
+        <Border Grid.Row="2"
+                Visibility="{x:Bind ViewModel.IsNotFileLoaded, Mode=OneWay,
+                             Converter={StaticResource BoolToVis}}">
+            <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center" Spacing="12">
+                <FontIcon Glyph="&#xE8A5;" FontSize="52" Opacity="0.25"
+                          HorizontalAlignment="Center"/>
+                <TextBlock Text="Open an existing .str file or create a new string table to get started."
+                           HorizontalAlignment="Center" Opacity="0.6"
+                           TextWrapping="WrapWholeWords" MaxWidth="400"
+                           TextAlignment="Center"/>
+            </StackPanel>
+        </Border>
+
+        <!-- Main content (file loaded) -->
+        <Grid Grid.Row="2"
+              Visibility="{x:Bind ViewModel.IsFileLoaded, Mode=OneWay,
+                           Converter={StaticResource BoolToVis}}">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="2*" MinWidth="300"/>
+                <ColumnDefinition Width="12"/>
+                <ColumnDefinition Width="320"/>
+            </Grid.ColumnDefinitions>
+
+            <!-- Left panel: entries list -->
+            <Grid Grid.Column="0">
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="*"/>
+                </Grid.RowDefinitions>
+
+                <!-- Search bar -->
+                <TextBox Grid.Row="0"
+                         PlaceholderText="Search entries..."
+                         Text="{x:Bind ViewModel.SearchText, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                         Margin="0,0,0,8"/>
+
+                <!-- Column headers -->
+                <Border Grid.Row="1"
+                        Background="{ThemeResource SubtleFillColorSecondaryBrush}"
+                        BorderBrush="{ThemeResource SurfaceStrokeColorDefaultBrush}"
+                        BorderThickness="1,1,1,0"
+                        CornerRadius="8,8,0,0">
+                    <Grid Padding="12,7">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="120"/>
+                            <ColumnDefinition Width="220"/>
+                            <ColumnDefinition Width="200"/>
+                            <ColumnDefinition Width="*"/>
+                        </Grid.ColumnDefinitions>
+                        <Button Grid.Column="0" Style="{StaticResource SortHeaderButtonStyle}"
+                                Command="{x:Bind ViewModel.SortCommand}" CommandParameter="HashIdHex">
+                            <StackPanel Orientation="Horizontal" Spacing="4">
+                                <TextBlock Text="Hash ID (Hex)" Style="{StaticResource ColumnHeaderTextStyle}"/>
+                                <TextBlock Text="{x:Bind ViewModel.SortIndicatorHashIdHex, Mode=OneWay}"
+                                           Style="{StaticResource ColumnHeaderTextStyle}"/>
+                            </StackPanel>
+                        </Button>
+                        <Button Grid.Column="1" Style="{StaticResource SortHeaderButtonStyle}"
+                                Command="{x:Bind ViewModel.SortCommand}" CommandParameter="FormattedHashId">
+                            <StackPanel Orientation="Horizontal" Spacing="4">
+                                <TextBlock Text="Hash ID (Dec)" Style="{StaticResource ColumnHeaderTextStyle}"/>
+                                <TextBlock Text="{x:Bind ViewModel.SortIndicatorFormattedHashId, Mode=OneWay}"
+                                           Style="{StaticResource ColumnHeaderTextStyle}"/>
+                            </StackPanel>
+                        </Button>
+                        <Button Grid.Column="2" Style="{StaticResource SortHeaderButtonStyle}"
+                                Command="{x:Bind ViewModel.SortCommand}" CommandParameter="KeyName">
+                            <StackPanel Orientation="Horizontal" Spacing="4">
+                                <TextBlock Text="Key Name" Style="{StaticResource ColumnHeaderTextStyle}"/>
+                                <TextBlock Text="{x:Bind ViewModel.SortIndicatorKeyName, Mode=OneWay}"
+                                           Style="{StaticResource ColumnHeaderTextStyle}"/>
+                            </StackPanel>
+                        </Button>
+                        <Button Grid.Column="3" Style="{StaticResource SortHeaderButtonStyle}"
+                                Command="{x:Bind ViewModel.SortCommand}" CommandParameter="Content">
+                            <StackPanel Orientation="Horizontal" Spacing="4">
+                                <TextBlock Text="Content" Style="{StaticResource ColumnHeaderTextStyle}"/>
+                                <TextBlock Text="{x:Bind ViewModel.SortIndicatorContent, Mode=OneWay}"
+                                           Style="{StaticResource ColumnHeaderTextStyle}"/>
+                            </StackPanel>
+                        </Button>
+                    </Grid>
+                </Border>
+
+                <!-- Entries list view -->
+                <Border Grid.Row="2"
+                        Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
+                        BorderBrush="{ThemeResource SurfaceStrokeColorDefaultBrush}"
+                        BorderThickness="1,0,1,1"
+                        CornerRadius="0,0,8,8">
+                    <ListView x:Name="EntriesListView"
+                              ItemsSource="{x:Bind ViewModel.FilteredEntries, Mode=OneWay}"
+                              SelectedItem="{x:Bind ViewModel.SelectedEntry, Mode=TwoWay}"
+                              SelectionMode="Extended"
+                              SelectionChanged="EntriesListView_SelectionChanged"
+                              ScrollViewer.VerticalScrollBarVisibility="Auto"
+                              ItemContainerStyle="{StaticResource EntryListItemStyle}">
+                        <ListView.ContextFlyout>
+                            <MenuFlyout>
+                                <MenuFlyoutItem Text="Paste" Click="PasteRow_Click"/>
+                            </MenuFlyout>
+                        </ListView.ContextFlyout>
+                        <ListView.ItemTemplate>
+                            <DataTemplate x:DataType="viewmodels:StrEntryViewModel">
+                                <Grid RightTapped="EntryRow_RightTapped">
+                                    <Grid.ContextFlyout>
+                                        <MenuFlyout>
+                                            <MenuFlyoutItem Text="Copy Hash ID (Hex)" Click="CopyHashHex_Click"/>
+                                            <MenuFlyoutItem Text="Copy Hash ID (Dec)" Click="CopyHashDec_Click"/>
+                                            <MenuFlyoutItem Text="Copy Key Name"      Click="CopyKeyName_Click"/>
+                                            <MenuFlyoutItem Text="Copy Content"       Click="CopyContent_Click"/>
+                                            <MenuFlyoutSeparator/>
+                                            <MenuFlyoutItem Text="Copy Row"           Click="CopyRow_Click"/>
+                                            <MenuFlyoutItem Text="Paste as New Row"   Click="PasteRow_Click"/>
+                                            <MenuFlyoutSeparator/>
+                                            <MenuFlyoutItem Text="Delete Entry"       Click="DeleteEntryMenu_Click"/>
+                                        </MenuFlyout>
+                                    </Grid.ContextFlyout>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="120"/>
+                                        <ColumnDefinition Width="220"/>
+                                        <ColumnDefinition Width="200"/>
+                                        <ColumnDefinition Width="*"/>
+                                    </Grid.ColumnDefinitions>
+                                    <TextBlock Grid.Column="0"
+                                               Text="{x:Bind HashIdHex, Mode=OneWay}"
+                                               Style="{StaticResource MonoTextStyle}"
+                                               VerticalAlignment="Center"/>
+                                    <TextBlock Grid.Column="1"
+                                               Text="{x:Bind FormattedHashId, Mode=OneWay}"
+                                               Style="{StaticResource MonoTextStyle}"
+                                               FontSize="12" VerticalAlignment="Center"
+                                               Opacity="0.8"/>
+                                    <TextBlock Grid.Column="2"
+                                               Text="{x:Bind KeyName, Mode=OneWay}"
+                                               FontSize="12" VerticalAlignment="Center"
+                                               TextTrimming="CharacterEllipsis" Opacity="0.75"/>
+                                    <TextBlock Grid.Column="3"
+                                               Text="{x:Bind Content, Mode=OneWay}"
+                                               FontSize="12" VerticalAlignment="Center"
+                                               TextTrimming="CharacterEllipsis"/>
+                                </Grid>
+                            </DataTemplate>
+                        </ListView.ItemTemplate>
+                    </ListView>
+                </Border>
+            </Grid>
+
+            <!-- Vertical divider -->
+            <Border Grid.Column="1"
+                    Width="1"
+                    Background="{ThemeResource DividerStrokeColorDefaultBrush}"
+                    VerticalAlignment="Stretch"
+                    Margin="5,0"/>
+
+            <!-- Right panel: entry editor -->
+            <Border Grid.Column="2"
+                    Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
+                    BorderBrush="{ThemeResource SurfaceStrokeColorDefaultBrush}"
+                    BorderThickness="1" CornerRadius="8" Padding="16">
+                <Grid>
+
+                    <!-- 0 entries selected: placeholder -->
+                    <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center"
+                                Spacing="8"
+                                Visibility="{x:Bind ViewModel.IsNothingSelected, Mode=OneWay,
+                                             Converter={StaticResource BoolToVis}}">
+                        <FontIcon Glyph="&#xE8D4;" FontSize="36" Opacity="0.25"
+                                  HorizontalAlignment="Center"/>
+                        <TextBlock Text="Select an entry to edit"
+                                   HorizontalAlignment="Center" Opacity="0.5"
+                                   FontSize="13"/>
+                    </StackPanel>
+
+                    <!-- >1 entries selected: multi-select banner -->
+                    <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center"
+                                Spacing="12"
+                                Visibility="{x:Bind ViewModel.IsMultipleSelected, Mode=OneWay,
+                                             Converter={StaticResource BoolToVis}}">
+                        <FontIcon Glyph="&#xE762;" FontSize="36" Opacity="0.4"
+                                  HorizontalAlignment="Center"/>
+                        <TextBlock Text="{x:Bind ViewModel.SelectedCountText, Mode=OneWay}"
+                                   HorizontalAlignment="Center"
+                                   Style="{StaticResource BodyStrongTextBlockStyle}"/>
+                        <Button Style="{StaticResource GhostAccentButtonStyle}"
+                                Click="CopySelectedRows_Click"
+                                HorizontalAlignment="Stretch">
+                            <StackPanel Orientation="Horizontal" Spacing="8">
+                                <FontIcon Glyph="&#xE8C8;" FontSize="12"/>
+                                <TextBlock Text="Copy Selected Rows" FontSize="12"/>
+                            </StackPanel>
+                        </Button>
+                        <Button Style="{StaticResource GhostAccentButtonStyle}"
+                                Command="{x:Bind ViewModel.DeleteEntryCommand}"
+                                HorizontalAlignment="Stretch">
+                            <StackPanel Orientation="Horizontal" Spacing="8">
+                                <FontIcon Glyph="&#xE74D;" FontSize="12"
+                                          Foreground="{ThemeResource SystemFillColorCriticalBrush}"/>
+                                <TextBlock Text="Delete Selected Entries" FontSize="12"
+                                           Foreground="{ThemeResource SystemFillColorCriticalBrush}"/>
+                            </StackPanel>
+                        </Button>
+                    </StackPanel>
+
+                    <!-- 1 entry selected: edit form -->
+                    <ScrollViewer VerticalScrollBarVisibility="Auto"
+                                  Visibility="{x:Bind ViewModel.IsEntrySelected, Mode=OneWay,
+                                               Converter={StaticResource BoolToVis}}">
+                        <StackPanel Spacing="14">
+
+                            <TextBlock Text="Edit Entry"
+                                       Style="{StaticResource BodyStrongTextBlockStyle}"/>
+
+                            <!-- Hash ID (read-only display) -->
+                            <StackPanel Spacing="4">
+                                <TextBlock Text="HASH ID (HEX)"
+                                           Style="{StaticResource CaptionTextBlockStyle}"
+                                           Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
+                                <TextBox Text="{x:Bind ViewModel.EditHashIdHex, Mode=OneWay}"
+                                         IsReadOnly="True"
+                                         FontFamily="Cascadia Code, Consolas, Courier New"
+                                         FontSize="13"/>
+                            </StackPanel>
+
+                            <!-- Hash ID (dec / combined) -->
+                            <StackPanel Spacing="4">
+                                <TextBlock Text="HASH ID (DEC)"
+                                           Style="{StaticResource CaptionTextBlockStyle}"
+                                           Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
+                                <TextBox Text="{x:Bind ViewModel.EditFormattedHashId, Mode=OneWay}"
+                                         IsReadOnly="True"
+                                         FontFamily="Cascadia Code, Consolas, Courier New"
+                                         FontSize="13"/>
+                            </StackPanel>
+
+                            <!-- Key name -->
+                            <StackPanel Spacing="4">
+                                <TextBlock Text="KEY NAME"
+                                           Style="{StaticResource CaptionTextBlockStyle}"
+                                           Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
+                                <TextBox Text="{x:Bind ViewModel.EditKeyName, Mode=TwoWay,
+                                                UpdateSourceTrigger=PropertyChanged}"
+                                         PlaceholderText="e.g. CAR_BMW_M3_NAME"
+                                         FontSize="12"/>
+                            </StackPanel>
+
+                            <!-- Recompute hash from key name -->
+                            <Button Style="{StaticResource GhostAccentButtonStyle}"
+                                    Command="{x:Bind ViewModel.RecomputeHashCommand}"
+                                    HorizontalAlignment="Stretch">
+                                <StackPanel Orientation="Horizontal" Spacing="8">
+                                    <FontIcon Glyph="&#xE72C;" FontSize="12"/>
+                                    <TextBlock Text="Recompute Hash from Key Name" FontSize="12"/>
+                                </StackPanel>
+                            </Button>
+
+                            <!-- Content string -->
+                            <StackPanel Spacing="4">
+                                <TextBlock Text="CONTENT"
+                                           Style="{StaticResource CaptionTextBlockStyle}"
+                                           Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
+                                <TextBox Text="{x:Bind ViewModel.EditContent, Mode=TwoWay,
+                                                UpdateSourceTrigger=PropertyChanged}"
+                                         AcceptsReturn="True"
+                                         MinHeight="120"
+                                         TextWrapping="Wrap"
+                                         ScrollViewer.VerticalScrollBarVisibility="Auto"
+                                         PlaceholderText="Display string value..."
+                                         FontSize="13"/>
+                            </StackPanel>
+
+                            <!-- Delete this entry shortcut -->
+                            <Button Style="{StaticResource GhostAccentButtonStyle}"
+                                    Command="{x:Bind ViewModel.DeleteEntryCommand}"
+                                    HorizontalAlignment="Stretch">
+                                <StackPanel Orientation="Horizontal" Spacing="8">
+                                    <FontIcon Glyph="&#xE74D;" FontSize="12"
+                                              Foreground="{ThemeResource SystemFillColorCriticalBrush}"/>
+                                    <TextBlock Text="Delete This Entry" FontSize="12"
+                                               Foreground="{ThemeResource SystemFillColorCriticalBrush}"/>
+                                </StackPanel>
+                            </Button>
+
+                        </StackPanel>
+                    </ScrollViewer>
+
+                </Grid>
+            </Border>
+        </Grid>
+
+    </Grid>
+</Page>
