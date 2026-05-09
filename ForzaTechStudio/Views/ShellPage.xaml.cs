@@ -6,8 +6,12 @@ using Microsoft.UI.Xaml.Navigation;
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Net.Http;
 using System.Numerics;
+using System.Text.Json;
+using System.Threading.Tasks;
 using Microsoft.UI.Xaml.Hosting;
+using Windows.System;
 
 namespace ForzaTechStudio.Views
 {
@@ -18,6 +22,7 @@ namespace ForzaTechStudio.Views
         public MainViewModel ViewModel { get; } = new MainViewModel();
 
         private bool _isFirstLoad = true;
+        private const string LatestReleaseUrl = "https://github.com/D3FEKT/ForzaTechStudio/releases";
 
         public ShellPage()
         {
@@ -132,6 +137,12 @@ namespace ForzaTechStudio.Views
                 }
                 
                 _isFirstLoad = false;
+
+                // Check for updates silently in the background
+                DispatcherQueue.TryEnqueue(Microsoft.UI.Dispatching.DispatcherQueuePriority.Low, async () =>
+                {
+                    await CheckForUpdatesOnStartupAsync();
+                });
             }
         }
 
@@ -262,6 +273,48 @@ namespace ForzaTechStudio.Views
                     NavView.IsPaneOpen = true;
                     break;
             }
+        }
+
+        private async Task CheckForUpdatesOnStartupAsync()
+        {
+            try
+            {
+                var asmVersion = System.Reflection.Assembly.GetExecutingAssembly().GetName().Version;
+                string currentVersion = $"{asmVersion.Major}.{asmVersion.Minor}.{asmVersion.Build}";
+
+                using var client = new HttpClient { Timeout = TimeSpan.FromSeconds(10) };
+                client.DefaultRequestHeaders.UserAgent.ParseAdd("ForzaTechStudio");
+
+                var response = await client.GetAsync("https://api.github.com/repos/D3FEKT/ForzaTechStudio/releases?per_page=1");
+                response.EnsureSuccessStatusCode();
+
+                var json = await response.Content.ReadAsStringAsync();
+                using var doc = JsonDocument.Parse(json);
+                var releases = doc.RootElement;
+
+                if (releases.ValueKind != JsonValueKind.Array || releases.GetArrayLength() == 0)
+                    return;
+
+                var latest = releases[0];
+                string tagName = latest.GetProperty("tag_name").GetString() ?? "";
+                string latestVersion = tagName.TrimStart('v');
+
+                if (Version.TryParse(latestVersion, out var remote) &&
+                    Version.TryParse(currentVersion, out var local) &&
+                    remote > local)
+                {
+                    UpdateInfoBar.IsOpen = true;
+                }
+            }
+            catch
+            {
+                // Silently ignore — update check is best-effort
+            }
+        }
+
+        private async void UpdateDownloadButton_Click(object sender, RoutedEventArgs e)
+        {
+            await Launcher.LaunchUriAsync(new Uri(LatestReleaseUrl));
         }
 
         private void ShellPage_Navigated(object sender, NavigationEventArgs e)

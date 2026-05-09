@@ -46,7 +46,7 @@
                             Style="{StaticResource GhostAccentButtonStyle}">
                         <StackPanel Orientation="Horizontal" Spacing="8">
                             <FontIcon Glyph="&#xE8E5;" FontSize="14"/>
-                            <TextBlock Text="Open Existing"/>
+                            <TextBlock Text="Open"/>
                         </StackPanel>
                         <Button.KeyboardAccelerators>
                             <KeyboardAccelerator Modifiers="Control" Key="O"/>

@@ -498,7 +498,10 @@ namespace ForzaTechStudio.ViewModels
             // Assembly name (v12+)
             public string AssemblyName { get; set; } = "";
 
-            // GUIDs (v13/v14) intentionally omitted � identity fields, not copied.
+            // GUIDs (v13/v14) intentionally omitted - identity fields, not copied.
+
+            // Legacy AO swatchbin path (v < 9)
+            public string AoSwatchPathLegacy { get; set; } = "";
 
             // Damage GUIDs (v15 Motorsport / v16 Horizon)
             public List<Guid> DamageGuids { get; set; } = [];
@@ -649,9 +652,9 @@ namespace ForzaTechStudio.ViewModels
             // Draw groups
             info.DrawGroupsRaw = reader.ReadUInt32();
 
-            // Old AO swatchbin path (v < 9) � skip, not stored in CarbinFullModelInfo
+            // Old AO swatchbin path (v < 9)
             if (modelVersion < 9)
-                SkipString(reader);
+                info.AoSwatchPathLegacy = ReadString(reader);
 
             // Material overrides (v2+) � skip for copy purposes
             if (modelVersion >= 2)
@@ -799,7 +802,10 @@ namespace ForzaTechStudio.ViewModels
 
         // Shows a searchable dialog listing all models from a carbin file.
         // Returns the selected CarbinFullModelInfo, or null if the user cancels.
-        private async Task<CarbinFullModelInfo?> ShowAddModelFromCarbinDialogAsync(List<CarbinFullModelInfo> models)
+        private Task<CarbinFullModelInfo?> ShowAddModelFromCarbinDialogAsync(List<CarbinFullModelInfo> models)
+            => ShowAddModelFromCarbinDialogAsync(models, "Select Model from Carbin", "Add Model");
+
+        private async Task<CarbinFullModelInfo?> ShowAddModelFromCarbinDialogAsync(List<CarbinFullModelInfo> models, string title, string primaryText)
         {
             var listView = new ListView
             {
@@ -836,7 +842,7 @@ namespace ForzaTechStudio.ViewModels
 
             var dialog = new ContentDialog
             {
-                Title = "Select Model from Carbin",
+                Title = title,
                 Content = new StackPanel
                 {
                     Spacing = 8,
@@ -845,14 +851,14 @@ namespace ForzaTechStudio.ViewModels
                     {
                         new TextBlock
                         {
-                            Text = $"Found {models.Count} model(s). Select one to add:",
+                            Text = $"Found {models.Count} model(s). Select one:",
                             TextWrapping = Microsoft.UI.Xaml.TextWrapping.Wrap
                         },
                         searchBox,
                         listView
                     }
                 },
-                PrimaryButtonText = "Add Model",
+                PrimaryButtonText = primaryText,
                 CloseButtonText = "Cancel",
                 XamlRoot = App.MainWindow.Content.XamlRoot
             };
@@ -864,9 +870,7 @@ namespace ForzaTechStudio.ViewModels
             return null;
         }
 
-        // Creates a new CarbinModelEntry from a carbin-source model, applying only the fields
-        // that are supported by both the source version and the target carbin version.
-        // GUIDs are intentionally not copied � new entries receive fresh identity GUIDs.
+        // Creates a new CarbinModelEntry from a carbin-source model
         private CarbinModelEntry CreateModelEntryFromCarbinSource(
             CarbinFullModelInfo source,
             ushort targetModelVersion,

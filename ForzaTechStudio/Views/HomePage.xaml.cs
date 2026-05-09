@@ -12,7 +12,6 @@ using Microsoft.UI.Xaml.Hosting;
 using Microsoft.UI.Xaml.Input;
 using Microsoft.UI.Xaml.Media;
 using Microsoft.UI.Xaml.Navigation;
-using Windows.ApplicationModel;
 using Windows.System;
 
 namespace ForzaTechStudio.Views
@@ -63,6 +62,19 @@ namespace ForzaTechStudio.Views
         {
             var settingsService = new SettingsService();
             var settings = await settingsService.LoadAsync();
+
+            var asmVersion = System.Reflection.Assembly.GetExecutingAssembly().GetName().Version;
+            string currentVersion = asmVersion != null
+                ? $"{asmVersion.Major}.{asmVersion.Minor}.{asmVersion.Build}"
+                : "0.0.0";
+
+            // If the app was updated since last run, show the welcome screen again
+            if (settings.AppVersion != currentVersion)
+            {
+                settings.HasShownWelcome = false;
+                settings.AppVersion = currentVersion;
+                await settingsService.SaveAsync(settings);
+            }
 
             if (settings.HasShownWelcome || _welcomeShownThisSession)
                 return;
@@ -191,17 +203,19 @@ namespace ForzaTechStudio.Views
             CheckUpdatesButton.IsEnabled = false;
             try
             {
-                var pkg = Package.Current;
-                var v = pkg.Id.Version;
-                string currentVersion = $"{v.Major}.{v.Minor}.{v.Build}";
+                var asmVersion = System.Reflection.Assembly.GetExecutingAssembly().GetName().Version;
+                string currentVersion = $"{asmVersion.Major}.{asmVersion.Minor}.{asmVersion.Build}";
 
-                using var client = new HttpClient();
+                using var client = new HttpClient { Timeout = TimeSpan.FromSeconds(10) };
                 client.DefaultRequestHeaders.UserAgent.ParseAdd("ForzaTechStudio");
-                var json = await client.GetStringAsync("https://api.github.com/repos/D3FEKT/ForzaTechStudio/releases/latest");
 
+                // quick fix so pre releases and single releases are included.
+                var response = await client.GetAsync("https://api.github.com/repos/D3FEKT/ForzaTechStudio/releases?per_page=1");
+                response.EnsureSuccessStatusCode();
+
+                var json = await response.Content.ReadAsStringAsync();
                 using var doc = JsonDocument.Parse(json);
-                var tagName = doc.RootElement.GetProperty("tag_name").GetString() ?? string.Empty;
-                var latestVersion = tagName.TrimStart('v');
+                var releases = doc.RootElement;
 
                 var dialog = new ContentDialog
                 {
@@ -210,28 +224,49 @@ namespace ForzaTechStudio.Views
                     XamlRoot = App.MainWindow.Content.XamlRoot
                 };
 
-                if (string.IsNullOrEmpty(latestVersion) || latestVersion == currentVersion)
+                if (releases.GetArrayLength() == 0)
                 {
-                    dialog.Content = $"You're up to date! (v{currentVersion})";
+                    dialog.Content = $"No releases found on GitHub. You have v{currentVersion}.";
                 }
                 else
                 {
-                    dialog.Content = $"Update available: v{latestVersion}\nYou have v{currentVersion}";
-                    dialog.PrimaryButtonText = "Open Releases Page";
-                    dialog.PrimaryButtonClick += async (s, args) =>
+                    var tagName = releases[0].GetProperty("tag_name").GetString() ?? string.Empty;
+                    var latestVersion = tagName.TrimStart('v');
+
+                    if (string.IsNullOrEmpty(latestVersion) || latestVersion == currentVersion)
                     {
-                        await Launcher.LaunchUriAsync(new Uri("https://github.com/D3FEKT/ForzaTechStudio/releases"));
-                    };
+                        dialog.Content = $"You're up to date! (v{currentVersion})";
+                    }
+                    else
+                    {
+                        dialog.Content = $"Update available: v{latestVersion}\nYou currently have v{currentVersion}";
+                        dialog.PrimaryButtonText = "Open Releases Page";
+                        dialog.PrimaryButtonClick += async (s, args) =>
+                        {
+                            await Launcher.LaunchUriAsync(new Uri("https://github.com/D3FEKT/ForzaTechStudio/releases"));
+                        };
+                    }
                 }
 
                 await dialog.ShowAsync();
             }
-            catch (Exception)
+            catch (HttpRequestException)
             {
                 var errDialog = new ContentDialog
                 {
                     Title = "Check for Updates",
                     Content = "Could not reach GitHub. Please check your internet connection.",
+                    CloseButtonText = "OK",
+                    XamlRoot = App.MainWindow.Content.XamlRoot
+                };
+                await errDialog.ShowAsync();
+            }
+            catch (TaskCanceledException)
+            {
+                var errDialog = new ContentDialog
+                {
+                    Title = "Check for Updates",
+                    Content = "The request timed out. Please try again later.",
                     CloseButtonText = "OK",
                     XamlRoot = App.MainWindow.Content.XamlRoot
                 };

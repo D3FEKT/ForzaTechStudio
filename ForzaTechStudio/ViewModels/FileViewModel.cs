@@ -172,7 +172,7 @@ namespace ForzaTechStudio.ViewModels
             {
                 var root = new ObjectNode("Bundle Root", bundle);
                 Nodes.Add(root);
-                root.Children.Clear(); // Remove DummyNode added by constructor; we populate synchronously
+                root.Children.Clear();
 
                 var headerNode = new ObjectNode("header", bundle, p => 
                     p.Name == nameof(Bundle.VersionMajor) || 
@@ -196,8 +196,6 @@ namespace ForzaTechStudio.ViewModels
                         blobTitle += $" (Tag: {blob.Tag:X})";
                     }
 
-                    // For MeshBlob, exclude fields already shown in dedicated card sections of the template
-                    // to prevent duplicate rows in the "OTHER PROPERTIES" ItemsControl.
                     var meshExclusions = blob is MeshBlob ? new System.Collections.Generic.HashSet<string>
                     {
                         nameof(MeshBlob.MaterialId), nameof(MeshBlob.MaterialIds),
@@ -211,7 +209,6 @@ namespace ForzaTechStudio.ViewModels
                         nameof(MeshBlob.PositionScale), nameof(MeshBlob.PositionTranslate),
                         nameof(MeshBlob.TexCoordTransforms),
                         nameof(MeshBlob.NameSuffix),
-                        // Collections that render poorly in the generic property list
                         nameof(MeshBlob.VertexBuffers),
                         nameof(MeshBlob.ConstantBufferIndices),
                     } : null;
@@ -226,9 +223,6 @@ namespace ForzaTechStudio.ViewModels
                         nameof(ModelBlob.BoundingBoxMin), nameof(ModelBlob.BoundingBoxMax),
                     } : null;
 
-                    // Collapse: blob node IS the data node (no header/metadata/data sub-nodes).
-                    // SkeletonBlob still exposes its Bones list as lazy-loaded children.
-                    // For VertexLayoutBlob, exclude all collections (handled by VLayBlobTemplate).
                     Func<PropertyInfo, bool> dataFilter = p =>
                         p.Name != nameof(BundleBlob.Tag) &&
                         p.Name != nameof(BundleBlob.VersionMajor) &&
@@ -247,14 +241,12 @@ namespace ForzaTechStudio.ViewModels
                     blobNode.OwnerBundle = bundle;
                     root.Children.Add(blobNode);
 
-                    // For blobs that have a rich template (non-skeleton), suppress auto-generated
-                    // collection children — their templates show everything inline.
-                    if (blob is not SkeletonBlob)
-                        blobNode.MarkAsLoaded();
+                    blobNode.Children.Clear();
+                    blobNode.MarkAsLoaded();
 
                     index++;
                 }
-                root.MarkAsLoaded(); // Lock root: EnsureChildrenLoaded must not overwrite OwnerBundle-bearing nodes
+                root.MarkAsLoaded(); 
             }
             else if (obj is Scene scene)
             {

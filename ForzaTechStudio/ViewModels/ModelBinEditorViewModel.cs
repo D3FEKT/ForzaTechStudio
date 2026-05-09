@@ -178,51 +178,40 @@ namespace ForzaTechStudio.ViewModels
         [RelayCommand]
         public async Task SaveFileAsync()
         {
-            Bundle bundleToSave = null;
-            string fileName = null;
+            var (bundleToSave, filePath) = ResolveSelectedBundle();
 
-            // 1. Try to get bundle from selected node in advanced view
-            if (SelectedNode != null)
+            if (bundleToSave == null)
             {
-                var current = SelectedNode;
-                while (current != null)
-                {
-                    if (current.Data is Bundle bundle)
-                    {
-                        bundleToSave = bundle;
-                        fileName = current.Title;
-                        break;
-                    }
-                    ObjectNode parent = null;
-                    foreach (var root in RootNodes)
-                    {
-                        if (FindParent(root, current, out parent))
-                            break;
-                    }
-                    current = parent;
-                }
+                App.ShowErrorDialog("No Modelbin file loaded to save.");
+                return;
             }
 
-            // 2. If no bundle found from selection, try the currently selected file in simple view
-            if (bundleToSave == null && SelectedFile != null)
+            if (string.IsNullOrEmpty(filePath))
             {
-                if (SelectedFile.ParsedObject is Bundle bundle)
-                {
-                    bundleToSave = bundle;
-                    fileName = SelectedFile.FileName;
-                }
+                App.ShowErrorDialog("Cannot determine the original file path. Use Save As instead.");
+                return;
             }
 
-            // 3. Fallback to first loaded file if absolutely nothing is selected
-            if (bundleToSave == null && LoadedFiles.Count > 0)
+            try
             {
-                var fallbackFile = LoadedFiles[0];
-                if (fallbackFile.ParsedObject is Bundle bundle)
+                await Task.Run(() =>
                 {
-                    bundleToSave = bundle;
-                    fileName = fallbackFile.FileName;
-                }
+                    using var stream = File.Open(filePath, FileMode.Create, FileAccess.Write);
+                    bundleToSave.Serialize(stream);
+                });
+
+                App.ShowInfoDialog($"File saved successfully to:\n{filePath}", "Save Complete");
             }
+            catch (Exception ex)
+            {
+                App.ShowErrorDialog($"Save Error: {ex.Message}");
+            }
+        }
+
+        [RelayCommand]
+        public async Task SaveFileAsAsync()
+        {
+            var (bundleToSave, fileName) = ResolveSelectedBundle();
 
             if (bundleToSave == null)
             {
@@ -237,7 +226,7 @@ namespace ForzaTechStudio.ViewModels
 
             picker.SuggestedStartLocation = PickerLocationId.ComputerFolder;
             picker.FileTypeChoices.Add("Forza Modelbin", new List<string>() { ".modelbin" });
-            picker.SuggestedFileName = fileName ?? "modified.modelbin";
+            picker.SuggestedFileName = System.IO.Path.GetFileName(fileName) ?? "modified.modelbin";
 
             var file = await picker.PickSaveFileAsync();
             if (file != null)
@@ -247,7 +236,7 @@ namespace ForzaTechStudio.ViewModels
                     using var stream = await file.OpenStreamForWriteAsync();
                     stream.SetLength(0);
                     bundleToSave.Serialize(stream);
-                    
+
                     App.ShowInfoDialog($"File saved successfully to:\n{file.Path}", "Save Complete");
                 }
                 catch (Exception ex)
@@ -255,6 +244,41 @@ namespace ForzaTechStudio.ViewModels
                     App.ShowErrorDialog($"Save Error: {ex.Message}");
                 }
             }
+        }
+
+
+        private (Bundle bundle, string filePath) ResolveSelectedBundle()
+        {
+            //  selected node
+            if (SelectedNode != null)
+            {
+                var current = SelectedNode;
+                while (current != null)
+                {
+                    if (current.Data is Bundle bundle)
+                    {
+                        var match = LoadedFiles.FirstOrDefault(f => f.ParsedObject == bundle);
+                        return (bundle, match?.FilePath);
+                    }
+                    ObjectNode parent = null;
+                    foreach (var root in RootNodes)
+                    {
+                        if (FindParent(root, current, out parent))
+                            break;
+                    }
+                    current = parent;
+                }
+            }
+
+            // fall back to the currently selected file
+            if (SelectedFile?.ParsedObject is Bundle selectedBundle)
+                return (selectedBundle, SelectedFile.FilePath);
+
+            // first loaded file
+            if (LoadedFiles.Count > 0 && LoadedFiles[0].ParsedObject is Bundle firstBundle)
+                return (firstBundle, LoadedFiles[0].FilePath);
+
+            return (null, null);
         }
 
         [RelayCommand]

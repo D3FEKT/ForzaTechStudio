@@ -44,7 +44,7 @@
             <!-- Version badge + title -->
             <StackPanel Grid.Row="0" Orientation="Horizontal" Spacing="12" VerticalAlignment="Center">
                 <Border Background="{ThemeResource SystemControlBackgroundAccentBrush}" CornerRadius="6" Padding="10,4">
-                    <TextBlock Text="v0.9 Pre-Release" FontSize="13" FontWeight="SemiBold" Foreground="White"/>
+                    <TextBlock Text="v0.9.1.0" FontSize="13" FontWeight="SemiBold" Foreground="White"/>
                 </Border>
                 <TextBlock Text="What's New" FontSize="28" FontWeight="SemiBold" VerticalAlignment="Center"/>
             </StackPanel>
@@ -74,6 +74,18 @@
                     <Ellipse Width="8" Height="8" Fill="{ThemeResource SystemAccentColorLight2}" VerticalAlignment="Top" Margin="0,6,0,0"/>
                     <TextBlock Grid.Column="1" TextWrapping="Wrap" FontSize="14" Opacity="0.85"
                                Text="Check out the Forza Mods Discord for support and suggestions."/>
+                </Grid>
+
+                <Grid ColumnSpacing="14">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="Auto"/>
+                        <ColumnDefinition Width="*"/>
+                    </Grid.ColumnDefinitions>
+                    <Ellipse Width="8" Height="8" Fill="{ThemeResource SystemAccentColorLight2}" VerticalAlignment="Top" Margin="0,6,0,0"/>
+                    <HyperlinkButton x:Name="ChangelogButton" Grid.Column="1" Padding="0"
+                                     Content="Version change logs"
+                                     FontSize="14"
+                                     Click="ChangelogButton_Click"/>
                 </Grid>
 
             </StackPanel>

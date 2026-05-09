@@ -48,6 +48,13 @@ public sealed partial class SwatchbinEditorPage : Page
     private double _loadedImageWidth;
     private double _loadedImageHeight;
 
+    // Preview display toggles
+    private bool _showAlpha = false;
+    private bool _showMipMaps = false;
+
+    // Cached linear (post-detile) texture data for re-rendering on toggle
+    private byte[]? _lastLinearData = null;
+
     public SwatchbinEditorPage()
     {
         this.InitializeComponent();
@@ -689,6 +696,7 @@ public sealed partial class SwatchbinEditorPage : Page
         PlaceholderPanel.Visibility = Visibility.Collapsed;
         TextureScrollViewer.Visibility = Visibility.Collapsed;
         _lastDecodeError = null;
+        _lastLinearData = null;
 
         try
         {
@@ -869,26 +877,11 @@ public sealed partial class SwatchbinEditorPage : Page
 
             if (rgbaData != null && rgbaData.Length > 0)
             {
-                var bitmapImage = await CreateBitmapImageFromRgbaAsync(rgbaData, (int)info.Width, (int)info.Height);
 
-                if (cancellationToken.IsCancellationRequested) return;
+                _lastLinearData = processedData;
 
-                if (bitmapImage != null)
-                {
-                    _loadedImageWidth = info.Width;
-                    _loadedImageHeight = info.Height;
-                    TextureImage.Width = _loadedImageWidth;
-                    TextureImage.Height = _loadedImageHeight;
-                    ImageContainer.Width = _loadedImageWidth;
-                    ImageContainer.Height = _loadedImageHeight;
-                    TextureImage.Source = bitmapImage;
-                    TextureScrollViewer.Visibility = Visibility.Visible;
-                    PlaceholderPanel.Visibility = Visibility.Collapsed;
-
-                    TextureScrollViewer.UpdateLayout();
-                    TextureScrollViewer.ChangeView(0, 0, 1.0f, true);
-                    return;
-                }
+                await RenderPreviewAsync(info, processedData, cancellationToken);
+                return;
             }
 
             // If we can't decode, show placeholder
@@ -1094,6 +1087,160 @@ public sealed partial class SwatchbinEditorPage : Page
         {
             return null;
         }
+    }
+
+    // Re-renders the preview using cached linear data when a toggle changes.
+    private async void ShowAlphaToggle_Toggled(object sender, RoutedEventArgs e)
+    {
+        _showAlpha = ShowAlphaToggle.IsOn;
+        if (_currentSwatchbin != null && _lastLinearData != null)
+            await RenderPreviewAsync(_currentSwatchbin, _lastLinearData, CancellationToken.None);
+    }
+
+    private async void ShowMipMapsToggle_Toggled(object sender, RoutedEventArgs e)
+    {
+        _showMipMaps = ShowMipMapsToggle.IsOn;
+        if (_currentSwatchbin != null && _lastLinearData != null)
+            await RenderPreviewAsync(_currentSwatchbin, _lastLinearData, CancellationToken.None);
+    }
+
+    // Decodes and displays the texture according to current toggle states.
+    private async Task RenderPreviewAsync(SwatchbinInfo info, byte[] linearData, CancellationToken cancellationToken)
+    {
+        byte[]? rgbaData = null;
+        int displayWidth = (int)info.Width;
+        int displayHeight = (int)info.Height;
+
+        await Task.Run(() =>
+        {
+            if (_showMipMaps && info.MipLevels > 1)
+            {
+                (rgbaData, displayWidth, displayHeight) = BuildMipAtlas(info, linearData);
+            }
+            else
+            {
+                rgbaData = DecodeTextureToRgba(info, linearData);
+            }
+
+            if (rgbaData != null && _showAlpha)
+                rgbaData = ExtractAlphaChannel(rgbaData);
+        }, cancellationToken);
+
+        if (cancellationToken.IsCancellationRequested) return;
+        if (rgbaData == null || rgbaData.Length == 0) return;
+
+        var bitmapImage = await CreateBitmapImageFromRgbaAsync(rgbaData, displayWidth, displayHeight);
+        if (cancellationToken.IsCancellationRequested) return;
+
+        if (bitmapImage != null)
+        {
+            _loadedImageWidth = displayWidth;
+            _loadedImageHeight = displayHeight;
+            TextureImage.Width = _loadedImageWidth;
+            TextureImage.Height = _loadedImageHeight;
+            ImageContainer.Width = _loadedImageWidth;
+            ImageContainer.Height = _loadedImageHeight;
+            TextureImage.Source = bitmapImage;
+            TextureScrollViewer.Visibility = Visibility.Visible;
+            PlaceholderPanel.Visibility = Visibility.Collapsed;
+
+            TextureScrollViewer.UpdateLayout();
+            TextureScrollViewer.ChangeView(0, 0, 1.0f, true);
+        }
+    }
+
+    // Builds a horizontal mip atlas
+    // Returns (rgba bytes, atlasWidth, atlasHeight).
+    private (byte[] rgba, int width, int height) BuildMipAtlas(SwatchbinInfo info, byte[] linearData)
+    {
+        int mipCount = Math.Max(1, (int)info.MipLevels);
+        uint blockSize = GetBlockSize(info.DxgiFormat);
+        uint bpp = blockSize == 0 ? GetBitsPerPixel(info.DxgiFormat) : 0;
+
+        var mips = new List<(int w, int h, int offset, int size)>(mipCount);
+        int offset = 0;
+        int w = (int)info.Width;
+        int h = (int)info.Height;
+
+        for (int m = 0; m < mipCount; m++)
+        {
+            int size;
+            if (blockSize > 0)
+            {
+                int blocksW = Math.Max(1, (w + 3) / 4);
+                int blocksH = Math.Max(1, (h + 3) / 4);
+                size = blocksW * blocksH * (int)blockSize;
+            }
+            else
+            {
+                size = Math.Max(1, w) * Math.Max(1, h) * (int)bpp / 8;
+            }
+
+            if (offset + size <= linearData.Length)
+                mips.Add((Math.Max(1, w), Math.Max(1, h), offset, size));
+
+            offset += size;
+            w = Math.Max(1, w >> 1);
+            h = Math.Max(1, h >> 1);
+        }
+
+        if (mips.Count == 0)
+            return (DecodeTextureToRgba(info, linearData) ?? [], (int)info.Width, (int)info.Height);
+
+        // Atlas dimensions: all mips side by side, height = mip 0 height
+        int atlasW = mips.Sum(m => m.w + 2); 
+        int atlasH = mips[0].h;
+        byte[] atlas = new byte[atlasW * atlasH * 4]; // pre-filled black/transparent
+
+        int xCursor = 0;
+        foreach (var (mw, mh, mOffset, mSize) in mips)
+        {
+            var mipSlice = new byte[mSize];
+            Array.Copy(linearData, mOffset, mipSlice, 0, mSize);
+
+            // Temporarily adjust info dimensions for this mip level
+            var mipInfo = new SwatchbinInfo
+            {
+                Width = (uint)mw,
+                Height = (uint)mh,
+                DxgiFormat = info.DxgiFormat,
+                IsDurangoFormat = false 
+            };
+
+            byte[]? mipRgba = DecodeTextureToRgba(mipInfo, mipSlice);
+            if (mipRgba == null) { xCursor += mw + 2; continue; }
+
+            int yOffset = (atlasH - mh) / 2;
+            for (int row = 0; row < mh; row++)
+            {
+                int atlasRow = yOffset + row;
+                if (atlasRow < 0 || atlasRow >= atlasH) continue;
+                int srcBase = row * mw * 4;
+                int dstBase = (atlasRow * atlasW + xCursor) * 4;
+                int copyLen = Math.Min(mw * 4, (atlasW - xCursor) * 4);
+                if (copyLen > 0 && srcBase + copyLen <= mipRgba.Length)
+                    Array.Copy(mipRgba, srcBase, atlas, dstBase, copyLen);
+            }
+
+            xCursor += mw + 2;
+        }
+
+        return (atlas, atlasW, atlasH);
+    }
+
+    // Converts RGBA data to a greyscale alpha-channel view (R=G=B=A, A=255).
+    private static byte[] ExtractAlphaChannel(byte[] rgba)
+    {
+        byte[] result = new byte[rgba.Length];
+        for (int i = 0; i < rgba.Length / 4; i++)
+        {
+            byte a = rgba[i * 4 + 3];
+            result[i * 4 + 0] = a;
+            result[i * 4 + 1] = a;
+            result[i * 4 + 2] = a;
+            result[i * 4 + 3] = 255;
+        }
+        return result;
     }
 
     private async void SaveAsDds_Click(object sender, RoutedEventArgs e)

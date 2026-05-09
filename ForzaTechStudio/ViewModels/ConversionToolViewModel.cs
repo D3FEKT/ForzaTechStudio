@@ -20,6 +20,7 @@ public partial class ConversionToolViewModel : ObservableObject
     private readonly Services.ConversionService _conversionService = new();
     private readonly Services.SettingsService _settingsService = new();
     private readonly Services.ZipCreationService _zipCreationService = new();
+    private readonly Services.CarbinEditService _carbinEditService = new();
     private readonly Dictionary<string, IReadOnlyList<MaterialPickerItem>> _materialPickerCache = new(StringComparer.OrdinalIgnoreCase);
     private bool _isLoadingPreferences;
 
@@ -99,11 +100,32 @@ public partial class ConversionToolViewModel : ObservableObject
     private bool _isModelbin;
 
     [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(ShowCarbinEdits))]
     private bool _isCarbin;
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(ShowPathConversion))]
+    [NotifyPropertyChangedFor(nameof(ShowCarbinEdits))]
     private bool _isBatchZip;
+
+    // Carbin edit (ordinal/scene name) UI state
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(ShowCarbinEdits))]
+    private bool _hasCarbinForEdit;
+
+    [ObservableProperty]
+    private bool _isCarbinEditEnabled;
+
+    [ObservableProperty]
+    private double _carbinOrdinal;
+
+    [ObservableProperty]
+    private string _carbinSceneName = string.Empty;
+
+    private uint _originalCarbinOrdinal;
+    private string _originalCarbinSceneName = string.Empty;
+
+    public bool ShowCarbinEdits => HasCarbinForEdit && (IsCarbin || IsBatchZip);
 
     [ObservableProperty]
     private bool _isLightsBin;
@@ -845,6 +867,9 @@ public partial class ConversionToolViewModel : ObservableObject
             int lightsBinCount = 0;
             int swatchbinCount = 0;
             int otherCount = 0;
+            uint firstCarbinOrdinal = 0;
+            string firstCarbinMediaName = string.Empty;
+            bool firstCarbinFound = false;
 
             await Task.Run(() =>
             {
@@ -856,12 +881,37 @@ public partial class ConversionToolViewModel : ObservableObject
                     string entryExt  = Path.GetExtension(entry.Name).ToLowerInvariant();
                     string entryName = Path.GetFileName(entry.Name).ToLowerInvariant();
                     if (entryExt == ".modelbin") modelbinCount++;
-                    else if (entryExt == ".carbin") carbinCount++;
+                    else if (entryExt == ".carbin")
+                    {
+                        carbinCount++;
+                        if (!firstCarbinFound)
+                        {
+                            try
+                            {
+                                byte[] data = customZip.ExtractToMemory(entry);
+                                using var ms = new MemoryStream(data);
+                                var header = Services.CarbinEditService.ReadHeader(ms);
+                                firstCarbinOrdinal = header.Ordinal;
+                                firstCarbinMediaName = header.MediaName;
+                                firstCarbinFound = true;
+                            }
+                            catch { }
+                        }
+                    }
                     else if (entryName == "lights.bin") lightsBinCount++;
                     else if (entryExt == ".swatchbin") swatchbinCount++;
                     else otherCount++;
                 }
             });
+
+            HasCarbinForEdit = firstCarbinFound;
+            if (firstCarbinFound)
+            {
+                _originalCarbinOrdinal = firstCarbinOrdinal;
+                _originalCarbinSceneName = firstCarbinMediaName ?? string.Empty;
+                CarbinOrdinal = firstCarbinOrdinal;
+                CarbinSceneName = _originalCarbinSceneName;
+            }
 
             FileName = Path.GetFileName(zipPath);
             FilePath = zipPath;
@@ -934,6 +984,7 @@ public partial class ConversionToolViewModel : ObservableObject
         HasResult = false;
         ConversionLog.Clear();
         IsBatchZip = false;
+        HasCarbinForEdit = false;
         _batchZipPath = null;
 
         try
@@ -990,6 +1041,21 @@ public partial class ConversionToolViewModel : ObservableObject
                 SharedModelCount = analysis.VertexBufferCount;
                 PartCount = analysis.PartCount;
                 UpgradePartCount = analysis.UpgradePartCount;
+
+                try
+                {
+                    using var fs = File.OpenRead(path);
+                    var header = Services.CarbinEditService.ReadHeader(fs);
+                    _originalCarbinOrdinal = header.Ordinal;
+                    _originalCarbinSceneName = header.MediaName ?? string.Empty;
+                    CarbinOrdinal = header.Ordinal;
+                    CarbinSceneName = _originalCarbinSceneName;
+                    HasCarbinForEdit = true;
+                }
+                catch
+                {
+                    HasCarbinForEdit = false;
+                }
             }
             else if (IsLightsBin)
             {
@@ -1338,6 +1404,21 @@ public partial class ConversionToolViewModel : ObservableObject
 
                                 if (convResult.Success)
                                 {
+                                    var carbinEditOptions = BuildCarbinEditOptions();
+                                    if (carbinEditOptions != null)
+                                    {
+                                        try
+                                        {
+                                            var editResult = _carbinEditService.ApplyToFile(outputPath, carbinEditOptions);
+                                            foreach (var line in editResult.Log)
+                                                AddLog($"  {line}");
+                                        }
+                                        catch (Exception editEx)
+                                        {
+                                            AddLog($"  ? Carbin edit failed for {entry.Name}: {editEx.Message}");
+                                        }
+                                    }
+
                                     AddLog($"  ? Converted: {entry.Name}");
                                     convertedCount++;
                                 }
@@ -1720,6 +1801,9 @@ public partial class ConversionToolViewModel : ObservableObject
         foreach (var err in convResult.Errors)
             AddLog($"? {err}");
 
+        if (convResult.Success)
+            await ApplyCarbinEditsAsync(convResult.OutputPath);
+
         ConversionSuccess = convResult.Success;
         OutputFilePath = convResult.OutputPath;
         HasResult = true;
@@ -1727,6 +1811,50 @@ public partial class ConversionToolViewModel : ObservableObject
         StatusMessage = convResult.Success
             ? $"Conversion successful: {Path.GetFileName(convResult.OutputPath)}"
             : "Conversion failed. Check log for details.";
+    }
+
+    private async Task ApplyCarbinEditsAsync(string? carbinPath)
+    {
+        if (string.IsNullOrEmpty(carbinPath)) return;
+
+        var options = BuildCarbinEditOptions();
+        if (options == null) return;
+
+        try
+        {
+            var editResult = await Task.Run(() => _carbinEditService.ApplyToFile(carbinPath, options));
+            AddLog("--- Carbin Edits ---");
+            foreach (var line in editResult.Log)
+                AddLog($"  {line}");
+        }
+        catch (Exception ex)
+        {
+            AddLog($"? Carbin edit failed: {ex.Message}");
+        }
+    }
+
+    private Services.CarbinEditService.EditOptions? BuildCarbinEditOptions()
+    {
+        if (!IsCarbinEditEnabled || !HasCarbinForEdit) return null;
+
+        uint newOrdinal = (uint)Math.Max(0, Math.Round(CarbinOrdinal));
+        string newName = (CarbinSceneName ?? string.Empty).Trim();
+
+        bool ordinalChanged = newOrdinal != _originalCarbinOrdinal;
+        bool nameChanged = !string.IsNullOrEmpty(newName) &&
+            !string.Equals(newName, _originalCarbinSceneName, StringComparison.Ordinal);
+
+        if (!ordinalChanged && !nameChanged) return null;
+
+        return new Services.CarbinEditService.EditOptions
+        {
+            ApplyOrdinal = ordinalChanged,
+            OriginalOrdinal = _originalCarbinOrdinal,
+            NewOrdinal = newOrdinal,
+            ApplyMediaName = nameChanged,
+            OriginalMediaName = _originalCarbinSceneName,
+            NewMediaName = newName,
+        };
     }
 
     private async Task ConvertModelbinAsync(string outputPath, Services.ForzaGameTarget target)
@@ -2077,6 +2205,12 @@ public partial class ConversionToolViewModel : ObservableObject
         IsSwatchbin = false;
         HasAnalysis = false;
         HasResult = false;
+        HasCarbinForEdit = false;
+        IsCarbinEditEnabled = false;
+        CarbinOrdinal = 0;
+        CarbinSceneName = string.Empty;
+        _originalCarbinOrdinal = 0;
+        _originalCarbinSceneName = string.Empty;
         SelectedTargetIndex = -1;
         StandardModelCount = 0;
         SharedModelCount = 0;

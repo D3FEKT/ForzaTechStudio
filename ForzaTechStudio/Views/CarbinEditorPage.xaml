@@ -306,6 +306,9 @@
                                             <Button Command="{x:Bind ViewModel.RemoveModelFromNonUpgradablePartCommand}" Style="{StaticResource SmallToolButtonStyle}" ToolTipService.ToolTip="Remove Model">
                                                 <FontIcon Glyph="&#xE74D;" FontSize="12"/>
                                             </Button>
+                                            <Button Command="{x:Bind ViewModel.DuplicateNonUpgradableModelCommand}" Style="{StaticResource SmallToolButtonStyle}" ToolTipService.ToolTip="Duplicate Model">
+                                                <FontIcon Glyph="&#xE8C8;" FontSize="12"/>
+                                            </Button>
                                             <Button Command="{x:Bind ViewModel.BrowseAoSwatchbinCommand}" Style="{StaticResource SmallToolButtonStyle}" ToolTipService.ToolTip="Set AO Swatchbin">
                                                 <FontIcon Glyph="&#xE8E5;" FontSize="12"/>
                                             </Button>
@@ -655,6 +658,9 @@
                                                 </Button>
                                                 <Button Command="{x:Bind ViewModel.RemoveModelFromUpgradablePartCommand}" Style="{StaticResource SmallToolButtonStyle}" ToolTipService.ToolTip="Remove Model">
                                                     <FontIcon Glyph="&#xE74D;" FontSize="12"/>
+                                                </Button>
+                                                <Button Command="{x:Bind ViewModel.DuplicateUpgradableModelCommand}" Style="{StaticResource SmallToolButtonStyle}" ToolTipService.ToolTip="Duplicate Model">
+                                                    <FontIcon Glyph="&#xE8C8;" FontSize="12"/>
                                                 </Button>
                                                 <Button Command="{x:Bind ViewModel.BrowseAoSwatchbinForUpgradableCommand}" Style="{StaticResource SmallToolButtonStyle}" ToolTipService.ToolTip="Set AO Swatchbin">
                                                     <FontIcon Glyph="&#xE8E5;" FontSize="12"/>

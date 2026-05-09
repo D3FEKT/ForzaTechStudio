@@ -40,7 +40,7 @@
         <!-- Header -->
         <controls:StandardPageHeader Grid.Row="0"
                                      Title="Conversion Tool"
-                                     Description="Convert modelbin and carbin files between Forza game versions"
+                                     Description="Convert car scene files between Forza game versions"
                                      Margin="0,0,0,12">
             <controls:StandardPageHeader.HeaderCommands>
                 <Grid>
@@ -53,7 +53,7 @@
                         <Button Style="{StaticResource GhostAccentButtonStyle}" Command="{x:Bind ViewModel.OpenFileCommand}">
                             <StackPanel Orientation="Horizontal" Spacing="8">
                                 <FontIcon Glyph="&#xE8E5;" FontSize="14"/>
-                                <TextBlock Text="Open File"/>
+                                <TextBlock Text="Open"/>
                             </StackPanel>
                             <Button.KeyboardAccelerators>
                                 <KeyboardAccelerator Modifiers="Control" Key="O"/>
@@ -328,6 +328,39 @@
                                                Foreground="{ThemeResource AccentTextFillColorPrimaryBrush}"/>
                                 </StackPanel>
                             </Grid>
+                        </StackPanel>
+                    </Border>
+
+                    <!-- Carbin Edits Card -->
+                    <Border Style="{StaticResource PropertyCardStyle}"
+                            Visibility="{x:Bind ViewModel.ShowCarbinEdits, Mode=OneWay}">
+                        <StackPanel Spacing="12">
+                            <StackPanel Orientation="Horizontal" Spacing="8">
+                                <FontIcon Glyph="&#xE70F;" FontSize="16" Foreground="{ThemeResource AccentTextFillColorPrimaryBrush}"/>
+                                <TextBlock Text="Carbin Edits" Style="{StaticResource BodyStrongTextBlockStyle}"/>
+                            </StackPanel>
+
+                            <CheckBox Content="Swap ordinal and names"
+                                      IsChecked="{x:Bind ViewModel.IsCarbinEditEnabled, Mode=TwoWay}"/>
+
+                            <StackPanel Spacing="8"
+                                        Visibility="{x:Bind ViewModel.IsCarbinEditEnabled, Mode=OneWay}">
+                                <NumberBox Header="Ordinal"
+                                           Value="{x:Bind ViewModel.CarbinOrdinal, Mode=TwoWay}"
+                                           Minimum="0"
+                                           Maximum="999999"
+                                           SpinButtonPlacementMode="Inline"
+                                           HorizontalAlignment="Stretch"/>
+                                <TextBlock Text="ID, Body ID, Upgrade ID matching the original ordinal will be updated to the new value."
+                                           TextWrapping="Wrap" Opacity="0.55" FontSize="11"/>
+
+                                <TextBox Header="Scene name (media name)"
+                                         Text="{x:Bind ViewModel.CarbinSceneName, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                                         PlaceholderText="e.g. Nis_skyline_99"
+                                         HorizontalAlignment="Stretch"/>
+                                <TextBlock Text="The media name and any path strings containing the original media name will be updated."
+                                           TextWrapping="Wrap" Opacity="0.55" FontSize="11"/>
+                            </StackPanel>
                         </StackPanel>
                     </Border>
 

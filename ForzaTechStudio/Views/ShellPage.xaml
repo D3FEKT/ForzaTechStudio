@@ -158,7 +158,32 @@
 
             </NavigationView.MenuItems>
 
-            <Frame x:Name="ContentFrame"/>
+            <Grid>
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="*"/>
+                </Grid.RowDefinitions>
+
+                <!-- Update available banner, shown on startup if a newer release is found -->
+                <InfoBar x:Name="UpdateInfoBar"
+                         Grid.Row="0"
+                         IsOpen="False"
+                         IsClosable="True"
+                         Severity="Informational"
+                         Title="Update Available"
+                         Message="A new version of ForzaTech Studio is available.">
+                    <InfoBar.ActionButton>
+                        <HyperlinkButton x:Name="UpdateDownloadButton" Click="UpdateDownloadButton_Click" Padding="0">
+                            <StackPanel Orientation="Horizontal" Spacing="6">
+                                <FontIcon Glyph="&#xE896;" FontSize="14"/>
+                                <TextBlock Text="Download" VerticalAlignment="Center"/>
+                            </StackPanel>
+                        </HyperlinkButton>
+                    </InfoBar.ActionButton>
+                </InfoBar>
+
+                <Frame x:Name="ContentFrame" Grid.Row="1"/>
+            </Grid>
         </NavigationView>
     </Grid>
 </Page>

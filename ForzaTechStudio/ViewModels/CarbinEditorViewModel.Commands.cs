@@ -647,6 +647,124 @@ namespace ForzaTechStudio.ViewModels
 
         // Shared Helpers
 
+        private static CarbinModelEntry DeepCloneModelEntry(CarbinModelEntry src)
+        {
+            var dst = new CarbinModelEntry
+            {
+                ModelFileName = src.ModelFileName,
+                ModelFullPath = src.ModelFullPath,
+                ModelGamePath = src.ModelGamePath,
+                AoSwatchbinFileName = src.AoSwatchbinFileName,
+                AoSwatchbinFullPath = src.AoSwatchbinFullPath,
+                AoSwatchbinGamePath = src.AoSwatchbinGamePath,
+                BoneName = src.BoneName,
+                BoneId = src.BoneId,
+                SnapToParent = src.SnapToParent,
+                DrawGroupExterior = src.DrawGroupExterior,
+                DrawGroupCockpit = src.DrawGroupCockpit,
+                DrawGroupShadow = src.DrawGroupShadow,
+                DrawGroupHood = src.DrawGroupHood,
+                DrawGroupWindshieldReflection = src.DrawGroupWindshieldReflection,
+                DrawGroupDriverlessCockpit = src.DrawGroupDriverlessCockpit,
+                DrawGroupWindshieldReflectionDriverlessCockpit = src.DrawGroupWindshieldReflectionDriverlessCockpit,
+                DrawGroupProxyLOD = src.DrawGroupProxyLOD,
+                TransformMatrix = src.TransformMatrix,
+                IsDroppable = src.IsDroppable,
+                DropValue = src.DropValue,
+                DropPartId = src.DropPartId,
+                BreakAmount = src.BreakAmount,
+                IsInteriorWindshield = src.IsInteriorWindshield,
+                ReceivesImpactMask = src.ReceivesImpactMask,
+                ReceivesSplatterMask = src.ReceivesSplatterMask,
+                ReceivesDamage = src.ReceivesDamage,
+                ReceivesDirt = src.ReceivesDirt,
+                ReceivesOil = src.ReceivesOil,
+                ReceivesRubber = src.ReceivesRubber,
+                ReceivesRain = src.ReceivesRain,
+                AssemblyName = src.AssemblyName,
+                GuidV13 = Guid.NewGuid(),
+                DropGuidV14 = Guid.Empty,
+                AoMapInfoIdV14 = src.AoMapInfoIdV14,
+                IsInterior = src.IsInterior,
+                IsLeftSideWindow = src.IsLeftSideWindow,
+                IsRightSideWindow = src.IsRightSideWindow,
+                IsNascarWiper = src.IsNascarWiper,
+                IsLicensePlate = src.IsLicensePlate,
+                ModelLodFlagLODS = src.ModelLodFlagLODS,
+                ModelLodFlagLOD0 = src.ModelLodFlagLOD0,
+                ModelLodFlagLOD1 = src.ModelLodFlagLOD1,
+                ModelLodFlagLOD2 = src.ModelLodFlagLOD2,
+                ModelLodFlagLOD3 = src.ModelLodFlagLOD3,
+                ModelLodFlagLOD4 = src.ModelLodFlagLOD4,
+                ModelLodFlagLOD5 = src.ModelLodFlagLOD5,
+                HorizonId = src.HorizonId,
+                HorizonUnkV18 = src.HorizonUnkV18,
+                HorizonUnkV15 = src.HorizonUnkV15,
+                MotorsportUnkV18 = src.MotorsportUnkV18,
+                MotorsportUnkV19 = src.MotorsportUnkV19,
+                ProxyLodId = src.ProxyLodId,
+                RawDrawGroupsValue = src.RawDrawGroupsValue,
+                OriginalModelVersion = src.OriginalModelVersion,
+                InternalId = src.InternalId,
+            };
+
+            foreach (var mat in src.MaterialIndexes)
+                dst.MaterialIndexes.Add(new MaterialIndexEntry(mat.Key, mat.Value));
+
+            foreach (var ao in src.AoMapInfos)
+                dst.AoMapInfos.Add(new AOMapInfoEntry
+                {
+                    Version = ao.Version,
+                    Path = ao.Path,
+                    PartType = ao.PartType,
+                    PartId = ao.PartId,
+                    DroppedModelInstanceGuid = ao.DroppedModelInstanceGuid,
+                    BoneIndex = ao.BoneIndex,
+                    IsDropped = ao.IsDropped,
+                    IsDefault = ao.IsDefault,
+                    LodTest = ao.LodTest,
+                    LodValue = ao.LodValue,
+                });
+
+            foreach (var id in src.UpgradeIds)
+                dst.UpgradeIds.Add(id);
+
+            foreach (var w in src.UpgradeIdWrappers)
+                dst.UpgradeIdWrappers.Add(new UpgradeIdWrapper(w.Value));
+
+            foreach (var guid in src.DamageGuids)
+                dst.DamageGuids.Add(guid);
+
+            foreach (var kvp in src.MaterialOverrides)
+                dst.MaterialOverrides[kvp.Key] = (byte[])kvp.Value.Clone();
+
+            return dst;
+        }
+
+        [RelayCommand]
+        private void DuplicateNonUpgradableModel()
+        {
+            if (SelectedNonUpgradablePart == null || SelectedNonUpgradableModel == null) return;
+
+            var clone = DeepCloneModelEntry(SelectedNonUpgradableModel);
+            int idx = SelectedNonUpgradablePart.Models.IndexOf(SelectedNonUpgradableModel);
+            SelectedNonUpgradablePart.Models.Insert(idx + 1, clone);
+            SelectedNonUpgradableModel = clone;
+            StatusMessage = $"Duplicated '{clone.ModelFileName}'.";
+        }
+
+        [RelayCommand]
+        private void DuplicateUpgradableModel()
+        {
+            if (SelectedUpgradablePart == null || SelectedUpgradableModel == null) return;
+
+            var clone = DeepCloneModelEntry(SelectedUpgradableModel);
+            int idx = SelectedUpgradablePart.Models.IndexOf(SelectedUpgradableModel);
+            SelectedUpgradablePart.Models.Insert(idx + 1, clone);
+            SelectedUpgradableModel = clone;
+            StatusMessage = $"Duplicated '{clone.ModelFileName}'.";
+        }
+
         private async Task AddModelsToPartAsync(CarbinPartEntry part)
         {
             var picker = new FileOpenPicker();
@@ -739,17 +857,86 @@ namespace ForzaTechStudio.ViewModels
             picker.ViewMode = PickerViewMode.List;
             picker.SuggestedStartLocation = PickerLocationId.Desktop;
             picker.FileTypeFilter.Add(".swatchbin");
+            picker.FileTypeFilter.Add(".carbin");
 
             var file = await picker.PickSingleFileAsync();
-            if (file != null)
+            if (file == null) return;
+
+            if (Path.GetExtension(file.Path).Equals(".carbin", StringComparison.OrdinalIgnoreCase))
             {
-                model.AoSwatchbinFullPath = file.Path;
-                model.AoSwatchbinFileName = Path.GetFileName(file.Path);
-                model.AoSwatchbinGamePath = $@"game:\media\cars\{SceneName}\textures\ao\swatches\{model.AoSwatchbinFileName}";
+                await BrowseAoFromCarbinAsync(model, file.Path);
+                return;
+            }
 
-                model.AoMapInfos.Clear();
+            model.AoSwatchbinFullPath = file.Path;
+            model.AoSwatchbinFileName = Path.GetFileName(file.Path);
+            model.AoSwatchbinGamePath = $@"game:\media\cars\{SceneName}\textures\ao\swatches\{model.AoSwatchbinFileName}";
+            model.AoMapInfos.Clear();
+            StatusMessage = $"AO Swatchbin set: {model.AoSwatchbinFileName}";
+        }
 
-                StatusMessage = $"AO Swatchbin set: {model.AoSwatchbinFileName}";
+        private async Task BrowseAoFromCarbinAsync(CarbinModelEntry target, string carbinPath)
+        {
+            try
+            {
+                byte[] fileBytes = await File.ReadAllBytesAsync(carbinPath);
+                if (fileBytes.Length < 2)
+                {
+                    StatusMessage = "Error: Selected carbin is too small.";
+                    return;
+                }
+
+                var allModels = ParseCarbinForAllModels(fileBytes);
+                if (allModels.Count == 0)
+                {
+                    StatusMessage = "No models found in the selected carbin.";
+                    return;
+                }
+
+                var selected = await ShowAddModelFromCarbinDialogAsync(allModels, "Select Model – Copy AO Path", "Copy AO Path");
+                if (selected == null) return;
+
+                // Prefer AoMapInfos (v9+), fall back to legacy AO path
+                if (selected.AoMapInfos.Count > 0)
+                {
+                    target.AoMapInfos.Clear();
+                    foreach (var ao in selected.AoMapInfos)
+                        target.AoMapInfos.Add(new AOMapInfoEntry
+                        {
+                            Version = ao.Version,
+                            Path = ao.Path,
+                            PartType = ao.PartType,
+                            PartId = ao.PartId,
+                            DroppedModelInstanceGuid = ao.DroppedModelInstanceGuid,
+                            BoneIndex = ao.BoneIndex,
+                            IsDropped = ao.IsDropped,
+                            IsDefault = ao.IsDefault,
+                            LodTest = ao.LodTest,
+                            LodValue = ao.LodValue,
+                        });
+
+                    string firstPath = selected.AoMapInfos[0].Path;
+                    target.AoSwatchbinGamePath = firstPath;
+                    target.AoSwatchbinFileName = Path.GetFileName(firstPath.Replace(@"game:\", "").Replace("game:/", ""));
+                    target.AoSwatchbinFullPath = "";
+                    StatusMessage = $"AO path copied from '{selected.DisplayName}'.";
+                }
+                else if (!string.IsNullOrEmpty(selected.AoSwatchPathLegacy))
+                {
+                    target.AoMapInfos.Clear();
+                    target.AoSwatchbinGamePath = selected.AoSwatchPathLegacy;
+                    target.AoSwatchbinFileName = Path.GetFileName(selected.AoSwatchPathLegacy.Replace(@"game:\", "").Replace("game:/", ""));
+                    target.AoSwatchbinFullPath = "";
+                    StatusMessage = $"AO path copied from '{selected.DisplayName}'.";
+                }
+                else
+                {
+                    StatusMessage = $"Selected model '{selected.DisplayName}' has no AO path to copy.";
+                }
+            }
+            catch (Exception ex)
+            {
+                StatusMessage = $"Error reading carbin: {ex.Message}";
             }
         }
 

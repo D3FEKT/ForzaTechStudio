@@ -1136,15 +1136,6 @@
                         </StackPanel>
                     </Border>
 
-                    <!-- Card 2 · Blob Header Properties -->
-                    <Border Style="{StaticResource DetailCardStyle}">
-                        <StackPanel Spacing="0">
-                            <TextBlock Text="BLOB HEADER" Style="{StaticResource SubSectionLabel}"/>
-                            <ItemsControl ItemsSource="{x:Bind Properties, Mode=OneWay}"
-                                          ItemTemplateSelector="{StaticResource PropertyItemSelector}"/>
-                        </StackPanel>
-                    </Border>
-
                     <!-- Card 3 · Shader Parameters -->
                     <Border Style="{StaticResource DetailCardStyle}">
                         <StackPanel Spacing="8">
@@ -1290,14 +1281,21 @@
                             Style="{StaticResource GhostAccentButtonStyle}">
                         <StackPanel Orientation="Horizontal" Spacing="8">
                             <FontIcon Glyph="&#xE8E5;" FontSize="14"/>
-                            <TextBlock Text="Open Modelbin(s)"/>
+                            <TextBlock Text="Open"/>
                         </StackPanel>
                     </Button>
                     <Button Command="{x:Bind ViewModel.SaveFileCommand}"
                             Style="{StaticResource GhostAccentButtonStyle}">
                         <StackPanel Orientation="Horizontal" Spacing="8">
                             <FontIcon Glyph="&#xE74E;" FontSize="14"/>
-                            <TextBlock Text="Save Selected"/>
+                            <TextBlock Text="Save"/>
+                        </StackPanel>
+                    </Button>
+                    <Button Command="{x:Bind ViewModel.SaveFileAsCommand}"
+                            Style="{StaticResource GhostAccentButtonStyle}">
+                        <StackPanel Orientation="Horizontal" Spacing="8">
+                            <FontIcon Glyph="&#xE792;" FontSize="14"/>
+                            <TextBlock Text="Save As"/>
                         </StackPanel>
                     </Button>
                     <Button Command="{x:Bind ViewModel.CloseSimpleFileCommand}"
@@ -1346,7 +1344,7 @@
                               SelectedItem="{x:Bind ViewModel.SelectedFile, Mode=TwoWay}"
                               DisplayMemberPath="FileName"
                               MinWidth="320"
-                              PlaceholderText="Select a model bin to view..."/>
+                              PlaceholderText="Select a modelbin to view..."/>
                 </StackPanel>
             </StackPanel>
         </Border>

@@ -9,6 +9,9 @@
     <RuntimeIdentifiers>win-x86;win-x64;win-arm64</RuntimeIdentifiers>
     <PublishProfile>win-$(Platform).pubxml</PublishProfile>
     <UseWinUI>true</UseWinUI>
+    <AssemblyVersion>0.9.1.0</AssemblyVersion>
+    <FileVersion>0.9.1.0</FileVersion>
+    <Version>0.9.1.0</Version>
     <EnableMsixTooling>true</EnableMsixTooling>
     <Nullable>enable</Nullable>
     <BuiltInComInteropSupport>true</BuiltInComInteropSupport>
@@ -21,8 +24,6 @@
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
     <XamlCompilerOomWorkaround>true</XamlCompilerOomWorkaround>
     <UseSharedCompilation>false</UseSharedCompilation>
-    <!-- Suppress the XAML-generated Main so Program.cs can register the
-         libs/ resolver before any WinRT/XAML code runs. -->
     <DefineConstants>$(DefineConstants);DISABLE_XAML_GENERATED_MAIN</DefineConstants>
   </PropertyGroup>
   <ItemGroup>
@@ -39,6 +40,7 @@
     <None Remove="Views\ModelBinSimpleView.xaml" />
     <None Remove="Views\ModelBinTreeEditorView.xaml" />
     <None Remove="Views\DocumentationPage.xaml" />
+    <None Remove="Views\ChangelogDialog.xaml" />
   </ItemGroup>
   <ItemGroup>
     <Content Include="Assets\FTS_icon.ico">
@@ -87,6 +89,7 @@
     <Content Include="..\docs\stringtable.md" Link="docs\stringtable.md" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
     <Content Include="..\docs\swatchbin-viewer.md" Link="docs\swatchbin-viewer.md" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
     <Content Include="..\docs\create-zip.md" Link="docs\create-zip.md" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
+    <Content Include="..\docs\changelogs.md" Link="docs\changelogs.md" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\ForzaTools.Bundles\ForzaTools.Bundles.csproj" />
@@ -205,6 +208,9 @@
       <Pack>True</Pack>
       <PackagePath>\</PackagePath>
     </None>
+    <Page Update="Views\ChangelogDialog.xaml">
+      <Generator>MSBuild:Compile</Generator>
+    </Page>
     <Page Update="Views\DocumentationPage.xaml">
       <Generator>MSBuild:Compile</Generator>
     </Page>
@@ -248,8 +254,8 @@
     <AssemblyName>ForzaTech Studio</AssemblyName>
     <Description>Forza Resource Tools</Description>
     <Copyright>D3FEKT</Copyright>
-    <AssemblyVersion>0.9.0.0</AssemblyVersion>
-    <FileVersion>0.9.0.0</FileVersion>
+    <AssemblyVersion>0.9.1.0</AssemblyVersion>
+    <FileVersion>0.9.1.0</FileVersion>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x86'">
     <DebugType>none</DebugType>
@@ -316,9 +322,7 @@
       <!-- WebView2 native loader must stay beside the exe (loaded via LoadLibrary) -->
       <_WebViewKeep Include="$(PublishDir)Microsoft.Web.WebView2.*.dll" />
       <_WebViewKeep Include="$(PublishDir)WebView2Loader.dll" />
-      <!-- WinUI component DLLs: XAML loads their Generic.xaml resource dictionaries via the
-           Windows DLL loader (combase/XAML resource manager), NOT via AssemblyResolve.
-           They MUST stay beside the exe or XAML activation fails with 0x80070002. -->
+
       <_XamlComponentKeep Include="$(PublishDir)CommunityToolkit.WinUI*.dll" />
       <_XamlComponentKeep Include="$(PublishDir)ColorCode.WinUI.dll" />
       <_XamlComponentKeep Include="$(PublishDir)ColorCode.Core.dll" />

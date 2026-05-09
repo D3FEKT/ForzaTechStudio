@@ -27,7 +27,7 @@
                             Style="{StaticResource GhostAccentButtonStyle}">
                         <StackPanel Orientation="Horizontal" Spacing="8">
                             <FontIcon Glyph="&#xE8E5;" FontSize="14"/>
-                            <TextBlock Text="Open File"/>
+                            <TextBlock Text="Open"/>
                         </StackPanel>
                         <Button.KeyboardAccelerators>
                             <KeyboardAccelerator Modifiers="Control" Key="O"/>
@@ -301,7 +301,14 @@
                             <TextBlock x:Name="ZoomPercentText" Text="100%" VerticalAlignment="Center" 
                                        Margin="8,0,0,0" Width="45" TextAlignment="Right"/>
                         </StackPanel>
-                        <StackPanel Orientation="Horizontal" Spacing="8" HorizontalAlignment="Right">
+                        <StackPanel Orientation="Horizontal" Spacing="12" HorizontalAlignment="Right">
+                            <ToggleSwitch x:Name="ShowAlphaToggle" Header="Show Alpha" IsOn="False"
+                                          VerticalAlignment="Center" Margin="0,-8,0,-8"
+                                          Toggled="ShowAlphaToggle_Toggled"/>
+                            <ToggleSwitch x:Name="ShowMipMapsToggle" Header="Show MipMaps" IsOn="False"
+                                          VerticalAlignment="Center" Margin="0,-8,0,-8"
+                                          Toggled="ShowMipMapsToggle_Toggled"/>
+                            <Border Width="1" Background="{ThemeResource DividerStrokeColorDefaultBrush}" Margin="0,4"/>
                             <Button Content="Fit" Click="FitZoomButton_Click" ToolTipService.ToolTip="Fit to Window" 
                                     FontSize="12"/>
                             <Button Content="1:1" Click="ActualSizeButton_Click" ToolTipService.ToolTip="Actual Size" 

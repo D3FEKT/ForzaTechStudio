@@ -41,6 +41,10 @@ namespace ForzaTechStudio.Models
         [JsonPropertyName("hasShownWelcome")]
         public bool HasShownWelcome { get; set; } = false;
 
+        // Tracks the last app version that showed the welcome screen
+        [JsonPropertyName("appVersion")]
+        public string AppVersion { get; set; } = "";
+
         public SettingsConfig()
         {
             // Initialize with empty paths for all supported games
