@@ -16,6 +16,15 @@ namespace ForzaTechStudio.ViewModels
         [RelayCommand]
         private void NewCarbin()
         {
+            // Save current tab and open in new tab if it has content
+            if (IsContentVisible && ActiveTab != null)
+            {
+                SaveCurrentStateToTab(ActiveTab);
+                var newTab = CreateEmptyTab();
+                Tabs.Add(newTab);
+                ActiveTab = newTab;
+            }
+
             IsBusy = true;
             ClearAll();
             StatusMessage = "Initializing new carbin...";
@@ -48,6 +57,9 @@ namespace ForzaTechStudio.ViewModels
 
                 IsContentVisible = true;
                 StatusMessage = "New carbin initialized. Ready to edit.";
+
+                // Update tab name
+                if (ActiveTab != null) ActiveTab.Name = LoadedFileName;
             }
             finally
             {
@@ -73,8 +85,26 @@ namespace ForzaTechStudio.ViewModels
             await LoadCarbinFileAsync(file.Path);
         }
 
-        public async Task LoadCarbinFileAsync(string filePath)
+        public async Task LoadCarbinFileAsync(string filePath, bool isReload = false)
         {
+            if (!isReload)
+            {
+                // Open in new tab if current tab already has content
+                if (IsContentVisible && ActiveTab != null)
+                {
+                    SaveCurrentStateToTab(ActiveTab);
+                    var newTab = CreateEmptyTab();
+                    Tabs.Add(newTab);
+                    ActiveTab = newTab;
+                }
+                else if (Tabs.Count == 0)
+                {
+                    var firstTab = CreateEmptyTab();
+                    Tabs.Add(firstTab);
+                    ActiveTab = firstTab;
+                }
+            }
+
             IsBusy = true;
             StatusMessage = "Loading carbin file...";
             ClearAll();
@@ -99,7 +129,10 @@ namespace ForzaTechStudio.ViewModels
                 ParseCarbinFile(reader, fileBytes.Length);
 
                 IsContentVisible = true;
-                StatusMessage = $"Loaded: {LoadedFileName} (Scene v{DetectedSceneVersion}, Model v{DetectedModelVersion}, {(IsHorizon ? "Horizon" : "Motorsport")})";
+                StatusMessage = $"Loaded: {LoadedFileName} (Scene v{DetectedSceneVersion}, Model v{DetectedModelVersion}, {(IsHorizon ? "Horizon" : "Motorsport")})"; 
+
+                
+                if (ActiveTab != null) ActiveTab.Name = LoadedFileName;
             }
             catch (Exception ex)
             {
@@ -115,8 +148,37 @@ namespace ForzaTechStudio.ViewModels
         [RelayCommand]
         public void CloseFile()
         {
+            if (ActiveTab != null)
+                CloseTab(ActiveTab);
+            else
+            {
+                ClearAll();
+                StatusMessage = "File closed.";
+            }
+        }
+
+        // Reload current file from disk
+        [RelayCommand]
+        public async Task ReloadFileAsync()
+        {
+            if (string.IsNullOrEmpty(LoadedFilePath) || !File.Exists(LoadedFilePath))
+            {
+                StatusMessage = "No file to reload.";
+                return;
+            }
+            var path = LoadedFilePath;
+            await LoadCarbinFileAsync(path, isReload: true);
+        }
+
+        [RelayCommand]
+        public void CloseAllFiles()
+        {
+            Tabs.Clear();
             ClearAll();
-            StatusMessage = "File closed.";
+            var blank = CreateEmptyTab();
+            Tabs.Add(blank);
+            ActiveTab = blank;
+            StatusMessage = "All files closed.";
         }
 
         [RelayCommand]
@@ -199,6 +261,7 @@ namespace ForzaTechStudio.ViewModels
                     WriteCarbinFile(writer, sceneVersion, modelVersion, isHorizon);
                 });
 
+                FileSaved?.Invoke(LoadedFilePath);
                 StatusMessage = $"Saved: {LoadedFileName}";
             }
             catch (Exception ex)
@@ -224,6 +287,9 @@ namespace ForzaTechStudio.ViewModels
             NonUpgradableParts.Add(part);
             SelectedNonUpgradablePart = part;
             StatusMessage = $"Added new non-upgradable part. Total: {NonUpgradableParts.Count}";
+            PushUndo(
+                () => { NonUpgradableParts.Remove(part); SelectedNonUpgradablePart = NonUpgradableParts.FirstOrDefault(); StatusMessage = "Undo: add part."; },
+                () => { NonUpgradableParts.Add(part); SelectedNonUpgradablePart = part; StatusMessage = "Redo: add part."; });
         }
 
         [RelayCommand]
@@ -231,9 +297,14 @@ namespace ForzaTechStudio.ViewModels
         {
             if (SelectedNonUpgradablePart != null)
             {
-                NonUpgradableParts.Remove(SelectedNonUpgradablePart);
+                var removed = SelectedNonUpgradablePart;
+                var idx = NonUpgradableParts.IndexOf(removed);
+                NonUpgradableParts.Remove(removed);
                 SelectedNonUpgradablePart = NonUpgradableParts.FirstOrDefault();
                 StatusMessage = $"Removed part. Remaining: {NonUpgradableParts.Count}";
+                PushUndo(
+                    () => { NonUpgradableParts.Insert(Math.Min(idx, NonUpgradableParts.Count), removed); SelectedNonUpgradablePart = removed; StatusMessage = "Undo: remove part."; },
+                    () => { NonUpgradableParts.Remove(removed); SelectedNonUpgradablePart = NonUpgradableParts.FirstOrDefault(); StatusMessage = "Redo: remove part."; });
             }
         }
 
@@ -293,9 +364,15 @@ namespace ForzaTechStudio.ViewModels
         {
             if (SelectedNonUpgradablePart != null && SelectedNonUpgradableModel != null)
             {
-                SelectedNonUpgradablePart.Models.Remove(SelectedNonUpgradableModel);
-                SelectedNonUpgradableModel = SelectedNonUpgradablePart.Models.FirstOrDefault();
+                var part = SelectedNonUpgradablePart;
+                var model = SelectedNonUpgradableModel;
+                var idx = part.Models.IndexOf(model);
+                part.Models.Remove(model);
+                SelectedNonUpgradableModel = part.Models.FirstOrDefault();
                 StatusMessage = "Model removed.";
+                PushUndo(
+                    () => { part.Models.Insert(Math.Min(idx, part.Models.Count), model); SelectedNonUpgradableModel = model; StatusMessage = "Undo: remove model."; },
+                    () => { part.Models.Remove(model); SelectedNonUpgradableModel = part.Models.FirstOrDefault(); StatusMessage = "Redo: remove model."; });
             }
         }
 
@@ -351,6 +428,9 @@ namespace ForzaTechStudio.ViewModels
             UpgradableParts.Add(part);
             SelectedUpgradablePart = part;
             StatusMessage = $"Added new upgradable part. Total: {UpgradableParts.Count}";
+            PushUndo(
+                () => { UpgradableParts.Remove(part); SelectedUpgradablePart = UpgradableParts.FirstOrDefault(); StatusMessage = "Undo: add part."; },
+                () => { UpgradableParts.Add(part); SelectedUpgradablePart = part; StatusMessage = "Redo: add part."; });
         }
 
         [RelayCommand]
@@ -358,9 +438,14 @@ namespace ForzaTechStudio.ViewModels
         {
             if (SelectedUpgradablePart != null)
             {
-                UpgradableParts.Remove(SelectedUpgradablePart);
+                var removed = SelectedUpgradablePart;
+                var idx = UpgradableParts.IndexOf(removed);
+                UpgradableParts.Remove(removed);
                 SelectedUpgradablePart = UpgradableParts.FirstOrDefault();
                 StatusMessage = $"Removed part. Remaining: {UpgradableParts.Count}";
+                PushUndo(
+                    () => { UpgradableParts.Insert(Math.Min(idx, UpgradableParts.Count), removed); SelectedUpgradablePart = removed; StatusMessage = "Undo: remove part."; },
+                    () => { UpgradableParts.Remove(removed); SelectedUpgradablePart = UpgradableParts.FirstOrDefault(); StatusMessage = "Redo: remove part."; });
             }
         }
 
@@ -417,9 +502,15 @@ namespace ForzaTechStudio.ViewModels
         {
             if (SelectedUpgradablePart != null && SelectedUpgradableModel != null)
             {
-                SelectedUpgradablePart.Models.Remove(SelectedUpgradableModel);
-                SelectedUpgradableModel = SelectedUpgradablePart.Models.FirstOrDefault();
+                var part = SelectedUpgradablePart;
+                var model = SelectedUpgradableModel;
+                var idx = part.Models.IndexOf(model);
+                part.Models.Remove(model);
+                SelectedUpgradableModel = part.Models.FirstOrDefault();
                 StatusMessage = "Model removed.";
+                PushUndo(
+                    () => { part.Models.Insert(Math.Min(idx, part.Models.Count), model); SelectedUpgradableModel = model; StatusMessage = "Undo: remove model."; },
+                    () => { part.Models.Remove(model); SelectedUpgradableModel = part.Models.FirstOrDefault(); StatusMessage = "Redo: remove model."; });
             }
         }
 
@@ -469,15 +560,19 @@ namespace ForzaTechStudio.ViewModels
         {
             if (SelectedUpgradablePart != null)
             {
-                var upgrade = new UpgradeEntry(SelectedUpgradablePart.Upgrades.Count, (byte)SelectedUpgradablePart.Upgrades.Count, SelectedUpgradablePart.Upgrades.Count == 0)
+                var part = SelectedUpgradablePart;
+                var upgrade = new UpgradeEntry(part.Upgrades.Count, (byte)part.Upgrades.Count, part.Upgrades.Count == 0)
                 {
                     Version = 3,
                     CarBodyId = 0,
                     ParentIsStock = true
                 };
-                SelectedUpgradablePart.Upgrades.Add(upgrade);
+                part.Upgrades.Add(upgrade);
                 SelectedUpgrade = upgrade;
-                StatusMessage = $"Added upgrade. Total: {SelectedUpgradablePart.Upgrades.Count}";
+                StatusMessage = $"Added upgrade. Total: {part.Upgrades.Count}";
+                PushUndo(
+                    () => { part.Upgrades.Remove(upgrade); SelectedUpgrade = part.Upgrades.FirstOrDefault(); StatusMessage = "Undo: add upgrade."; },
+                    () => { part.Upgrades.Add(upgrade); SelectedUpgrade = upgrade; StatusMessage = "Redo: add upgrade."; });
             }
         }
 
@@ -486,9 +581,15 @@ namespace ForzaTechStudio.ViewModels
         {
             if (SelectedUpgradablePart != null && SelectedUpgrade != null)
             {
-                SelectedUpgradablePart.Upgrades.Remove(SelectedUpgrade);
-                SelectedUpgrade = SelectedUpgradablePart.Upgrades.FirstOrDefault();
-                StatusMessage = $"Removed upgrade. Remaining: {SelectedUpgradablePart.Upgrades.Count}";
+                var part = SelectedUpgradablePart;
+                var upgrade = SelectedUpgrade;
+                var idx = part.Upgrades.IndexOf(upgrade);
+                part.Upgrades.Remove(upgrade);
+                SelectedUpgrade = part.Upgrades.FirstOrDefault();
+                StatusMessage = $"Removed upgrade. Remaining: {part.Upgrades.Count}";
+                PushUndo(
+                    () => { part.Upgrades.Insert(Math.Min(idx, part.Upgrades.Count), upgrade); SelectedUpgrade = upgrade; StatusMessage = "Undo: remove upgrade."; },
+                    () => { part.Upgrades.Remove(upgrade); SelectedUpgrade = part.Upgrades.FirstOrDefault(); StatusMessage = "Redo: remove upgrade."; });
             }
         }
 
@@ -699,6 +800,8 @@ namespace ForzaTechStudio.ViewModels
                 ModelLodFlagLOD5 = src.ModelLodFlagLOD5,
                 HorizonId = src.HorizonId,
                 HorizonUnkV18 = src.HorizonUnkV18,
+                HorizonUnkV21Flag = src.HorizonUnkV21Flag,
+                HorizonUnkV21Path = src.HorizonUnkV21Path,
                 HorizonUnkV15 = src.HorizonUnkV15,
                 MotorsportUnkV18 = src.MotorsportUnkV18,
                 MotorsportUnkV19 = src.MotorsportUnkV19,

@@ -113,6 +113,7 @@ namespace ForzaTechStudio.Views
         {
             this.ActualThemeChanged -= ViewportPage_ActualThemeChanged;
 
+            DisposeFileWatch();
             StopStatsOverlay();
             StopAnimTimer();
             ClearAllOverlays();
@@ -155,6 +156,7 @@ namespace ForzaTechStudio.Views
         private void Page_Loaded(object sender, RoutedEventArgs e)
         {
             Initialize3DView();
+            InitFileWatch();
             
             this.ActualThemeChanged += ViewportPage_ActualThemeChanged;
             UpdateViewportTheme();
@@ -173,6 +175,23 @@ namespace ForzaTechStudio.Views
 
             InitializeStatsOverlay();
             UpdateUndoRedoButtons();
+
+            // Create initial tab on first load
+            if (ViewModel.Tabs.Count == 0)
+            {
+                _isSwitchingTabs = true;
+                var tab = ViewModel.AddTab("Tab 1");
+                ViewModel.ActiveTab = tab;
+                TabListView.SelectedItem = tab;
+                _isSwitchingTabs = false;
+            }
+            else if (TabListView.SelectedItem == null && ViewModel.ActiveTab != null)
+            {
+                // Re-sync selection after navigation cache restores the page
+                _isSwitchingTabs = true;
+                TabListView.SelectedItem = ViewModel.ActiveTab;
+                _isSwitchingTabs = false;
+            }
         }
 
         private void ViewportPage_ActualThemeChanged(FrameworkElement sender, object args)

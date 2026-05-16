@@ -21,12 +21,15 @@ using System.Windows.Input;
 
 namespace ForzaTechStudio.ViewModels
 {
-    public partial class ModelBinEditorViewModel : ObservableObject
+    public partial class ModelBinEditorViewModel : UndoRedoViewModel
     {
         private readonly FileService _fileService;
 
         public ObservableCollection<ObjectNode> RootNodes { get; } = new();
         public ObservableCollection<FileViewModel> LoadedFiles { get; } = new();
+
+        // Fired with the saved file path so the page can suppress its file watcher.
+        public event Action<string>? FileSaved;
 
         [ObservableProperty]
         [NotifyPropertyChangedFor(nameof(SelectedFileTitle))]
@@ -111,17 +114,25 @@ namespace ForzaTechStudio.ViewModels
 
         public async Task LoadFileAsync(string name, string path)
         {
-            foreach (var node in RootNodes)
+            // Path-based dedup so same-named files in different folders can both load
+            foreach (var f in LoadedFiles)
             {
-                if (node.Title == name) return;
+                if (string.Equals(f.FilePath, path, StringComparison.OrdinalIgnoreCase)) return;
             }
 
             var fileVm = new FileViewModel(name, path, _fileService);
             await fileVm.EnsureLoadedAsync();
             LoadedFiles.Add(fileVm);
 
-            // Populate tree items
-            var fileNode = new ObjectNode(name, null, true);
+            // Disambiguate display title when names collide
+            string displayTitle = name;
+            if (LoadedFiles.Count(f => string.Equals(f.FileName, name, StringComparison.OrdinalIgnoreCase)) > 1)
+            {
+                var dir = System.IO.Path.GetFileName(System.IO.Path.GetDirectoryName(path) ?? string.Empty);
+                if (!string.IsNullOrEmpty(dir)) displayTitle = $"{name} [{dir}]";
+            }
+
+            var fileNode = new ObjectNode(displayTitle, null, true) { FilePath = path };
             foreach (var node in fileVm.Nodes)
             {
                 fileNode.Children.Add(node);
@@ -131,6 +142,23 @@ namespace ForzaTechStudio.ViewModels
             
             // Default to the last loaded file for simple view
             SelectedFile = fileVm;
+        }
+
+        // Remove and reload a file by path (used by file change detection).
+        public async Task ReloadFileByPathAsync(string path)
+        {
+            var existing = LoadedFiles.FirstOrDefault(f =>
+                string.Equals(f.FilePath, path, StringComparison.OrdinalIgnoreCase));
+            if (existing == null) return;
+
+            var name = existing.FileName;
+            LoadedFiles.Remove(existing);
+
+            var rootNode = RootNodes.FirstOrDefault(n => n is ObjectNode on &&
+                string.Equals(on.FilePath, path, StringComparison.OrdinalIgnoreCase));
+            if (rootNode != null) RootNodes.Remove(rootNode);
+
+            await LoadFileAsync(name, path);
         }
 
         partial void OnSelectedFileChanged(FileViewModel value)
@@ -166,7 +194,7 @@ namespace ForzaTechStudio.ViewModels
                 }
                 else if (blob is MeshBlob meshBlob)
                 {
-                    SimpleMeshes.Add(new SimpleMeshViewModel(meshBlob));
+                    SimpleMeshes.Add(new SimpleMeshViewModel(meshBlob, this));
                 }
                 else if (blob is VertexLayoutBlob vlayBlob)
                 {
@@ -200,6 +228,7 @@ namespace ForzaTechStudio.ViewModels
                     bundleToSave.Serialize(stream);
                 });
 
+                FileSaved?.Invoke(filePath);
                 App.ShowInfoDialog($"File saved successfully to:\n{filePath}", "Save Complete");
             }
             catch (Exception ex)
@@ -867,8 +896,9 @@ namespace ForzaTechStudio.ViewModels
              file.Unload();
              LoadedFiles.Remove(file);
 
-             // Also remove from Tree Nodes
-             var node = RootNodes.FirstOrDefault(n => n.Title == file.FileName);
+             // Path-based lookup avoids collisions with same-named files
+             var node = RootNodes.FirstOrDefault(n => string.Equals(n.FilePath, file.FilePath, StringComparison.OrdinalIgnoreCase))
+                        ?? RootNodes.FirstOrDefault(n => n.Title == file.FileName);
              if (node != null) RootNodes.Remove(node);
              
              if (SelectedFile == file)
@@ -1116,14 +1146,24 @@ namespace ForzaTechStudio.ViewModels
                 {
                     if (idMeta.Id != value)
                     {
+                        var oldId = idMeta.Id;
+                        var newId = value;
                         idMeta.Id = value;
                         OnPropertyChanged(nameof(MaterialId));
+                        _parentVm?.PushUndo(
+                            () => { idMeta.Id = oldId; OnPropertyChanged(nameof(MaterialId)); },
+                            () => { idMeta.Id = newId; OnPropertyChanged(nameof(MaterialId)); });
                     }
                 }
                 else if (Blob.Id != value)
                 {
+                    var oldId = Blob.Id;
+                    var newId = value;
                     Blob.Id = value;
                     OnPropertyChanged(nameof(MaterialId));
+                    _parentVm?.PushUndo(
+                        () => { Blob.Id = oldId; OnPropertyChanged(nameof(MaterialId)); },
+                        () => { Blob.Id = newId; OnPropertyChanged(nameof(MaterialId)); });
                 }
             }
         }
@@ -1160,8 +1200,13 @@ namespace ForzaTechStudio.ViewModels
                     var matiBlob = Blob.Bundle.Blobs.OfType<MaterialResourceBlob>().FirstOrDefault();
                     if (matiBlob != null && matiBlob.Path != value)
                     {
+                        var oldPath = matiBlob.Path;
+                        var newPath = value;
                         matiBlob.Path = value;
                         OnPropertyChanged(nameof(MaterialPath));
+                        _parentVm?.PushUndo(
+                            () => { matiBlob.Path = oldPath; OnPropertyChanged(nameof(MaterialPath)); },
+                            () => { matiBlob.Path = newPath; OnPropertyChanged(nameof(MaterialPath)); });
                     }
                 }
             }
@@ -1234,6 +1279,7 @@ namespace ForzaTechStudio.ViewModels
     public partial class SimpleMeshViewModel : ObservableObject
     {
         public MeshBlob Blob { get; }
+        private readonly ModelBinEditorViewModel? _parentVm;
         
         public string Name
         {
@@ -1260,6 +1306,8 @@ namespace ForzaTechStudio.ViewModels
             set
             {
                 bool changed = false;
+                short oldId = MaterialId;
+                short newId = value;
                 if (Blob.MaterialIds != null && Blob.MaterialIds.Length > 1)
                 {
                     if (Blob.MaterialIds[1] != value)
@@ -1282,6 +1330,9 @@ namespace ForzaTechStudio.ViewModels
                 if (changed)
                 {
                     OnPropertyChanged(nameof(MaterialId));
+                    _parentVm?.PushUndo(
+                        () => { MaterialId = oldId; },
+                        () => { MaterialId = newId; });
                 }
             }
         }
@@ -1290,32 +1341,32 @@ namespace ForzaTechStudio.ViewModels
         public bool IsOpaque
         {
             get => Blob.IsOpaque;
-            set { if (Blob.IsOpaque != value) { Blob.IsOpaque = value; OnFlagChanged(); } }
+            set { if (Blob.IsOpaque != value) { var old = Blob.IsOpaque; Blob.IsOpaque = value; OnFlagChanged(); _parentVm?.PushUndo(() => { Blob.IsOpaque = old; OnFlagChanged(); }, () => { Blob.IsOpaque = value; OnFlagChanged(); }); } }
         }
         public bool IsDecal
         {
             get => Blob.IsDecal;
-            set { if (Blob.IsDecal != value) { Blob.IsDecal = value; OnFlagChanged(); } }
+            set { if (Blob.IsDecal != value) { var old = Blob.IsDecal; Blob.IsDecal = value; OnFlagChanged(); _parentVm?.PushUndo(() => { Blob.IsDecal = old; OnFlagChanged(); }, () => { Blob.IsDecal = value; OnFlagChanged(); }); } }
         }
         public bool IsTransparent
         {
             get => Blob.IsTransparent;
-            set { if (Blob.IsTransparent != value) { Blob.IsTransparent = value; OnFlagChanged(); } }
+            set { if (Blob.IsTransparent != value) { var old = Blob.IsTransparent; Blob.IsTransparent = value; OnFlagChanged(); _parentVm?.PushUndo(() => { Blob.IsTransparent = old; OnFlagChanged(); }, () => { Blob.IsTransparent = value; OnFlagChanged(); }); } }
         }
         public bool IsShadow
         {
             get => Blob.IsShadow;
-            set { if (Blob.IsShadow != value) { Blob.IsShadow = value; OnFlagChanged(); } }
+            set { if (Blob.IsShadow != value) { var old = Blob.IsShadow; Blob.IsShadow = value; OnFlagChanged(); _parentVm?.PushUndo(() => { Blob.IsShadow = old; OnFlagChanged(); }, () => { Blob.IsShadow = value; OnFlagChanged(); }); } }
         }
         public bool IsNotShadow
         {
             get => Blob.IsNotShadow;
-            set { if (Blob.IsNotShadow != value) { Blob.IsNotShadow = value; OnFlagChanged(); } }
+            set { if (Blob.IsNotShadow != value) { var old = Blob.IsNotShadow; Blob.IsNotShadow = value; OnFlagChanged(); _parentVm?.PushUndo(() => { Blob.IsNotShadow = old; OnFlagChanged(); }, () => { Blob.IsNotShadow = value; OnFlagChanged(); }); } }
         }
         public bool IsAlphaToCoverage
         {
             get => Blob.IsAlphaToCoverage;
-            set { if (Blob.IsAlphaToCoverage != value) { Blob.IsAlphaToCoverage = value; OnFlagChanged(); } }
+            set { if (Blob.IsAlphaToCoverage != value) { var old = Blob.IsAlphaToCoverage; Blob.IsAlphaToCoverage = value; OnFlagChanged(); _parentVm?.PushUndo(() => { Blob.IsAlphaToCoverage = old; OnFlagChanged(); }, () => { Blob.IsAlphaToCoverage = value; OnFlagChanged(); }); } }
         }
         
         private void OnFlagChanged()
@@ -1332,52 +1383,58 @@ namespace ForzaTechStudio.ViewModels
         public float ScaleX
         {
             get => Blob.PositionScale.X;
-            set { if (Blob.PositionScale.X != value) { var v = Blob.PositionScale; v.X = value; Blob.PositionScale = v; OnPropertyChanged(); } }
+            set { if (Blob.PositionScale.X != value) { var old = Blob.PositionScale.X; var v = Blob.PositionScale; v.X = value; Blob.PositionScale = v; OnPropertyChanged(); _parentVm?.PushUndo(() => { var s = Blob.PositionScale; s.X = old; Blob.PositionScale = s; OnPropertyChanged(nameof(ScaleX)); }, () => { var s = Blob.PositionScale; s.X = value; Blob.PositionScale = s; OnPropertyChanged(nameof(ScaleX)); }); } }
         }
         public float ScaleY
         {
             get => Blob.PositionScale.Y;
-            set { if (Blob.PositionScale.Y != value) { var v = Blob.PositionScale; v.Y = value; Blob.PositionScale = v; OnPropertyChanged(); } }
+            set { if (Blob.PositionScale.Y != value) { var old = Blob.PositionScale.Y; var v = Blob.PositionScale; v.Y = value; Blob.PositionScale = v; OnPropertyChanged(); _parentVm?.PushUndo(() => { var s = Blob.PositionScale; s.Y = old; Blob.PositionScale = s; OnPropertyChanged(nameof(ScaleY)); }, () => { var s = Blob.PositionScale; s.Y = value; Blob.PositionScale = s; OnPropertyChanged(nameof(ScaleY)); }); } }
         }
         public float ScaleZ
         {
             get => Blob.PositionScale.Z;
-            set { if (Blob.PositionScale.Z != value) { var v = Blob.PositionScale; v.Z = value; Blob.PositionScale = v; OnPropertyChanged(); } }
+            set { if (Blob.PositionScale.Z != value) { var old = Blob.PositionScale.Z; var v = Blob.PositionScale; v.Z = value; Blob.PositionScale = v; OnPropertyChanged(); _parentVm?.PushUndo(() => { var s = Blob.PositionScale; s.Z = old; Blob.PositionScale = s; OnPropertyChanged(nameof(ScaleZ)); }, () => { var s = Blob.PositionScale; s.Z = value; Blob.PositionScale = s; OnPropertyChanged(nameof(ScaleZ)); }); } }
         }
         public float ScaleW
         {
             get => Blob.PositionScale.W;
-            set { if (Blob.PositionScale.W != value) { var v = Blob.PositionScale; v.W = value; Blob.PositionScale = v; OnPropertyChanged(); } }
+            set { if (Blob.PositionScale.W != value) { var old = Blob.PositionScale.W; var v = Blob.PositionScale; v.W = value; Blob.PositionScale = v; OnPropertyChanged(); _parentVm?.PushUndo(() => { var s = Blob.PositionScale; s.W = old; Blob.PositionScale = s; OnPropertyChanged(nameof(ScaleW)); }, () => { var s = Blob.PositionScale; s.W = value; Blob.PositionScale = s; OnPropertyChanged(nameof(ScaleW)); }); } }
         }
 
         // Transforms (Position/Translate)
         public float TransX
         {
             get => Blob.PositionTranslate.X;
-            set { if (Blob.PositionTranslate.X != value) { var v = Blob.PositionTranslate; v.X = value; Blob.PositionTranslate = v; OnPropertyChanged(); } }
+            set { if (Blob.PositionTranslate.X != value) { var old = Blob.PositionTranslate.X; var v = Blob.PositionTranslate; v.X = value; Blob.PositionTranslate = v; OnPropertyChanged(); _parentVm?.PushUndo(() => { var t = Blob.PositionTranslate; t.X = old; Blob.PositionTranslate = t; OnPropertyChanged(nameof(TransX)); }, () => { var t = Blob.PositionTranslate; t.X = value; Blob.PositionTranslate = t; OnPropertyChanged(nameof(TransX)); }); } }
         }
         public float TransY
         {
             get => Blob.PositionTranslate.Y;
-            set { if (Blob.PositionTranslate.Y != value) { var v = Blob.PositionTranslate; v.Y = value; Blob.PositionTranslate = v; OnPropertyChanged(); } }
+            set { if (Blob.PositionTranslate.Y != value) { var old = Blob.PositionTranslate.Y; var v = Blob.PositionTranslate; v.Y = value; Blob.PositionTranslate = v; OnPropertyChanged(); _parentVm?.PushUndo(() => { var t = Blob.PositionTranslate; t.Y = old; Blob.PositionTranslate = t; OnPropertyChanged(nameof(TransY)); }, () => { var t = Blob.PositionTranslate; t.Y = value; Blob.PositionTranslate = t; OnPropertyChanged(nameof(TransY)); }); } }
         }
         public float TransZ
         {
             get => Blob.PositionTranslate.Z;
-            set { if (Blob.PositionTranslate.Z != value) { var v = Blob.PositionTranslate; v.Z = value; Blob.PositionTranslate = v; OnPropertyChanged(); } }
+            set { if (Blob.PositionTranslate.Z != value) { var old = Blob.PositionTranslate.Z; var v = Blob.PositionTranslate; v.Z = value; Blob.PositionTranslate = v; OnPropertyChanged(); _parentVm?.PushUndo(() => { var t = Blob.PositionTranslate; t.Z = old; Blob.PositionTranslate = t; OnPropertyChanged(nameof(TransZ)); }, () => { var t = Blob.PositionTranslate; t.Z = value; Blob.PositionTranslate = t; OnPropertyChanged(nameof(TransZ)); }); } }
         }
         public float TransW
         {
             get => Blob.PositionTranslate.W;
-            set { if (Blob.PositionTranslate.W != value) { var v = Blob.PositionTranslate; v.W = value; Blob.PositionTranslate = v; OnPropertyChanged(); } }
+            set { if (Blob.PositionTranslate.W != value) { var old = Blob.PositionTranslate.W; var v = Blob.PositionTranslate; v.W = value; Blob.PositionTranslate = v; OnPropertyChanged(); _parentVm?.PushUndo(() => { var t = Blob.PositionTranslate; t.W = old; Blob.PositionTranslate = t; OnPropertyChanged(nameof(TransW)); }, () => { var t = Blob.PositionTranslate; t.W = value; Blob.PositionTranslate = t; OnPropertyChanged(nameof(TransW)); }); } }
         }
         
         public ObservableCollection<TexCoordTransformViewModel> TexCoordTransforms { get; } = new();
         public bool HasTexCoordTransforms => TexCoordTransforms.Count > 0;
 
-        public SimpleMeshViewModel(MeshBlob blob)
+        // v1.12+: true when the loaded blob uses the FH6 Mesh 1.12 layout
+        public bool IsV1_12 => Blob.IsAtLeastVersion(1, 12);
+        // v1.12+: number of entries in the post-reference index array (read-only; 0 is valid)
+        public uint PostRefCount => (uint)Blob.PostRefArray.Length;
+
+        public SimpleMeshViewModel(MeshBlob blob, ModelBinEditorViewModel? parentVm = null)
         {
             Blob = blob;
+            _parentVm = parentVm;
             if (blob.TexCoordTransforms != null)
             {
                 for (int i = 0; i < blob.TexCoordTransforms.Length; i++)

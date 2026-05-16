@@ -21,6 +21,7 @@ public enum ForzaGameTarget
     FH4,    // Forza Horizon 4
     FH5,    // Forza Horizon 5
     FM2023, // Forza Motorsport (2023)
+    FH6,    // Forza Horizon 6
 }
 
 // Describes the detected source game from file analysis.

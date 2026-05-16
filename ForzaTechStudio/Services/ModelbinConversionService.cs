@@ -1289,6 +1289,8 @@ public class ModelbinConversionService
                 ((1, 1), (1, 2), (1, 9), (1, 1)),
             ForzaGameTarget.FH5 =>
                 ((1, 1), (1, 2), (1, 9), (1, 1)),
+            ForzaGameTarget.FH6 =>
+                ((1, 1), (1, 4), (1, 12), (1, 1)),
             ForzaGameTarget.FM2023 =>
                 ((1, 1), (1, 2), (1, 8), (1, 1)),
             _ => ((1, 1), (1, 2), (1, 9), (1, 1))
@@ -1304,9 +1306,9 @@ public class ModelbinConversionService
     private static VLayElementInfo GetTargetElementFormat(string semanticName, short semanticIndex, ForzaGameTarget target)
     {
         bool isFH2 = target is ForzaGameTarget.FH2 or ForzaGameTarget.FM5;
-        bool hasTangent2 = target is ForzaGameTarget.FH5 or ForzaGameTarget.FM2023;
-        bool hasColor = target is ForzaGameTarget.FH3 or ForzaGameTarget.FH4 or ForzaGameTarget.FH5;
-        bool hasTexcoord4 = target is ForzaGameTarget.FH3 or ForzaGameTarget.FH4 or ForzaGameTarget.FH5 or ForzaGameTarget.FM2023;
+        bool hasTangent2 = target is ForzaGameTarget.FH5 or ForzaGameTarget.FH6 or ForzaGameTarget.FM2023;
+        bool hasColor = target is ForzaGameTarget.FH3 or ForzaGameTarget.FH4 or ForzaGameTarget.FH5 or ForzaGameTarget.FH6;
+        bool hasTexcoord4 = target is ForzaGameTarget.FH3 or ForzaGameTarget.FH4 or ForzaGameTarget.FH5 or ForzaGameTarget.FH6 or ForzaGameTarget.FM2023;
 
         return (semanticName, semanticIndex) switch
         {

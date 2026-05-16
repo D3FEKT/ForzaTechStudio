@@ -2,13 +2,14 @@
 using CommunityToolkit.Mvvm.Input;
 using ForzaTechStudio.Models;
 using ForzaTechStudio.Services;
+using ForzaTools.Bundles.Blobs;
+using ForzaTools.Bundles.Metadata;
 using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.Linq;
 using System.Windows.Input;
 using System.Numerics;
-using ForzaTools.Bundles.Blobs;
 
 namespace ForzaTechStudio.ViewModels.ThreeDViewer
 {
@@ -100,11 +101,44 @@ namespace ForzaTechStudio.ViewModels.ThreeDViewer
                 try
                 {
                     _isSettingChildren = true;
-                    foreach (var child in Children)
+                    if (IsChecked == false)
                     {
-                        if (child.IsChecked != IsChecked)
+                        // Snapshot child states before unchecking so we can restore them
+                        _childCheckSnapshot = new Dictionary<IViewerNode, bool?>(Children.Count);
+                        foreach (var child in Children)
                         {
-                            child.IsChecked = IsChecked;
+                            _childCheckSnapshot[child] = child.IsChecked;
+                            if (child.IsChecked != false)
+                            {
+                                child.IsChecked = false;
+                            }
+                        }
+                    }
+                    else
+                    {
+                        // Restore prior child states if we have a snapshot, else cascade true
+                        if (_childCheckSnapshot != null)
+                        {
+                            foreach (var child in Children)
+                            {
+                                bool? restored = _childCheckSnapshot.TryGetValue(child, out var s) ? s : true;
+                                if (restored == null) restored = true;
+                                if (child.IsChecked != restored)
+                                {
+                                    child.IsChecked = restored;
+                                }
+                            }
+                            _childCheckSnapshot = null;
+                        }
+                        else
+                        {
+                            foreach (var child in Children)
+                            {
+                                if (child.IsChecked != true)
+                                {
+                                    child.IsChecked = true;
+                                }
+                            }
                         }
                     }
                 }
@@ -119,6 +153,9 @@ namespace ForzaTechStudio.ViewModels.ThreeDViewer
                 parentNode.UpdateCheckStateFromChildren();
             }
         }
+
+        // Snapshot of children's check states captured when this node is unchecked
+        private Dictionary<IViewerNode, bool?> _childCheckSnapshot;
 
         public void UpdateCheckStateFromChildren()
         {
@@ -315,6 +352,75 @@ namespace ForzaTechStudio.ViewModels.ThreeDViewer
         public string StatusColor => FullMatch ? "Green" : InModelBinSkeleton || InGr2Skeleton ? "Orange" : "Red";
     }
 
+    // Lightweight material item used in the Viewport materials section
+    public partial class ViewportMaterialItem : ObservableObject
+    {
+        public MaterialBlob Blob { get; }
+        public string SourceModelName { get; }
+
+        public string Name
+        {
+            get
+            {
+                var meta = Blob.Metadatas.OfType<NameMetadata>().FirstOrDefault();
+                return meta?.Name ?? "Unnamed";
+            }
+        }
+
+        public uint MaterialId
+        {
+            get
+            {
+                var meta = Blob.Metadatas.OfType<IdentifierMetadata>().FirstOrDefault();
+                return meta?.Id ?? Blob.Id;
+            }
+        }
+
+        public string MaterialPath
+        {
+            get
+            {
+                if (Blob.Bundle != null)
+                {
+                    var mati = Blob.Bundle.Blobs.OfType<MaterialResourceBlob>().FirstOrDefault();
+                    return mati?.Path ?? string.Empty;
+                }
+                return string.Empty;
+            }
+        }
+
+        public ObservableCollection<ShaderParameter> Parameters { get; } = new();
+
+        public ViewportMaterialItem(MaterialBlob blob, string sourceModelName)
+        {
+            Blob = blob;
+            SourceModelName = sourceModelName;
+            var paramBlob = blob.Bundle?.Blobs.OfType<MaterialShaderParameterBlob>().FirstOrDefault();
+            if (paramBlob != null)
+                foreach (var p in paramBlob.Parameters)
+                    Parameters.Add(p);
+        }
+
+        public void Refresh()
+        {
+            OnPropertyChanged(nameof(Name));
+            OnPropertyChanged(nameof(MaterialId));
+            OnPropertyChanged(nameof(MaterialPath));
+            Parameters.Clear();
+            var paramBlob = Blob.Bundle?.Blobs.OfType<MaterialShaderParameterBlob>().FirstOrDefault();
+            if (paramBlob != null)
+                foreach (var p in paramBlob.Parameters)
+                    Parameters.Add(p);
+        }
+    }
+
+    public partial class ViewportTab : ObservableObject
+    {
+        [ObservableProperty] private string _name;
+        public List<IViewerNode> Roots { get; } = new();
+        public ViewportTab(string name) => _name = name;
+    }
+
     public partial class ViewportViewModel : ObservableObject
     {
         private ObservableCollection<IViewerNode> _roots = new();
@@ -331,6 +437,50 @@ namespace ForzaTechStudio.ViewModels.ThreeDViewer
             set => SetProperty(ref _selectedNode, value);
         }
 
+        public ObservableCollection<ViewportTab> Tabs { get; } = new();
+
+        private ViewportTab? _activeTab;
+        public ViewportTab? ActiveTab
+        {
+            get => _activeTab;
+            set => SetProperty(ref _activeTab, value);
+        }
+
+        public ObservableCollection<ViewportMaterialItem> ViewportMaterials { get; } = new();
+
+        // Materials for the mesh-level material editor (swap list for selected mesh)
+        public ObservableCollection<ViewportMaterialItem> MeshMaterials { get; } = new();
+
+        private ViewportMaterialItem? _selectedMeshMaterial;
+        public ViewportMaterialItem? SelectedMeshMaterial
+        {
+            get => _selectedMeshMaterial;
+            set => SetProperty(ref _selectedMeshMaterial, value);
+        }
+
+        public void RefreshViewportMaterials()
+        {
+            ViewportMaterials.Clear();
+            foreach (var root in Roots)
+                CollectMaterialsFromNode(root);
+        }
+
+        private void CollectMaterialsFromNode(IViewerNode node)
+        {
+            if (node is ModelBinNode mb && mb.Bundle != null)
+                foreach (var blob in mb.Bundle.Blobs.OfType<MaterialBlob>())
+                    ViewportMaterials.Add(new ViewportMaterialItem(blob, mb.Name));
+            foreach (var child in node.Children)
+                CollectMaterialsFromNode(child);
+        }
+
+        public ViewportTab AddTab(string name)
+        {
+            var tab = new ViewportTab(name);
+            Tabs.Add(tab);
+            return tab;
+        }
+
         public ViewportViewModel()
         {
         }
@@ -338,14 +488,14 @@ namespace ForzaTechStudio.ViewModels.ThreeDViewer
         public void AddRoot(IViewerNode root)
         {
             Roots.Add(root);
+            ActiveTab?.Roots.Add(root);
         }
 
         public void RemoveRoot(IViewerNode root)
         {
-            if (Roots.Contains(root))
-            {
-                Roots.Remove(root);
-            }
+            Roots.Remove(root);
+            foreach (var tab in Tabs)
+                tab.Roots.Remove(root);
         }
 
         private RelayCommand _closeSelectedCommand;
@@ -377,6 +527,7 @@ namespace ForzaTechStudio.ViewModels.ThreeDViewer
             foreach (var root in roots)
                 RequestCloseRoot?.Invoke(this, root);
             Roots.Clear();
+            ActiveTab?.Roots.Clear();
             SelectedNode = null;
         }
 

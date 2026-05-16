@@ -113,6 +113,28 @@
 
                     <Border Width="1" Background="{ThemeResource DividerStrokeColorDefaultBrush}" Margin="4,8"/>
 
+                    <Button Style="{StaticResource GhostAccentButtonStyle}" Command="{x:Bind ViewModel.UndoCommand}">
+                        <StackPanel Orientation="Horizontal" Spacing="8">
+                            <FontIcon Glyph="&#xE7A7;" FontSize="14"/>
+                            <TextBlock Text="Undo"/>
+                        </StackPanel>
+                        <Button.KeyboardAccelerators>
+                            <KeyboardAccelerator Modifiers="Control" Key="Z"/>
+                        </Button.KeyboardAccelerators>
+                    </Button>
+
+                    <Button Style="{StaticResource GhostAccentButtonStyle}" Command="{x:Bind ViewModel.RedoCommand}">
+                        <StackPanel Orientation="Horizontal" Spacing="8">
+                            <FontIcon Glyph="&#xE7A6;" FontSize="14"/>
+                            <TextBlock Text="Redo"/>
+                        </StackPanel>
+                        <Button.KeyboardAccelerators>
+                            <KeyboardAccelerator Modifiers="Control" Key="Y"/>
+                        </Button.KeyboardAccelerators>
+                    </Button>
+
+                    <Border Width="1" Background="{ThemeResource DividerStrokeColorDefaultBrush}" Margin="4,8"/>
+
                     <StackPanel Orientation="Horizontal" Spacing="12" VerticalAlignment="Center">
                         <TextBlock Text="{x:Bind ViewModel.LoadedFileName, Mode=OneWay}"
                                    FontWeight="SemiBold" VerticalAlignment="Center"

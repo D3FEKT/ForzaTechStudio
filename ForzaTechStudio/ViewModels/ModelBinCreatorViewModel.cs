@@ -443,6 +443,7 @@ namespace ForzaTechStudio.ViewModels
         // Game Target Selection
         public ObservableCollection<string> GameTargetOptions { get; } =
         [
+            "Forza Horizon 6",
             "Forza Horizon 5",
             "Forza Motorsport (2023)",
             "Forza Horizon 4",
@@ -458,6 +459,7 @@ namespace ForzaTechStudio.ViewModels
         // Returns the ForzaGameTarget enum for the currently selected game.
         public ForzaGameTarget CurrentGameTarget => SelectedGameTarget switch
         {
+            "Forza Horizon 6" => ForzaGameTarget.FH6,
             "Forza Horizon 5" => ForzaGameTarget.FH5,
             "Forza Motorsport (2023)" => ForzaGameTarget.FM2023,
             "Forza Horizon 4" => ForzaGameTarget.FH4,

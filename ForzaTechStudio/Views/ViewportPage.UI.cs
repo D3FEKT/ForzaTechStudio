@@ -241,6 +241,7 @@ namespace ForzaTechStudio.Views
             UpdateTransformUI();
             UpdateHighlightFromUI();
             UpdateBoneUI();
+            RefreshMeshMaterialSection();
         }
 
         private void UpdateHighlightFromUI()

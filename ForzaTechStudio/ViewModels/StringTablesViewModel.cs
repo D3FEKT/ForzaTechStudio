@@ -80,6 +80,7 @@ namespace ForzaTechStudio.ViewModels
         }
 
         public string TableName   { get; set; } = string.Empty;
+        public ushort  Version    { get; set; } = 0x0400;
 
         private string? _sourceZipPath;
         // Set when this file was extracted from a zip archive.
@@ -544,7 +545,8 @@ namespace ForzaTechStudio.ViewModels
                 {
                     FilePath  = filePath,
                     FileName  = Path.GetFileName(filePath),
-                    TableName = data.TableName
+                    TableName = data.TableName,
+                    Version   = data.Version
                 };
                 foreach (var e in data.Entries)
                     openFile.Entries.Add(new StrEntryViewModel
@@ -795,7 +797,8 @@ namespace ForzaTechStudio.ViewModels
             {
                 var snapshot  = Entries.Select(e => (e.HashId, e.KeyName, e.Content)).ToList();
                 var tableName = TableName;
-                await Task.Run(() => StrFileWriter.Write(path, tableName, snapshot));
+                var version   = _activeFile?.Version ?? 0x0400;
+                await Task.Run(() => StrFileWriter.Write(path, tableName, version, snapshot));
 
                 // If the file was extracted from a zip and we're saving to the same temp path,
                 // write the updated .str back into the original zip entry.
@@ -856,12 +859,18 @@ namespace ForzaTechStudio.ViewModels
         public static StrTableData Parse(Stream stream)
         {
             using var r = new BinaryReader(stream, Encoding.UTF8, leaveOpen: true);
-
-            // BLOBFILEHEADER (140 bytes)
             ushort version = r.ReadUInt16();
-            if (version != 0x0400)
-                throw new InvalidDataException($"Unsupported .str version 0x{version:X4}; expected 0x0400.");
+            return version switch
+            {
+                0x0400 => ParseV4(r, version),
+                0x0800 => ParseV8(r, version),
+                _ => throw new InvalidDataException($"Unsupported .str version 0x{version:X4}; expected 0x0400 or 0x0800.")
+            };
+        }
 
+        // Version 0x0400 parser (BLOBFILEHEADER layout, UTF-16 strings)
+        private static StrTableData ParseV4(BinaryReader r, ushort version)
+        {
             byte[] nameBytes = r.ReadBytes(128);
             nameBytes[127] = 0;
             string tableName = Encoding.ASCII.GetString(nameBytes, 0, IndexOfZero(nameBytes));
@@ -874,23 +883,79 @@ namespace ForzaTechStudio.ViewModels
             /*uint contentSize    =*/ r.ReadUInt32(); // SectionSize (informational)
             uint contentDataSz  = r.ReadUInt32();
             uint contentCount   = r.ReadUInt32();
-            var  contentSyms    = ReadSymbols(r, contentCount);
+            var  contentSyms    = ReadSymbolsV4(r, contentCount);
             byte[] contentData  = r.ReadBytes((int)contentDataSz);
-            var    contentMap   = DecodeStrings(contentSyms, contentData);
+            var    contentMap   = DecodeStringsV4(contentSyms, contentData);
 
             // Names section (optional)
             Dictionary<uint, string>? nameMap = null;
-            if (numSections >= 2 && stream.Position < stream.Length)
+            if (numSections >= 2 && r.BaseStream.Position < r.BaseStream.Length)
             {
                 /*uint namesSize    =*/ r.ReadUInt32();
                 uint namesDataSz  = r.ReadUInt32();
                 uint namesCount   = r.ReadUInt32();
-                var  namesSyms    = ReadSymbols(r, namesCount);
+                var  namesSyms    = ReadSymbolsV4(r, namesCount);
                 byte[] namesData  = r.ReadBytes((int)namesDataSz);
-                nameMap           = DecodeStrings(namesSyms, namesData);
+                nameMap           = DecodeStringsV4(namesSyms, namesData);
             }
 
-            // Build entry list
+            var entries = BuildEntries(contentMap, nameMap);
+            return new StrTableData { TableName = tableName, Version = version, Entries = entries };
+        }
+
+        // Version 0x0800 parser (variable-length header, UTF-8 strings, absolute table offsets)
+        private static StrTableData ParseV8(BinaryReader r, ushort version)
+        {
+            byte[] nameBytes = r.ReadBytes(0x7E);
+            nameBytes[0x7D] = 0;
+            string tableName = Encoding.ASCII.GetString(nameBytes, 0, IndexOfZero(nameBytes));
+
+            r.ReadInt16(); // Empty / padding
+            short tableCount = r.ReadInt16();
+
+            int[] tableOffsets = new int[tableCount];
+            for (int i = 0; i < tableCount; i++)
+                tableOffsets[i] = r.ReadInt32();
+
+            Dictionary<uint, string>? contentMap = null;
+            Dictionary<uint, string>? nameMap    = null;
+
+            for (int i = 0; i < tableCount; i++)
+            {
+                r.BaseStream.Seek(tableOffsets[i], SeekOrigin.Begin);
+
+                /*int tableSize   =*/ r.ReadInt32(); // total table block size (informational)
+                int stringsSize = r.ReadInt32();
+                int entryCount  = r.ReadInt32();
+
+                var syms = new (uint hash, int offset)[entryCount];
+                for (int j = 0; j < entryCount; j++)
+                    syms[j] = (r.ReadUInt32(), r.ReadInt32());
+
+                long stringBlockStart = r.BaseStream.Position;
+
+                var map = new Dictionary<uint, string>(entryCount);
+                for (int j = 0; j < entryCount; j++)
+                {
+                    r.BaseStream.Seek(stringBlockStart + syms[j].offset, SeekOrigin.Begin);
+                    map[syms[j].hash] = ReadNullTerminatedUtf8(r);
+                }
+
+                r.BaseStream.Seek(stringBlockStart + stringsSize, SeekOrigin.Begin);
+
+                if (i == 0) contentMap = map;
+                else if (i == 1) nameMap = map;
+            }
+
+            if (contentMap == null)
+                return new StrTableData { TableName = tableName, Version = version, Entries = new() };
+
+            var entries = BuildEntries(contentMap, nameMap);
+            return new StrTableData { TableName = tableName, Version = version, Entries = entries };
+        }
+
+        private static List<StrRawEntry> BuildEntries(Dictionary<uint, string> contentMap, Dictionary<uint, string>? nameMap)
+        {
             var entries = new List<StrRawEntry>(contentMap.Count);
             foreach (var (hash, content) in contentMap)
             {
@@ -898,11 +963,10 @@ namespace ForzaTechStudio.ViewModels
                 nameMap?.TryGetValue(hash, out keyName);
                 entries.Add(new StrRawEntry { HashId = hash, Content = content, KeyName = keyName });
             }
-
-            return new StrTableData { TableName = tableName, Version = version, Entries = entries };
+            return entries;
         }
 
-        private static (uint hash, uint offset)[] ReadSymbols(BinaryReader r, uint count)
+        private static (uint hash, uint offset)[] ReadSymbolsV4(BinaryReader r, uint count)
         {
             var syms = new (uint, uint)[count];
             for (int i = 0; i < count; i++)
@@ -910,7 +974,7 @@ namespace ForzaTechStudio.ViewModels
             return syms;
         }
 
-        private static Dictionary<uint, string> DecodeStrings((uint hash, uint offset)[] syms, byte[] data)
+        private static Dictionary<uint, string> DecodeStringsV4((uint hash, uint offset)[] syms, byte[] data)
         {
             var map = new Dictionary<uint, string>(syms.Length);
             foreach (var (hash, off) in syms)
@@ -921,6 +985,15 @@ namespace ForzaTechStudio.ViewModels
                 map[hash] = Encoding.Unicode.GetString(data, (int)off, end - (int)off);
             }
             return map;
+        }
+
+        private static string ReadNullTerminatedUtf8(BinaryReader r)
+        {
+            var bytes = new List<byte>();
+            byte b;
+            while ((b = r.ReadByte()) != 0)
+                bytes.Add(b);
+            return Encoding.UTF8.GetString(bytes.ToArray());
         }
 
         private static int IndexOfZero(byte[] arr)
@@ -949,12 +1022,93 @@ namespace ForzaTechStudio.ViewModels
 
     internal static class StrFileWriter
     {
-        public static void Write(string path, string tableName,
+        public static void Write(string path, string tableName, ushort version,
             IList<(uint HashId, string KeyName, string Content)> entries)
         {
             using var fs = new FileStream(path, FileMode.Create, FileAccess.Write, FileShare.None);
             using var w  = new BinaryWriter(fs, Encoding.UTF8, leaveOpen: false);
-            WriteToStream(w, tableName, entries);
+            if (version == 0x0800)
+                WriteV8ToStream(w, tableName, entries);
+            else
+                WriteToStream(w, tableName, entries);
+        }
+
+        private static void WriteV8ToStream(BinaryWriter w, string tableName,
+            IList<(uint HashId, string KeyName, string Content)> entries)
+        {
+            bool hasNames  = entries.Any(e => !string.IsNullOrEmpty(e.KeyName));
+            int tableCount = hasNames ? 2 : 1;
+
+            // Build content data buffer (UTF-8 null-terminated)
+            var contentDataMs = new MemoryStream();
+            var contentSyms   = new List<(uint hash, int offset)>(entries.Count);
+            using (var dw = new BinaryWriter(contentDataMs, Encoding.UTF8, leaveOpen: true))
+            {
+                foreach (var (hashId, _, content) in entries)
+                {
+                    contentSyms.Add((hashId, (int)contentDataMs.Position));
+                    dw.Write(Encoding.UTF8.GetBytes(content));
+                    dw.Write((byte)0);
+                }
+            }
+            byte[] contentData = contentDataMs.ToArray();
+
+            // Build names data buffer (ASCII null-terminated)
+            byte[] namesData = Array.Empty<byte>();
+            var    namesSyms = new List<(uint hash, int offset)>(entries.Count);
+            if (hasNames)
+            {
+                var namesDataMs = new MemoryStream();
+                using (var dw = new BinaryWriter(namesDataMs, Encoding.UTF8, leaveOpen: true))
+                {
+                    foreach (var (hashId, keyName, _) in entries)
+                    {
+                        namesSyms.Add((hashId, (int)namesDataMs.Position));
+                        string name = keyName ?? string.Empty;
+                        dw.Write(Encoding.ASCII.GetBytes(name));
+                        dw.Write((byte)0);
+                    }
+                }
+                namesData = namesDataMs.ToArray();
+            }
+
+            // Header: 2 (version) + 0x7E (name) + 2 (empty) + 2 (tableCount) + 4*tableCount (offsets)
+            int headerSize     = 2 + 0x7E + 2 + 2 + 4 * tableCount;
+            int sec0EntryBytes = 8 * contentSyms.Count;
+            int sec0TotalSize  = 12 + sec0EntryBytes + contentData.Length;
+            int sec0Offset     = headerSize;
+            int sec1Offset     = headerSize + sec0TotalSize;
+
+            // Write header
+            w.Write((ushort)0x0800);
+
+            byte[] nameField  = new byte[0x7E];
+            byte[] tableAscii = Encoding.ASCII.GetBytes(tableName);
+            Array.Copy(tableAscii, nameField, Math.Min(tableAscii.Length, 0x7D));
+            w.Write(nameField);
+
+            w.Write((short)0);            // Empty
+            w.Write((short)tableCount);   // TableCount
+            w.Write(sec0Offset);          // TableOffsets[0]
+            if (hasNames) w.Write(sec1Offset); // TableOffsets[1]
+
+            // Table 0: content values
+            w.Write(sec0TotalSize);
+            w.Write(contentData.Length);
+            w.Write(contentSyms.Count);
+            foreach (var (hash, off) in contentSyms) { w.Write(hash); w.Write(off); }
+            w.Write(contentData);
+
+            // Table 1: key names
+            if (hasNames)
+            {
+                int sec1TotalSize = 12 + 8 * namesSyms.Count + namesData.Length;
+                w.Write(sec1TotalSize);
+                w.Write(namesData.Length);
+                w.Write(namesSyms.Count);
+                foreach (var (hash, off) in namesSyms) { w.Write(hash); w.Write(off); }
+                w.Write(namesData);
+            }
         }
 
         private static void WriteToStream(BinaryWriter w, string tableName,

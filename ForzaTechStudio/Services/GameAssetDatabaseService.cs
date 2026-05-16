@@ -111,6 +111,18 @@ public class GameAssetDatabaseService
             var zipPaths = FindRelevantZips(mediaPath);
             progress?.Report($"Found {zipPaths.Count} zip archive(s) to scan");
 
+            // Throttle progress updates to avoid hammering the UI dispatcher
+            var lastReport = System.Diagnostics.Stopwatch.StartNew();
+            const int ReportIntervalMs = 200;
+            void ThrottledReport(string msg)
+            {
+                if (lastReport.ElapsedMilliseconds >= ReportIntervalMs)
+                {
+                    progress?.Report(msg);
+                    lastReport.Restart();
+                }
+            }
+
             using var transaction = conn.BeginTransaction();
             using var insertCmd = conn.CreateCommand();
             insertCmd.CommandText = "INSERT INTO assets (file_name, game_path, zip_source, extension) VALUES ($name, $path, $zip, $ext)";
@@ -128,7 +140,7 @@ public class GameAssetDatabaseService
                     Path.GetDirectoryName(zipRelativeToGame) ?? "",
                     Path.GetFileNameWithoutExtension(zipRelativeToGame));
 
-                progress?.Report($"Scanning: {zipRelativeToGame}");
+                ThrottledReport($"Scanning: {zipRelativeToGame}");
                 int zipCount = 0;
 
                 // Try standard .NET ZipArchive first
@@ -189,7 +201,7 @@ public class GameAssetDatabaseService
                 }
 
                 totalIndexed += zipCount;
-                progress?.Report($"  Indexed {zipCount} file(s) from {Path.GetFileName(zipPath)}");
+                ThrottledReport($"  Indexed {zipCount} file(s) from {Path.GetFileName(zipPath)}");
             }
 
             // Store metadata

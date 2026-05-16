@@ -2,6 +2,7 @@
 using CommunityToolkit.Mvvm.Input;
 using ForzaTechStudio.Services;
 using System;
+using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
@@ -9,9 +10,8 @@ using Windows.Storage.Pickers;
 
 namespace ForzaTechStudio.ViewModels
 {
-    public partial class FxbEditorViewModel : ObservableObject
-    {
-        // file state
+    public partial class FxbEditorViewModel : UndoRedoViewModel
+    {        // file state
         private string _loadedFilePath = "";
         public string LoadedFilePath
         {
@@ -68,8 +68,28 @@ namespace ForzaTechStudio.ViewModels
             get => _selectedNode;
             set
             {
+                var old = _selectedNode;
                 if (SetProperty(ref _selectedNode, value))
                 {
+                    // Swap property-change tracking to the new node so every NumberBox /
+                    // TextBox edit on it automatically creates an undo entry.
+                    TrackPropertyChanges(value as System.ComponentModel.INotifyPropertyChanging,
+                                         old  as System.ComponentModel.INotifyPropertyChanging);
+
+                    // Also track keyframe rows on the new property node, untrack the old ones.
+                    if (old is FxbPropertyValueNode oldProp)
+                    {
+                        foreach (var kf in oldProp.LinearKeyframes) TrackPropertyChanges(null, kf);
+                        foreach (var kf in oldProp.CubicKeyframes)  TrackPropertyChanges(null, kf);
+                        foreach (var kf in oldProp.ColorKeyframes)  TrackPropertyChanges(null, kf);
+                    }
+                    if (value is FxbPropertyValueNode newProp)
+                    {
+                        foreach (var kf in newProp.LinearKeyframes) TrackPropertyChanges(kf, null);
+                        foreach (var kf in newProp.CubicKeyframes)  TrackPropertyChanges(kf, null);
+                        foreach (var kf in newProp.ColorKeyframes)  TrackPropertyChanges(kf, null);
+                    }
+
                     OnPropertyChanged(nameof(SelectedEffect));
                     OnPropertyChanged(nameof(SelectedPhase));
                     OnPropertyChanged(nameof(SelectedComponent));

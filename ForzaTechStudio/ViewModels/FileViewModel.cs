@@ -196,6 +196,21 @@ namespace ForzaTechStudio.ViewModels
                         blobTitle += $" (Tag: {blob.Tag:X})";
                     }
 
+                    // Append material id for material/mesh blobs
+                    if (blob is MaterialBlob matBlob)
+                    {
+                        var idMeta = matBlob.Metadatas.OfType<IdentifierMetadata>().FirstOrDefault();
+                        var matId = idMeta?.Id ?? matBlob.Id;
+                        blobTitle += $" (Material ID - {matId})";
+                    }
+                    else if (blob is MeshBlob meshBlob)
+                    {
+                        short mid = (meshBlob.MaterialIds != null && meshBlob.MaterialIds.Length > 1)
+                            ? meshBlob.MaterialIds[1]
+                            : meshBlob.MaterialId;
+                        blobTitle += $" (Material ID - {mid})";
+                    }
+
                     var meshExclusions = blob is MeshBlob ? new System.Collections.Generic.HashSet<string>
                     {
                         nameof(MeshBlob.MaterialId), nameof(MeshBlob.MaterialIds),
@@ -290,6 +305,8 @@ namespace ForzaTechStudio.ViewModels
         public string Title { get; }
         public object Data { get; }
         public Bundle? OwnerBundle { get; set; }
+        // Optional source file path for path-based identification of root file nodes
+        public string FilePath { get; set; }
         public ObservableCollection<ObjectNode> Children { get; } = new();
         public ObservableCollection<PropertyItem> Properties { get; } = new();
 

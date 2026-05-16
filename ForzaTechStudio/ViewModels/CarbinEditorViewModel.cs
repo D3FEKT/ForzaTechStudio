@@ -5,8 +5,11 @@ using System.Linq;
 
 namespace ForzaTechStudio.ViewModels
 {
-    public partial class CarbinEditorViewModel : ObservableObject
+    public partial class CarbinEditorViewModel : UndoRedoViewModel
     {
+        // Fired with the saved path so the page can suppress its file watcher.
+        public event Action<string>? FileSaved;
+
         // Content Visibility
         private bool _isContentVisible = false;
         public bool IsContentVisible
@@ -75,6 +78,9 @@ namespace ForzaTechStudio.ViewModels
             set => SetProperty(ref _isHorizon, value);
         }
 
+        private bool _sceneUnkV6 = true;
+        private bool _sceneUnkV7 = true;
+
         // Version Selection
         public ObservableCollection<string> GameVersions { get; } = new()
         {
@@ -84,13 +90,14 @@ namespace ForzaTechStudio.ViewModels
             "Forza Horizon 2 (Scene v5, Model v15)",
             "Forza Horizon 3/4 (Scene v5, Model v16)",
             "Forza Horizon 5 (Scene v6, Model v18)",
+            "Forza Horizon 6 (Scene v7, Model v21)",
         };
 
         private int _selectedVersionIndex = 5;
         public int SelectedVersionIndex
         {
             get => _selectedVersionIndex;
-            set => SetProperty(ref _selectedVersionIndex, value);
+            set { var old = _selectedVersionIndex; if (SetProperty(ref _selectedVersionIndex, value) && !IsUndoRedoInProgress) PushUndo(() => SelectedVersionIndex = old, () => SelectedVersionIndex = value); }
         }
 
         // Scene Properties
@@ -98,28 +105,28 @@ namespace ForzaTechStudio.ViewModels
         public string SceneName
         {
             get => _sceneName;
-            set => SetProperty(ref _sceneName, value);
+            set { var old = _sceneName; if (SetProperty(ref _sceneName, value) && !IsUndoRedoInProgress) PushUndo(() => SceneName = old, () => SceneName = value); }
         }
 
         private string _mediaName = "";
         public string MediaName
         {
             get => _mediaName;
-            set => SetProperty(ref _mediaName, value);
+            set { var old = _mediaName; if (SetProperty(ref _mediaName, value) && !IsUndoRedoInProgress) PushUndo(() => MediaName = old, () => MediaName = value); }
         }
 
         private string _skeletonPath = "";
         public string SkeletonPath
         {
             get => _skeletonPath;
-            set => SetProperty(ref _skeletonPath, value);
+            set { var old = _skeletonPath; if (SetProperty(ref _skeletonPath, value) && !IsUndoRedoInProgress) PushUndo(() => SkeletonPath = old, () => SkeletonPath = value); }
         }
 
         private uint _ordinal = 0;
         public uint Ordinal
         {
             get => _ordinal;
-            set => SetProperty(ref _ordinal, value);
+            set { var old = _ordinal; if (SetProperty(ref _ordinal, value) && !IsUndoRedoInProgress) PushUndo(() => Ordinal = old, () => Ordinal = value); }
         }
 
         // Build Options
@@ -127,7 +134,7 @@ namespace ForzaTechStudio.ViewModels
         public bool BuildStrict
         {
             get => _buildStrict;
-            set => SetProperty(ref _buildStrict, value);
+            set { var old = _buildStrict; if (SetProperty(ref _buildStrict, value) && !IsUndoRedoInProgress) PushUndo(() => BuildStrict = old, () => BuildStrict = value); }
         }
 
         private Guid _buildGuid = Guid.Empty;
@@ -142,49 +149,49 @@ namespace ForzaTechStudio.ViewModels
         public bool LodFlagLODS
         {
             get => _lodFlagLODS;
-            set => SetProperty(ref _lodFlagLODS, value);
+            set { var old = _lodFlagLODS; if (SetProperty(ref _lodFlagLODS, value) && !IsUndoRedoInProgress) PushUndo(() => LodFlagLODS = old, () => LodFlagLODS = value); }
         }
 
         private bool _lodFlagLOD0 = true;
         public bool LodFlagLOD0
         {
             get => _lodFlagLOD0;
-            set => SetProperty(ref _lodFlagLOD0, value);
+            set { var old = _lodFlagLOD0; if (SetProperty(ref _lodFlagLOD0, value) && !IsUndoRedoInProgress) PushUndo(() => LodFlagLOD0 = old, () => LodFlagLOD0 = value); }
         }
 
         private bool _lodFlagLOD1 = true;
         public bool LodFlagLOD1
         {
             get => _lodFlagLOD1;
-            set => SetProperty(ref _lodFlagLOD1, value);
+            set { var old = _lodFlagLOD1; if (SetProperty(ref _lodFlagLOD1, value) && !IsUndoRedoInProgress) PushUndo(() => LodFlagLOD1 = old, () => LodFlagLOD1 = value); }
         }
 
         private bool _lodFlagLOD2 = true;
         public bool LodFlagLOD2
         {
             get => _lodFlagLOD2;
-            set => SetProperty(ref _lodFlagLOD2, value);
+            set { var old = _lodFlagLOD2; if (SetProperty(ref _lodFlagLOD2, value) && !IsUndoRedoInProgress) PushUndo(() => LodFlagLOD2 = old, () => LodFlagLOD2 = value); }
         }
 
         private bool _lodFlagLOD3 = true;
         public bool LodFlagLOD3
         {
             get => _lodFlagLOD3;
-            set => SetProperty(ref _lodFlagLOD3, value);
+            set { var old = _lodFlagLOD3; if (SetProperty(ref _lodFlagLOD3, value) && !IsUndoRedoInProgress) PushUndo(() => LodFlagLOD3 = old, () => LodFlagLOD3 = value); }
         }
 
         private bool _lodFlagLOD4 = true;
         public bool LodFlagLOD4
         {
             get => _lodFlagLOD4;
-            set => SetProperty(ref _lodFlagLOD4, value);
+            set { var old = _lodFlagLOD4; if (SetProperty(ref _lodFlagLOD4, value) && !IsUndoRedoInProgress) PushUndo(() => LodFlagLOD4 = old, () => LodFlagLOD4 = value); }
         }
 
         private bool _lodFlagLOD5 = false;
         public bool LodFlagLOD5
         {
             get => _lodFlagLOD5;
-            set => SetProperty(ref _lodFlagLOD5, value);
+            set { var old = _lodFlagLOD5; if (SetProperty(ref _lodFlagLOD5, value) && !IsUndoRedoInProgress) PushUndo(() => LodFlagLOD5 = old, () => LodFlagLOD5 = value); }
         }
 
         // Non-Upgradable Parts
@@ -196,8 +203,10 @@ namespace ForzaTechStudio.ViewModels
             get => _selectedNonUpgradablePart;
             set
             {
+                var old = _selectedNonUpgradablePart;
                 if (SetProperty(ref _selectedNonUpgradablePart, value))
                 {
+                    TrackPropertyChanges(value, old);
                     OnPropertyChanged(nameof(HasSelectedNonUpgradablePart));
                     SelectedNonUpgradableModel = value?.Models.FirstOrDefault();
                 }
@@ -212,8 +221,10 @@ namespace ForzaTechStudio.ViewModels
             get => _selectedNonUpgradableModel;
             set
             {
+                var old = _selectedNonUpgradableModel;
                 if (SetProperty(ref _selectedNonUpgradableModel, value))
                 {
+                    TrackPropertyChanges(value, old);
                     OnPropertyChanged(nameof(HasSelectedNonUpgradableModel));
                 }
             }
@@ -230,8 +241,10 @@ namespace ForzaTechStudio.ViewModels
             get => _selectedUpgradablePart;
             set
             {
+                var old = _selectedUpgradablePart;
                 if (SetProperty(ref _selectedUpgradablePart, value))
                 {
+                    TrackPropertyChanges(value, old);
                     OnPropertyChanged(nameof(HasSelectedUpgradablePart));
                     SelectedUpgradableModel = value?.Models.FirstOrDefault();
                     SelectedUpgrade = value?.Upgrades.FirstOrDefault();
@@ -247,8 +260,10 @@ namespace ForzaTechStudio.ViewModels
             get => _selectedUpgradableModel;
             set
             {
+                var old = _selectedUpgradableModel;
                 if (SetProperty(ref _selectedUpgradableModel, value))
                 {
+                    TrackPropertyChanges(value, old);
                     OnPropertyChanged(nameof(HasSelectedUpgradableModel));
                 }
             }
@@ -263,8 +278,10 @@ namespace ForzaTechStudio.ViewModels
             get => _selectedUpgrade;
             set
             {
+                var old = _selectedUpgrade;
                 if (SetProperty(ref _selectedUpgrade, value))
                 {
+                    TrackPropertyChanges(value, old);
                     OnPropertyChanged(nameof(HasSelectedUpgrade));
                 }
             }
@@ -285,6 +302,11 @@ namespace ForzaTechStudio.ViewModels
             {
                 PartTypeNames.Add(partType.ToString());
             }
+
+            // Create initial blank tab
+            var firstTab = CreateEmptyTab();
+            Tabs.Add(firstTab);
+            _activeTab = firstTab;
         }
 
         private void ClearAll()
@@ -322,6 +344,8 @@ namespace ForzaTechStudio.ViewModels
             Ordinal = 0;
             BuildStrict = false;
             BuildGuid = Guid.Empty;
+            _sceneUnkV6 = true;
+            _sceneUnkV7 = true;
 
             LodFlagLODS = false;
             LodFlagLOD0 = false;
@@ -348,6 +372,29 @@ namespace ForzaTechStudio.ViewModels
             return flags;
         }
 
+        private static bool GetSceneSeriesIsHorizon(ushort sceneVersion)
+        {
+            return sceneVersion switch
+            {
+                >= 10 => false,
+                _ => true,
+            };
+        }
+
+        private static bool? TryResolveModelSeriesIsHorizon(ushort sceneVersion, ushort modelVersion)
+        {
+            return modelVersion switch
+            {
+                15 or 16 or 18 => true,
+                14 or 17 => false,
+                21 when sceneVersion == 7 => true,
+                21 => false,
+                _ => null,
+            };
+        }
+
+        private static bool UsesWideMaterialIndexes(ushort modelVersion) => modelVersion >= 21;
+
         private (ushort sceneVersion, ushort modelVersion, bool isHorizon) GetVersionInfo()
         {
             return SelectedVersionIndex switch
@@ -358,6 +405,7 @@ namespace ForzaTechStudio.ViewModels
                 3 => (5, 15, true),
                 4 => (5, 16, true),
                 5 => (6, 18, true),
+                6 => (7, 21, true),
                 _ => (6, 18, true),
             };
         }

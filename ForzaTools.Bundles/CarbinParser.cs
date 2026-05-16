@@ -57,12 +57,17 @@ namespace ForzaTools.CarScene
         public List<PartEntry> NonUpgradableParts { get; set; } = new();
         public List<UpgradablePart> UpgradableParts { get; set; } = new();
         public bool UnkV6 { get; set; } // Horizon v6+
+        public bool UnkV7 { get; set; } // Horizon v7+
 
         public void Read(BinaryStream bs)
         {
             Version = bs.ReadUInt16();
 
-            if (Series == GameSeries.Auto && (Version == 10 || Version == 11))
+            if (Series == GameSeries.Auto && Version == 7)
+            {
+                Series = GameSeries.Horizon;
+            }
+            else if (Series == GameSeries.Auto && (Version == 10 || Version == 11))
             {
                 Series = GameSeries.Motorsport;
                 SeriesIsWeak = true;
@@ -95,6 +100,9 @@ namespace ForzaTools.CarScene
 
             if (Series == GameSeries.Horizon && Version >= 6)
                 UnkV6 = bs.ReadBoolean();
+
+            if (Series == GameSeries.Horizon && Version >= 7)
+                UnkV7 = bs.ReadBoolean();
         }
 
         public void Serialize(BinaryStream bs)
@@ -120,6 +128,9 @@ namespace ForzaTools.CarScene
 
             if (Series == GameSeries.Horizon && Version >= 6)
                 bs.WriteBoolean(UnkV6);
+
+            if (Series == GameSeries.Horizon && Version >= 7)
+                bs.WriteBoolean(UnkV7);
         }
 
         public void ConvertToFH5()
@@ -129,6 +140,7 @@ namespace ForzaTools.CarScene
             Series = GameSeries.Horizon;
             SeriesIsWeak = false;
             UnkV6 = true; // Required by FH5
+            UnkV7 = false;
 
             byte modelIdCounter = 0;
 
@@ -468,6 +480,8 @@ namespace ForzaTools.CarScene
         public int HorizonUnkV15 { get; set; }
         public byte HorizonId { get; set; }
         public uint HorizonUnkV18 { get; set; }
+        public uint HorizonUnkV21Flag { get; set; }
+        public string HorizonUnkV21Path { get; set; }
 
         // Preserved raw draw groups value for round-trip byte parity
         public int RawDrawGroupsValue { get; set; }
@@ -478,11 +492,7 @@ namespace ForzaTools.CarScene
 
             if (scene.Series == GameSeries.Auto || scene.SeriesIsWeak)
             {
-                if (Version == 18)
-                {
-                    scene.Series = GameSeries.Horizon;
-                }
-                else if (Version == 15 || Version == 16)
+                if (Version == 18 || Version == 15 || Version == 16 || (Version == 21 && scene.Version == 7))
                 {
                     scene.Series = GameSeries.Horizon;
                 }
@@ -528,7 +538,7 @@ namespace ForzaTools.CarScene
                 {
                     string key = bs.ReadString(StringCoding.Int32CharCount);
                     ulong val = 0;
-                    if (scene.Series == GameSeries.Motorsport && Version >= 21)
+                    if (Version >= 21)
                         val = bs.ReadUInt64();
                     else
                         val = unchecked((uint)bs.ReadInt32());
@@ -609,6 +619,11 @@ namespace ForzaTools.CarScene
             {
                 if (Version >= 17) HorizonId = bs.Read1Byte();
                 if (Version >= 18) HorizonUnkV18 = bs.ReadUInt32();
+                if (Version >= 21)
+                {
+                    HorizonUnkV21Flag = bs.ReadUInt32();
+                    HorizonUnkV21Path = bs.ReadString(StringCoding.Int32CharCount);
+                }
             }
         }
 
@@ -647,7 +662,7 @@ namespace ForzaTools.CarScene
                 foreach (var item in MaterialIndexes)
                 {
                     bs.WriteString(item.Key, StringCoding.Int32CharCount);
-                    if (scene.Series == GameSeries.Motorsport && Version >= 21)
+                    if (Version >= 21)
                         bs.WriteUInt64(item.Value);
                     else
                         bs.WriteInt32(unchecked((int)(uint)item.Value));
@@ -722,6 +737,11 @@ namespace ForzaTools.CarScene
             {
                 if (Version >= 17) bs.WriteByte(HorizonId);
                 if (Version >= 18) bs.WriteUInt32(HorizonUnkV18);
+                if (Version >= 21)
+                {
+                    bs.WriteUInt32(HorizonUnkV21Flag);
+                    bs.WriteString(HorizonUnkV21Path ?? string.Empty, StringCoding.Int32CharCount);
+                }
             }
         }
 
@@ -734,6 +754,8 @@ namespace ForzaTools.CarScene
             // set Horizon-specific fields
             HorizonUnkV18 = 1;
             HorizonUnkV15 = 1;
+            HorizonUnkV21Flag = 0;
+            HorizonUnkV21Path = null;
 
             // clear Motorsport-only fields
             MotorsportUnkV18 = null;

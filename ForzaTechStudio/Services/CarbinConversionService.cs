@@ -20,13 +20,14 @@ public class CarbinConversionService
         ushort UpgradeVersion)
     {
         public bool UsesSceneUnkV6 => Series == GameSeries.Horizon && SceneVersion >= 6;
+        public bool UsesSceneUnkV7 => Series == GameSeries.Horizon && SceneVersion >= 7;
         public bool UsesRawPartType => Series == GameSeries.Motorsport && PartVersion >= 3;
         public bool UsesRawUpgradablePartType => Series == GameSeries.Motorsport && UpgradablePartVersion >= 4;
     }
 
     private readonly record struct CarRenderModelProfile(ushort Version, GameSeries Series)
     {
-        public bool UsesMotorsportMaterialIndexes64 => Series == GameSeries.Motorsport && Version >= 21;
+        public bool UsesWideMaterialIndexes => Version >= 21;
         public bool UsesLodDetails => Version >= 5;
         public bool UsesAOSwatchPath => Version < 9;
         public bool UsesAoMapInfos => Version >= 9;
@@ -42,6 +43,7 @@ public class CarbinConversionService
         public bool UsesProxyLodId => Series == GameSeries.Motorsport && Version >= 17;
         public bool UsesMotorsportUnkV18 => Series == GameSeries.Motorsport && Version >= 18;
         public bool UsesHorizonUnkV18 => Series == GameSeries.Horizon && Version >= 18;
+        public bool UsesHorizonV21Tail => Series == GameSeries.Horizon && Version >= 21;
         public bool UsesMotorsportUnkV19 => Series == GameSeries.Motorsport && Version >= 19;
         public bool UsesMotorsportV20Flags => Series == GameSeries.Motorsport && Version >= 20;
     }
@@ -118,6 +120,7 @@ public class CarbinConversionService
         scene.Series = targetProfile.Series;
         scene.SeriesIsWeak = false;
         scene.UnkV6 = targetProfile.UsesSceneUnkV6;
+        scene.UnkV7 = targetProfile.UsesSceneUnkV7;
 
         if (scene.Version >= 3 && scene.BuildGuid == Guid.Empty)
             scene.BuildGuid = Guid.NewGuid();
@@ -271,7 +274,7 @@ public class CarbinConversionService
         if (model.Version != targetProfile.Version)
             throw new InvalidDataException($"Model '{modelName}' wrote version {model.Version}, expected {targetProfile.Version}");
 
-        if (!targetProfile.UsesMotorsportMaterialIndexes64 && model.MaterialIndexes.Any(item => item.Value > uint.MaxValue))
+        if (!targetProfile.UsesWideMaterialIndexes && model.MaterialIndexes.Any(item => item.Value > uint.MaxValue))
             throw new InvalidDataException($"Model '{modelName}' retained 64-bit material index values after converting to v{targetProfile.Version}.");
 
         if (targetProfile.UsesHorizonId && seenHorizonIds != null && !seenHorizonIds.Add(model.HorizonId))
@@ -403,6 +406,8 @@ public class CarbinConversionService
             HorizonUnkV15 = model.HorizonUnkV15,
             HorizonId = model.HorizonId,
             HorizonUnkV18 = model.HorizonUnkV18,
+            HorizonUnkV21Flag = model.HorizonUnkV21Flag,
+            HorizonUnkV21Path = model.HorizonUnkV21Path,
             RawDrawGroupsValue = model.RawDrawGroupsValue,
         };
     }
@@ -445,6 +450,7 @@ public class CarbinConversionService
             ForzaGameTarget.FH3
             or ForzaGameTarget.FH4  => (5,  16, GameSeries.Horizon,    2, 3, 3),
             ForzaGameTarget.FH5     => (6,  18, GameSeries.Horizon,    2, 3, 3),
+            ForzaGameTarget.FH6     => (7,  21, GameSeries.Horizon,    2, 3, 3),
             _                       => (6,  18, GameSeries.Horizon,    2, 3, 3)
         };
     }
@@ -522,6 +528,12 @@ public class CarbinConversionService
         if (!targetProfile.UsesHorizonUnkV18)
             model.HorizonUnkV18 = 0;
 
+        if (!targetProfile.UsesHorizonV21Tail)
+        {
+            model.HorizonUnkV21Flag = 0;
+            model.HorizonUnkV21Path = null;
+        }
+
         if (!targetProfile.UsesAssemblyName)
             model.AssemblyName = null;
     }
@@ -534,7 +546,7 @@ public class CarbinConversionService
     {
         foreach (var materialIndex in model.MaterialIndexes)
         {
-            if (!sourceProfile.UsesMotorsportMaterialIndexes64)
+            if (!sourceProfile.UsesWideMaterialIndexes)
             {
                 ulong widenedValue = materialIndex.Value & uint.MaxValue;
                 if (materialIndex.Value != widenedValue)
@@ -544,7 +556,7 @@ public class CarbinConversionService
                 }
             }
 
-            if (targetProfile.UsesMotorsportMaterialIndexes64)
+            if (targetProfile.UsesWideMaterialIndexes)
                 continue;
 
             if (materialIndex.Value > uint.MaxValue)
@@ -594,6 +606,14 @@ public class CarbinConversionService
 
         if (targetProfile.UsesHorizonUnkV18 && (!sourceProfile.UsesHorizonUnkV18 || sourceProfile.Series != GameSeries.Horizon))
             model.HorizonUnkV18 = 1;
+
+        if (targetProfile.UsesHorizonV21Tail)
+        {
+            if (!sourceProfile.UsesHorizonV21Tail || sourceProfile.Series != GameSeries.Horizon)
+                model.HorizonUnkV21Flag = 0;
+
+            model.HorizonUnkV21Path ??= string.Empty;
+        }
 
         if (targetProfile.UsesMotorsportUnkV18)
             model.MotorsportUnkV18 ??= string.Empty;
@@ -655,7 +675,8 @@ public class CarbinConversionService
         return version switch
         {
             // Unambiguously Motorsport versions
-            17 or 20 or 21 => true,
+            17 or 20 => true,
+            21 => model.HorizonUnkV21Path is null,
             // v18: Motorsport if MotorsportUnkV18 string field is present (non-null after parsing)
             18 => model.MotorsportUnkV18 != null,
             // v19: same logic

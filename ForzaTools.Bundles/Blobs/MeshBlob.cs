@@ -56,6 +56,8 @@ public class MeshBlob : BundleBlob
     public int PrimCount { get; set; }
     public float ACMR { get; set; } = 0.65f;
     public uint ReferencedVertexCount { get; set; }
+    // v1.12+: optional post-reference index array; the count field is always present but can be 0
+    public uint[] PostRefArray { get; set; } = Array.Empty<uint>();
     public int VertexLayoutIndex { get; set; }
     public List<VertexBufferUsage> VertexBuffers { get; set; } = new();
     public int MorphDataBufferIndex { get; set; }
@@ -68,12 +70,14 @@ public class MeshBlob : BundleBlob
 
     // One vertex buffer usage entry in the mesh's VB list.
     // Fields: Index (buffer id), InputSlot (D3D12 slot), Stride (bytes/vertex), Offset.
+    // v1.12+: 5th dword Unknown appended; always 0 in all checked FH6 samples.
     public class VertexBufferUsage
     {
         public int Index { get; set; }
         public uint InputSlot { get; set; }  
         public uint Stride { get; set; }
         public uint Offset { get; set; }
+        public uint Unknown { get; set; }
     }
 
     public override void ReadBlobData(BinaryStream bs)
@@ -114,6 +118,7 @@ public class MeshBlob : BundleBlob
         BucketOrder = bs.Read1Byte();
 
         if (IsAtLeastVersion(1, 2)) { SkinningElementsCount = bs.Read1Byte(); MorphWeightsCount = bs.Read1Byte(); }
+        if (IsAtLeastVersion(1, 12)) bs.ReadBytes(3); // v1.12+: 3-byte zero pad after MorphWeightsCount
         if (IsAtLeastVersion(1, 3)) IsMorphDamage = bs.ReadBoolean();
 
         Is32BitIndices = bs.ReadBoolean();
@@ -128,6 +133,13 @@ public class MeshBlob : BundleBlob
         PrimCount             = bs.ReadInt32();   
 
         if (IsAtLeastVersion(1, 6)) { ACMR = bs.ReadSingle(); ReferencedVertexCount = bs.ReadUInt32(); }
+        if (IsAtLeastVersion(1, 12))
+        {
+            uint postRefCount = bs.ReadUInt32();
+            PostRefArray = new uint[postRefCount];
+            for (int i = 0; i < postRefCount; i++)
+                PostRefArray[i] = bs.ReadUInt32();
+        }
 
         VertexLayoutIndex = bs.ReadInt32();
 
@@ -139,7 +151,8 @@ public class MeshBlob : BundleBlob
                 Index     = bs.ReadInt32(),
                 InputSlot = bs.ReadUInt32(), 
                 Stride    = bs.ReadUInt32(),
-                Offset    = bs.ReadUInt32()
+                Offset    = bs.ReadUInt32(),
+                Unknown   = IsAtLeastVersion(1, 12) ? bs.ReadUInt32() : 0
             });
         }
 
@@ -184,6 +197,7 @@ public class MeshBlob : BundleBlob
         bs.WriteByte(BucketOrder);
 
         if (IsAtLeastVersion(1, 2)) { bs.WriteByte(SkinningElementsCount); bs.WriteByte(MorphWeightsCount); }
+        if (IsAtLeastVersion(1, 12)) { bs.WriteByte(0); bs.WriteByte(0); bs.WriteByte(0); } // v1.12+ zero pad
         if (IsAtLeastVersion(1, 3)) bs.WriteBoolean(IsMorphDamage);
 
         bs.WriteBoolean(Is32BitIndices);
@@ -196,6 +210,11 @@ public class MeshBlob : BundleBlob
         bs.WriteInt32(PrimCount);
 
         if (IsAtLeastVersion(1, 6)) { bs.WriteSingle(ACMR); bs.WriteUInt32(ReferencedVertexCount); }
+        if (IsAtLeastVersion(1, 12))
+        {
+            bs.WriteUInt32((uint)PostRefArray.Length);
+            foreach (var v in PostRefArray) bs.WriteUInt32(v);
+        }
 
         bs.WriteInt32(VertexLayoutIndex);
         WriteVertexBuffers(bs);
@@ -239,6 +258,9 @@ public class MeshBlob : BundleBlob
         bs.WriteByte(SkinningElementsCount);
         bs.WriteByte(MorphWeightsCount);
 
+        // v1.12+: zero pad after MorphWeightsCount
+        if (IsAtLeastVersion(1, 12)) { bs.WriteByte(0); bs.WriteByte(0); bs.WriteByte(0); }
+
         // 8. IsMorphDamage (always v1.3+ in new files)
         bs.WriteBoolean(IsMorphDamage);
 
@@ -259,6 +281,9 @@ public class MeshBlob : BundleBlob
         // 12. ACMR & ReferencedVertexCount (always v1.6+ in new files)
         bs.WriteSingle(ACMR);
         bs.WriteUInt32(ReferencedVertexCount);
+
+        // v1.12+: PostRefCount (0 for newly created meshes)
+        if (IsAtLeastVersion(1, 12)) bs.WriteUInt32(0);
 
         // 13. Vertex Layout Index
         bs.WriteInt32(VertexLayoutIndex);
@@ -324,6 +349,7 @@ public class MeshBlob : BundleBlob
             bs.WriteUInt32(vb.InputSlot);
             bs.WriteUInt32(vb.Stride);
             bs.WriteUInt32(vb.Offset);
+            if (IsAtLeastVersion(1, 12)) bs.WriteUInt32(vb.Unknown);
         }
     }
 }

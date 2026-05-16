@@ -1315,6 +1315,28 @@
                     </Button>
 
                     <Border Width="1" Background="{ThemeResource DividerStrokeColorDefaultBrush}" Margin="4,8"/>
+
+                    <Button Style="{StaticResource GhostAccentButtonStyle}" Command="{x:Bind ViewModel.UndoCommand}">
+                        <StackPanel Orientation="Horizontal" Spacing="8">
+                            <FontIcon Glyph="&#xE7A7;" FontSize="14"/>
+                            <TextBlock Text="Undo"/>
+                        </StackPanel>
+                        <Button.KeyboardAccelerators>
+                            <KeyboardAccelerator Modifiers="Control" Key="Z"/>
+                        </Button.KeyboardAccelerators>
+                    </Button>
+
+                    <Button Style="{StaticResource GhostAccentButtonStyle}" Command="{x:Bind ViewModel.RedoCommand}">
+                        <StackPanel Orientation="Horizontal" Spacing="8">
+                            <FontIcon Glyph="&#xE7A6;" FontSize="14"/>
+                            <TextBlock Text="Redo"/>
+                        </StackPanel>
+                        <Button.KeyboardAccelerators>
+                            <KeyboardAccelerator Modifiers="Control" Key="Y"/>
+                        </Button.KeyboardAccelerators>
+                    </Button>
+
+                    <Border Width="1" Background="{ThemeResource DividerStrokeColorDefaultBrush}" Margin="4,8"/>
                     
                     <TextBlock Text="{x:Bind ViewModel.SelectedFileTitle, Mode=OneWay}" 
                                VerticalAlignment="Center" 
@@ -1324,30 +1346,73 @@
             </controls:StandardPageHeader.HeaderCommands>
         </controls:StandardPageHeader>
 
-        <!-- Global File Selection Toolbar -->
-        <Border Grid.Row="1" 
-                Background="{ThemeResource LayerFillColorDefaultBrush}"
-                BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" 
-                BorderThickness="0,1,0,1"
-                Padding="24,12"
-                Margin="0,0,0,12"
-                Visibility="{x:Bind ViewModel.IsContentVisible, Mode=OneWay, Converter={StaticResource BoolToVis}}">
-            <StackPanel Orientation="Horizontal" Spacing="16" VerticalAlignment="Center">
-                <FontIcon Glyph="&#xE81F;" FontSize="20" Foreground="{ThemeResource AccentFillColorDefaultBrush}" Opacity="0.8"/>
-                <StackPanel Spacing="2">
-                    <TextBlock Text="Active Model" 
-                               FontSize="11" 
-                               FontWeight="SemiBold" 
-                               Opacity="0.7" 
-                               Margin="2,0,0,0"/>
-                    <ComboBox ItemsSource="{x:Bind ViewModel.LoadedFiles, Mode=OneWay}" 
-                              SelectedItem="{x:Bind ViewModel.SelectedFile, Mode=TwoWay}"
-                              DisplayMemberPath="FileName"
-                              MinWidth="320"
-                              PlaceholderText="Select a modelbin to view..."/>
-                </StackPanel>
-            </StackPanel>
-        </Border>
+        <!-- Tab strip -->
+        <Grid Grid.Row="1"
+              Background="{ThemeResource LayerFillColorDefaultBrush}"
+              BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
+              BorderThickness="0,1,0,1"
+              Margin="0,0,0,12"
+              Visibility="{x:Bind ViewModel.IsContentVisible, Mode=OneWay, Converter={StaticResource BoolToVis}}">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="Auto"/>
+                <ColumnDefinition Width="*"/>
+            </Grid.ColumnDefinitions>
+            <Button Grid.Column="0"
+                    x:Name="ModelBinAddTabBtn"
+                    Command="{x:Bind ViewModel.OpenFilesCommand}"
+                    Width="28" Height="28"
+                    Padding="0" CornerRadius="4"
+                    Margin="4,0"
+                    VerticalAlignment="Center"
+                    Background="Transparent"
+                    BorderThickness="0"
+                    ToolTipService.ToolTip="Open file">
+                <FontIcon Glyph="&#xE710;" FontSize="11"/>
+            </Button>
+            <ListView Grid.Column="1"
+                      x:Name="ModelBinTabListView"
+                      ItemsSource="{x:Bind ViewModel.LoadedFiles, Mode=OneWay}"
+                      SelectedItem="{x:Bind ViewModel.SelectedFile, Mode=TwoWay}"
+                      SelectionMode="Single"
+                      ScrollViewer.HorizontalScrollBarVisibility="Auto"
+                      ScrollViewer.HorizontalScrollMode="Enabled"
+                      ScrollViewer.VerticalScrollBarVisibility="Disabled"
+                      ScrollViewer.VerticalScrollMode="Disabled">
+                <ListView.ItemsPanel>
+                    <ItemsPanelTemplate>
+                        <StackPanel Orientation="Horizontal"/>
+                    </ItemsPanelTemplate>
+                </ListView.ItemsPanel>
+                <ListView.ItemContainerStyle>
+                    <Style TargetType="ListViewItem">
+                        <Setter Property="Padding" Value="8,4"/>
+                        <Setter Property="MinHeight" Value="0"/>
+                    </Style>
+                </ListView.ItemContainerStyle>
+                <ListView.ItemTemplate>
+                    <DataTemplate x:DataType="vm:FileViewModel">
+                        <StackPanel Orientation="Horizontal" Spacing="6">
+                            <TextBlock Text="{x:Bind FileName, Mode=OneWay}"
+                                       VerticalAlignment="Center"
+                                       MaxWidth="160"
+                                       TextTrimming="CharacterEllipsis"
+                                       FontSize="12"/>
+                            <Button Click="ModelBinTabClose_Click"
+                                    Tag="{x:Bind}"
+                                    Width="18" Height="18"
+                                    Padding="0"
+                                    CornerRadius="9"
+                                    VerticalAlignment="Center"
+                                    Background="Transparent"
+                                    BorderThickness="0"
+                                    ToolTipService.ToolTip="Close">
+                                <FontIcon Glyph="&#xE711;" FontSize="9"/>
+                            </Button>
+                        </StackPanel>
+                    </DataTemplate>
+                </ListView.ItemTemplate>
+            </ListView>
+        </Grid>
 
         <!-- - Empty state - -->
         <StackPanel Grid.Row="2"
@@ -1378,8 +1443,26 @@
                                         <DataTemplate x:DataType="vm:SimpleMaterialViewModel">
                                             <Expander HorizontalAlignment="Stretch" Margin="0,0,0,8">
                                                 <Expander.Header>
-                                                    <Grid>
+                                                    <Grid HorizontalAlignment="Stretch">
+                                                        <Grid.ColumnDefinitions>
+                                                            <ColumnDefinition Width="Auto"/>
+                                                            <ColumnDefinition Width="Auto"/>
+                                                            <ColumnDefinition Width="*"/>
+                                                        </Grid.ColumnDefinitions>
                                                         <TextBlock Text="{x:Bind Name}" FontWeight="SemiBold" VerticalAlignment="Center"/>
+                                                        <TextBlock Grid.Column="1" VerticalAlignment="Center" Margin="8,0,0,0" Opacity="0.7" FontSize="12">
+                                                            <Run Text="(Material ID = "/>
+                                                            <Run Text="{Binding MaterialId}"/>
+                                                            <Run Text=")"/>
+                                                        </TextBlock>
+                                                        <TextBlock Grid.Column="2"
+                                                                   Text="{x:Bind MaterialPath, Mode=OneWay}"
+                                                                   FontSize="10"
+                                                                   VerticalAlignment="Center"
+                                                                   HorizontalAlignment="Right"
+                                                                   Opacity="0.6"
+                                                                   TextTrimming="CharacterEllipsis"
+                                                                   Margin="12,0,0,0"/>
                                                     </Grid>
                                                 </Expander.Header>
                                                 <StackPanel Spacing="12">
@@ -1560,14 +1643,31 @@
                                         <DataTemplate x:DataType="vm:SimpleMeshViewModel">
                                             <Expander HorizontalAlignment="Stretch" Margin="0,0,0,8">
                                                 <Expander.Header>
-                                                    <TextBlock Text="{x:Bind Name}" FontWeight="SemiBold"/>
+                                                    <StackPanel Orientation="Horizontal" Spacing="8">
+                                                        <TextBlock Text="{x:Bind Name}" FontWeight="SemiBold" VerticalAlignment="Center"/>
+                                                        <TextBlock VerticalAlignment="Center" Opacity="0.7" FontSize="12">
+                                                            <Run Text="(Material ID = "/>
+                                                            <Run Text="{Binding MaterialId}"/>
+                                                            <Run Text=")"/>
+                                                        </TextBlock>
+                                                    </StackPanel>
                                                 </Expander.Header>
                                                 <StackPanel Spacing="12">
                                                     <!-- IDs -->
                                                     <TextBlock Text="IDs" Style="{StaticResource BodyStrongTextBlockStyle}"/>
                                                     <Grid ColumnSpacing="12" RowSpacing="8" ColumnDefinitions="*,*">
+                                                        <Grid.RowDefinitions>
+                                                            <RowDefinition Height="Auto"/>
+                                                            <RowDefinition Height="Auto"/>
+                                                        </Grid.RowDefinitions>
                                                         <NumberBox Header="Material ID" Value="{x:Bind MaterialId, Mode=TwoWay}" SpinButtonPlacementMode="Inline" MinWidth="0"/>
                                                         <NumberBox Grid.Column="1" Header="Bone Index" Value="{x:Bind Blob.RigidBoneIndex, Mode=TwoWay}" SpinButtonPlacementMode="Inline" MinWidth="0"/>
+                                                        <NumberBox Grid.Row="1" Header="Post-Ref Count"
+                                                                   Value="{x:Bind PostRefCount, Mode=OneWay}"
+                                                                   IsEnabled="False"
+                                                                   SpinButtonPlacementMode="Inline"
+                                                                   Visibility="{x:Bind IsV1_12, Mode=OneWay, Converter={StaticResource BoolToVis}}"
+                                                                   MinWidth="0"/>
                                                     </Grid>
 
                                                     <!-- Transforms -->

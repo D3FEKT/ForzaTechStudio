@@ -6,15 +6,21 @@
     xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
     xmlns:vm="using:ForzaTechStudio.ViewModels.ThreeDViewer"
     xmlns:converters="using:ForzaTechStudio.Converters"
+    xmlns:controls="using:ForzaTechStudio.Views.Controls"
     mc:Ignorable="d"
     AllowDrop="True"
     DragOver="Page_DragOver"
     DragLeave="Page_DragLeave"
     Drop="Page_Drop">
 
+    <Page.KeyboardAccelerators>
+        <KeyboardAccelerator Modifiers="Control" Key="A" Invoked="SelectAllVisibleMeshes_Invoked"/>
+    </Page.KeyboardAccelerators>
+
     <Page.Resources>
         <converters:NodeTypeIconConverter x:Key="NodeTypeIconConverter"/>
         <converters:BoolToVisibilityIconConverter x:Key="BoolToVisibilityIconConverter"/>
+        <converters:BooleanToVisibilityConverter x:Key="BoolToVisConverter"/>
 
         <!-- Used by the Materials filter dialog for virtualized rendering -->
         <DataTemplate x:Key="MaterialFilterItemTemplate">
@@ -58,13 +64,87 @@
                 Background="{ThemeResource LayerFillColorDefaultBrush}">
                 <Grid>
                     <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto"/>
                         <RowDefinition Height="*"/>
                         <RowDefinition Height="Auto"/>
                     </Grid.RowDefinitions>
 
+                <!-- Tab Strip -->
+                <Border Grid.Row="0"
+                        BorderThickness="0,0,0,1"
+                        BorderBrush="{ThemeResource DividerStrokeColorDefaultBrush}">
+                    <Grid Height="32">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+                        <ScrollViewer Grid.Column="0"
+                                      HorizontalScrollBarVisibility="Hidden"
+                                      VerticalScrollBarVisibility="Disabled">
+                            <ListView x:Name="TabListView"
+                                      ItemsSource="{x:Bind ViewModel.Tabs}"
+                                      SelectionMode="Single"
+                                      SelectionChanged="TabListView_SelectionChanged"
+                                      Height="32">
+                                <ListView.ItemsPanel>
+                                    <ItemsPanelTemplate>
+                                        <ItemsStackPanel Orientation="Horizontal"/>
+                                    </ItemsPanelTemplate>
+                                </ListView.ItemsPanel>
+                                <ListView.ItemContainerStyle>
+                                    <Style TargetType="ListViewItem">
+                                        <Setter Property="Padding" Value="0"/>
+                                        <Setter Property="MinHeight" Value="0"/>
+                                        <Setter Property="Margin" Value="0"/>
+                                        <Setter Property="Height" Value="32"/>
+                                        <Setter Property="HorizontalContentAlignment" Value="Stretch"/>
+                                    </Style>
+                                </ListView.ItemContainerStyle>
+                                <ListView.ItemTemplate>
+                                    <DataTemplate>
+                                        <Grid MinWidth="80" MaxWidth="120" Padding="8,0,4,0" VerticalAlignment="Center">
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="*"/>
+                                                <ColumnDefinition Width="Auto"/>
+                                            </Grid.ColumnDefinitions>
+                                            <TextBlock Text="{Binding Name}"
+                                                       FontSize="11"
+                                                       VerticalAlignment="Center"
+                                                       TextTrimming="CharacterEllipsis"
+                                                       Margin="0,0,4,0"/>
+                                            <Button Grid.Column="1"
+                                                    Click="CloseTab_Click"
+                                                    Tag="{Binding}"
+                                                    Padding="2"
+                                                    MinWidth="16"
+                                                    MinHeight="16"
+                                                    Background="Transparent"
+                                                    BorderThickness="0"
+                                                    VerticalAlignment="Center">
+                                                <FontIcon Glyph="&#xE711;" FontSize="7"/>
+                                            </Button>
+                                        </Grid>
+                                    </DataTemplate>
+                                </ListView.ItemTemplate>
+                            </ListView>
+                        </ScrollViewer>
+                        <Button x:Name="AddTabBtn"
+                                Grid.Column="1"
+                                Click="AddTab_Click"
+                                Width="32"
+                                Height="32"
+                                Padding="0"
+                                Background="Transparent"
+                                BorderThickness="0"
+                                ToolTipService.ToolTip="New Tab">
+                            <FontIcon Glyph="&#xE710;" FontSize="12"/>
+                        </Button>
+                    </Grid>
+                </Border>
+
                 <!-- Tree View -->
                 <TreeView x:Name="FileTree"
-                          Grid.Row="0" 
+                          Grid.Row="1"
                           SelectionMode="Single"
                           ItemInvoked="FileTree_ItemInvoked"
                           RightTapped="FileTree_RightTapped"
@@ -102,7 +182,7 @@
                 </TreeView>
 
                 <!-- Properties Area (Bottom Left) -->
-                <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto" MaxHeight="450" Padding="0,0,0,8">
+                <ScrollViewer Grid.Row="2" VerticalScrollBarVisibility="Auto" MaxHeight="450" Padding="0,0,0,8">
                     <StackPanel Spacing="2">
                         <!-- Transform Controls Section -->
                         <Expander x:Name="ModelPropertiesExpander"
@@ -610,6 +690,107 @@
                                                 </DataTemplate>
                                             </ComboBox.ItemTemplate>
                                         </ComboBox>
+                                    </StackPanel>
+                                </Expander>
+
+                                <!-- Mesh Material (only visible when a specific mesh is selected) -->
+                                <Expander x:Name="MeshMaterialExpander"
+                                          Header="Material"
+                                          IsExpanded="True"
+                                          Visibility="Collapsed"
+                                          HorizontalAlignment="Stretch"
+                                          HorizontalContentAlignment="Stretch"
+                                          Padding="8,6"
+                                          Margin="0,4,0,0">
+                                    <StackPanel Spacing="10">
+                                        <!-- Material picker: select which material to view/assign -->
+                                        <ComboBox x:Name="MaterialPickerCombo"
+                                                  Header="Active Material"
+                                                  HorizontalAlignment="Stretch"
+                                                  SelectionChanged="MaterialPicker_SelectionChanged"
+                                                  FontSize="12" MinHeight="28">
+                                            <ComboBox.ItemTemplate>
+                                                <DataTemplate x:DataType="vm:ViewportMaterialItem">
+                                                    <StackPanel Orientation="Horizontal" Spacing="8">
+                                                        <TextBlock Text="{x:Bind Name}" FontWeight="SemiBold" VerticalAlignment="Center" FontSize="12"/>
+                                                        <TextBlock VerticalAlignment="Center" FontSize="10" Opacity="0.5">
+                                                            <Run Text="ID: "/>
+                                                            <Run Text="{x:Bind MaterialId}"/>
+                                                        </TextBlock>
+                                                    </StackPanel>
+                                                </DataTemplate>
+                                            </ComboBox.ItemTemplate>
+                                        </ComboBox>
+
+                                        <!-- Assign selected material to mesh -->
+                                        <Button x:Name="AssignMaterialBtn"
+                                                Content="Assign to Mesh"
+                                                HorizontalAlignment="Left"
+                                                Click="AssignMaterial_Click"
+                                                Style="{StaticResource AccentButtonStyle}"
+                                                Visibility="Collapsed"
+                                                FontSize="11" MinHeight="26"/>
+
+                                        <!-- Selected material details -->
+                                        <StackPanel x:Name="MeshMaterialDetailsPanel" Spacing="8" Visibility="Collapsed">
+                                            <!-- Material ID NumberBox -->
+                                            <NumberBox x:Name="MeshMatIdBox"
+                                                       Header="Material ID"
+                                                       SpinButtonPlacementMode="Inline"
+                                                       Minimum="0"
+                                                       SmallChange="1"
+                                                       ValueChanged="MeshMatId_ValueChanged"
+                                                       FontSize="12" MinHeight="28"/>
+
+                                            <!-- Material Path -->
+                                            <TextBox x:Name="MeshMatPathBox"
+                                                     Header="Material Path"
+                                                     IsReadOnly="True"
+                                                     HorizontalAlignment="Stretch"
+                                                     FontSize="11"/>
+
+                                            <!-- Action buttons -->
+                                            <ScrollViewer HorizontalScrollBarVisibility="Auto"
+                                                          VerticalScrollBarVisibility="Disabled"
+                                                          HorizontalAlignment="Stretch">
+                                                <StackPanel Orientation="Horizontal" Spacing="6">
+                                                    <Button Click="AddMaterialParam_Click" FontSize="11">
+                                                        <StackPanel Orientation="Horizontal" Spacing="6">
+                                                            <SymbolIcon Symbol="Add"/>
+                                                            <TextBlock Text="Add Parameter"/>
+                                                        </StackPanel>
+                                                    </Button>
+                                                    <Button Click="SaveMaterialJson_Click" FontSize="11">
+                                                        <StackPanel Orientation="Horizontal" Spacing="6">
+                                                            <SymbolIcon Symbol="Save"/>
+                                                            <TextBlock Text="Save to JSON"/>
+                                                        </StackPanel>
+                                                    </Button>
+                                                    <Button Click="ReplaceMaterialJson_Click" FontSize="11">
+                                                        <StackPanel Orientation="Horizontal" Spacing="6">
+                                                            <SymbolIcon Symbol="Import"/>
+                                                            <TextBlock Text="Replace JSON"/>
+                                                        </StackPanel>
+                                                    </Button>
+                                                    <Button Click="BrowseMaterialLibrary_Click" FontSize="11">
+                                                        <StackPanel Orientation="Horizontal" Spacing="6">
+                                                            <SymbolIcon Symbol="Library"/>
+                                                            <TextBlock Text="Browse Library"/>
+                                                        </StackPanel>
+                                                    </Button>
+                                                </StackPanel>
+                                            </ScrollViewer>
+
+                                            <!-- Parameters -->
+                                            <controls:MaterialParameterEditorView x:Name="MeshMaterialParamEditor"/>
+                                        </StackPanel>
+
+                                        <!-- Save Modelbin -->
+                                        <Button Content="Save Modelbin"
+                                                HorizontalAlignment="Stretch"
+                                                Style="{StaticResource AccentButtonStyle}"
+                                                Click="SaveModelBinFromMaterial_Click"
+                                                FontSize="12" MinHeight="28"/>
                                     </StackPanel>
                                 </Expander>
                             </StackPanel>
@@ -1275,6 +1456,43 @@
                 <AppBarButton.KeyboardAccelerators>
                     <KeyboardAccelerator Modifiers="Control,Shift" Key="S"/>
                 </AppBarButton.KeyboardAccelerators>
+            </AppBarButton>
+
+            <AppBarButton x:Name="ReloadBtn" Label="Reload"
+                          ToolTipService.ToolTip="Reload opened files">
+                <AppBarButton.Icon>
+                    <FontIcon Glyph="&#xE72C;"/>
+                </AppBarButton.Icon>
+                <AppBarButton.Flyout>
+                    <Flyout Placement="Bottom">
+                        <StackPanel Width="320" Spacing="8">
+                            <TextBlock Text="Reload Files" FontWeight="SemiBold" FontSize="14"/>
+                            <Button x:Name="ReloadAllBtn" Click="ReloadAll_Click" HorizontalAlignment="Stretch">
+                                <StackPanel Orientation="Horizontal" Spacing="8">
+                                    <FontIcon Glyph="&#xE72C;" FontSize="14"/>
+                                    <TextBlock Text="Reload All"/>
+                                </StackPanel>
+                            </Button>
+                            <Border Height="1" Background="{ThemeResource DividerStrokeColorDefaultBrush}"/>
+                            <ScrollViewer MaxHeight="280" VerticalScrollBarVisibility="Auto">
+                                <ItemsControl x:Name="ReloadFilesList" ItemsSource="{x:Bind ViewModel.Roots, Mode=OneWay}">
+                                    <ItemsControl.ItemTemplate>
+                                        <DataTemplate>
+                                            <Button Click="ReloadOne_Click" Tag="{Binding}"
+                                                    HorizontalAlignment="Stretch" HorizontalContentAlignment="Left"
+                                                    Margin="0,2">
+                                                <StackPanel Orientation="Horizontal" Spacing="8">
+                                                    <FontIcon Glyph="&#xE7C3;" FontSize="12"/>
+                                                    <TextBlock Text="{Binding Name}" TextTrimming="CharacterEllipsis"/>
+                                                </StackPanel>
+                                            </Button>
+                                        </DataTemplate>
+                                    </ItemsControl.ItemTemplate>
+                                </ItemsControl>
+                            </ScrollViewer>
+                        </StackPanel>
+                    </Flyout>
+                </AppBarButton.Flyout>
             </AppBarButton>
 
             <AppBarSeparator/>

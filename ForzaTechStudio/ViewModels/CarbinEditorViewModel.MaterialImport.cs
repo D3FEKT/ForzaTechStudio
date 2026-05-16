@@ -111,12 +111,7 @@ namespace ForzaTechStudio.ViewModels
 
             ushort sceneVersion = reader.ReadUInt16();
 
-            bool isHorizon = sceneVersion switch
-            {
-                6 => true,
-                >= 10 => false,
-                _ => true
-            };
+            bool isHorizon = GetSceneSeriesIsHorizon(sceneVersion);
 
             if (sceneVersion >= 3)
                 reader.ReadBytes(16);
@@ -220,10 +215,9 @@ namespace ForzaTechStudio.ViewModels
             ushort modelVersion = reader.ReadUInt16();
 
             // Determine series from model version
-            if (modelVersion == 18 || modelVersion == 15 || modelVersion == 16)
-                isHorizon = true;
-            else if (modelVersion == 21 || modelVersion == 17 || modelVersion == 14)
-                isHorizon = false;
+            bool? modelIsHorizon = TryResolveModelSeriesIsHorizon(sceneVersion, modelVersion);
+            if (modelIsHorizon.HasValue)
+                isHorizon = modelIsHorizon.Value;
 
             string path = ReadString(reader);
             info.GamePath = path;
@@ -264,7 +258,7 @@ namespace ForzaTechStudio.ViewModels
                 {
                     string key = ReadString(reader);
                     ulong val;
-                    if (!isHorizon && modelVersion >= 21)
+                    if (UsesWideMaterialIndexes(modelVersion))
                         val = reader.ReadUInt64();
                     else
                         val = (ulong)reader.ReadInt32();
@@ -373,6 +367,11 @@ namespace ForzaTechStudio.ViewModels
                     reader.ReadByte();
                 if (modelVersion >= 18)
                     reader.ReadUInt32();
+                if (modelVersion >= 21)
+                {
+                    reader.ReadUInt32();
+                    SkipString(reader);
+                }
             }
 
             return info;
@@ -506,6 +505,12 @@ namespace ForzaTechStudio.ViewModels
             // Damage GUIDs (v15 Motorsport / v16 Horizon)
             public List<Guid> DamageGuids { get; set; } = [];
 
+            // Horizon-only tail fields
+            public int HorizonUnkV15 { get; set; }
+            public uint HorizonUnkV18 { get; set; }
+            public uint HorizonUnkV21Flag { get; set; }
+            public string HorizonUnkV21Path { get; set; } = "";
+
             // ReceivesRain (v16 Motorsport only)
             public bool ReceivesRain { get; set; }
 
@@ -527,12 +532,7 @@ namespace ForzaTechStudio.ViewModels
 
             ushort sceneVersion = reader.ReadUInt16();
 
-            bool isHorizon = sceneVersion switch
-            {
-                6 => true,
-                >= 10 => false,
-                _ => true
-            };
+            bool isHorizon = GetSceneSeriesIsHorizon(sceneVersion);
 
             if (sceneVersion >= 3)
                 reader.ReadBytes(16);
@@ -562,7 +562,7 @@ namespace ForzaTechStudio.ViewModels
 
                 uint modelsCount = reader.ReadUInt32();
                 for (int j = 0; j < modelsCount; j++)
-                    models.Add(ParseCarRenderModelForFullInfo(reader, isHorizon, $"Standard: {partName}"));
+                    models.Add(ParseCarRenderModelForFullInfo(reader, sceneVersion, isHorizon, $"Standard: {partName}"));
 
                 if (partVersion >= 2)
                     reader.ReadBytes(32); // AABB
@@ -592,7 +592,7 @@ namespace ForzaTechStudio.ViewModels
                     {
                         uint modelsCount = reader.ReadUInt32();
                         for (int j = 0; j < modelsCount; j++)
-                            models.Add(ParseCarRenderModelForFullInfo(reader, isHorizon, $"Upgrade: {partName} (Lvl {level})"));
+                            models.Add(ParseCarRenderModelForFullInfo(reader, sceneVersion, isHorizon, $"Upgrade: {partName} (Lvl {level})"));
                     }
 
                     if (upgradeVersion >= 2)
@@ -606,7 +606,7 @@ namespace ForzaTechStudio.ViewModels
                     {
                         uint upgradeIdsCount = reader.ReadUInt32();
                         reader.ReadBytes((int)(upgradeIdsCount * 4));
-                        models.Add(ParseCarRenderModelForFullInfo(reader, isHorizon, $"Upgrade: {partName} (Shared)"));
+                        models.Add(ParseCarRenderModelForFullInfo(reader, sceneVersion, isHorizon, $"Upgrade: {partName} (Shared)"));
                     }
                 }
             }
@@ -615,7 +615,7 @@ namespace ForzaTechStudio.ViewModels
         }
 
         // Reads a CarRenderModel from the stream and stores all fields into a CarbinFullModelInfo.
-        private CarbinFullModelInfo ParseCarRenderModelForFullInfo(BinaryReader reader, bool isHorizon, string partContext)
+        private CarbinFullModelInfo ParseCarRenderModelForFullInfo(BinaryReader reader, ushort sceneVersion, bool isHorizon, string partContext)
         {
             var info = new CarbinFullModelInfo { PartContext = partContext };
 
@@ -623,10 +623,9 @@ namespace ForzaTechStudio.ViewModels
             info.SourceModelVersion = modelVersion;
 
             // Determine series from model version (mirrors existing parser logic)
-            if (modelVersion == 18 || modelVersion == 15 || modelVersion == 16)
-                isHorizon = true;
-            else if (modelVersion == 21 || modelVersion == 17 || modelVersion == 14)
-                isHorizon = false;
+            bool? modelIsHorizon = TryResolveModelSeriesIsHorizon(sceneVersion, modelVersion);
+            if (modelIsHorizon.HasValue)
+                isHorizon = modelIsHorizon.Value;
             info.SourceIsHorizon = isHorizon;
 
             // Path
@@ -676,7 +675,7 @@ namespace ForzaTechStudio.ViewModels
                 for (int i = 0; i < indexesCount; i++)
                 {
                     string key = ReadString(reader);
-                    ulong val = (!isHorizon && modelVersion >= 21) ? reader.ReadUInt64() : (ulong)reader.ReadInt32();
+                    ulong val = UsesWideMaterialIndexes(modelVersion) ? reader.ReadUInt64() : (ulong)reader.ReadInt32();
                     info.MaterialIndexes.Add(new MaterialIndexEntry(key, val));
                 }
             }
@@ -759,7 +758,7 @@ namespace ForzaTechStudio.ViewModels
 
             // Horizon-only v15 unknown
             if (isHorizon && modelVersion >= 15)
-                reader.ReadInt32();
+                info.HorizonUnkV15 = reader.ReadInt32();
 
             // Damage GUIDs (v15 Motorsport / v16 Horizon)
             if ((!isHorizon && modelVersion >= 15) || (isHorizon && modelVersion >= 16))
@@ -794,7 +793,12 @@ namespace ForzaTechStudio.ViewModels
                 if (modelVersion >= 17)
                     reader.ReadByte(); // HorizonId � not exposed in UI
                 if (modelVersion >= 18)
-                    reader.ReadUInt32(); // HorizonUnkV18
+                    info.HorizonUnkV18 = reader.ReadUInt32();
+                if (modelVersion >= 21)
+                {
+                    info.HorizonUnkV21Flag = reader.ReadUInt32();
+                    info.HorizonUnkV21Path = ReadString(reader);
+                }
             }
 
             return info;
@@ -982,6 +986,21 @@ namespace ForzaTechStudio.ViewModels
             {
                 foreach (var g in source.DamageGuids)
                     entry.DamageGuids.Add(g);
+            }
+
+            if (targetIsHorizon && source.SourceIsHorizon)
+            {
+                if (targetModelVersion >= 15 && source.SourceModelVersion >= 15)
+                    entry.HorizonUnkV15 = source.HorizonUnkV15;
+
+                if (targetModelVersion >= 18 && source.SourceModelVersion >= 18)
+                    entry.HorizonUnkV18 = source.HorizonUnkV18;
+
+                if (targetModelVersion >= 21 && source.SourceModelVersion >= 21)
+                {
+                    entry.HorizonUnkV21Flag = source.HorizonUnkV21Flag;
+                    entry.HorizonUnkV21Path = source.HorizonUnkV21Path;
+                }
             }
 
             // v16 Motorsport only: ReceivesRain

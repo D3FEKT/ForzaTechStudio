@@ -474,9 +474,9 @@ namespace ForzaTechStudio.Services
                     VlayFlags = 0x000004FF,
                 },
 
-                ForzaGameTarget.FH5 => new InternalLayoutInfo
+                ForzaGameTarget.FH5 or ForzaGameTarget.FH6 => new InternalLayoutInfo
                 {
-                    // FH5: adds TANGENT2, full 10 elements
+                    // FH5/FH6: adds TANGENT2, full 10 elements
                     // 10 elements: NORMAL + TEXCOORD0-4 + TANGENT0-2 + COLOR0 = 4+4+4+4+4+4+4+4+4+4 = 40B
                     ElementCount = 10, Stride = 40,
                     TexcoordCount = 5, TangentCount = 3, HasColor = true,

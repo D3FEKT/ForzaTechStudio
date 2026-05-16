@@ -3,6 +3,7 @@ using CommunityToolkit.Mvvm.Input;
 using ForzaTechStudio.Models;
 using ForzaTechStudio.Services;
 using System;
+using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.IO;
 using System.Linq;
@@ -24,10 +25,11 @@ namespace ForzaTechStudio.ViewModels
         AvPins,              // root = <PointsOfInterest>  / *.avpins extension
     }
 
-    public partial class ShakeBonesViewModel : ObservableObject
+    public partial class ShakeBonesViewModel : UndoRedoViewModel
     {
         // Sub-ViewModels for each supported format
         public LocatorsViewModel         Locators      { get; } = new();
+
         public CarAttributesViewModel    CarAttr       { get; } = new();
         public GlobalCarAttributesViewModel GlobalCarAttr { get; } = new();
         public IKAnchorBonesViewModel    IKAnchorBones { get; } = new();
@@ -478,15 +480,23 @@ namespace ForzaTechStudio.ViewModels
             Cameras.Add(cam);
             SelectedCamera = cam;
             RefreshXmlText();
+            PushUndo(
+                () => { Cameras.Remove(cam); SelectedCamera = null; RefreshXmlText(); },
+                () => { Cameras.Add(cam); SelectedCamera = cam; RefreshXmlText(); });
         }
 
         [RelayCommand(CanExecute = nameof(IsCameraSelected))]
         private void DeleteCamera()
         {
             if (SelectedCamera == null) return;
-            Cameras.Remove(SelectedCamera);
+            var cam = SelectedCamera;
+            var idx = Cameras.IndexOf(cam);
+            Cameras.Remove(cam);
             SelectedCamera = null;
             RefreshXmlText();
+            PushUndo(
+                () => { Cameras.Insert(Math.Min(idx, Cameras.Count), cam); SelectedCamera = cam; RefreshXmlText(); },
+                () => { Cameras.Remove(cam); SelectedCamera = null; RefreshXmlText(); });
         }
 
         // Bone CRUD
@@ -495,19 +505,29 @@ namespace ForzaTechStudio.ViewModels
         private void AddBone()
         {
             if (SelectedCamera == null) return;
+            var cam = SelectedCamera;
             var bone = new ShakeBonesbone("bone_name", 0, 0, 0.05f, 0.03f);
-            SelectedCamera.Bones.Add(bone);
+            cam.Bones.Add(bone);
             SelectedBone = bone;
             RefreshXmlText();
+            PushUndo(
+                () => { cam.Bones.Remove(bone); SelectedBone = null; RefreshXmlText(); },
+                () => { cam.Bones.Add(bone); SelectedBone = bone; RefreshXmlText(); });
         }
 
         [RelayCommand(CanExecute = nameof(IsBoneSelected))]
         private void DeleteBone()
         {
             if (SelectedCamera == null || SelectedBone == null) return;
-            SelectedCamera.Bones.Remove(SelectedBone);
+            var cam = SelectedCamera;
+            var bone = SelectedBone;
+            var idx = cam.Bones.IndexOf(bone);
+            cam.Bones.Remove(bone);
             SelectedBone = null;
             RefreshXmlText();
+            PushUndo(
+                () => { cam.Bones.Insert(Math.Min(idx, cam.Bones.Count), bone); SelectedBone = bone; RefreshXmlText(); },
+                () => { cam.Bones.Remove(bone); SelectedBone = null; RefreshXmlText(); });
         }
 
         // Transform CRUD
@@ -516,19 +536,29 @@ namespace ForzaTechStudio.ViewModels
         private void AddTransform()
         {
             if (SelectedBone == null) return;
+            var bone = SelectedBone;
             var xf = new ShakeBonesTransform("translateX", -0.005, 0.005);
-            SelectedBone.Transforms.Add(xf);
+            bone.Transforms.Add(xf);
             SelectedTransform = xf;
             RefreshXmlText();
+            PushUndo(
+                () => { bone.Transforms.Remove(xf); SelectedTransform = null; RefreshXmlText(); },
+                () => { bone.Transforms.Add(xf); SelectedTransform = xf; RefreshXmlText(); });
         }
 
         [RelayCommand(CanExecute = nameof(IsTransformSelected))]
         private void DeleteTransform()
         {
             if (SelectedBone == null || SelectedTransform == null) return;
-            SelectedBone.Transforms.Remove(SelectedTransform);
+            var bone = SelectedBone;
+            var xf = SelectedTransform;
+            var idx = bone.Transforms.IndexOf(xf);
+            bone.Transforms.Remove(xf);
             SelectedTransform = null;
             RefreshXmlText();
+            PushUndo(
+                () => { bone.Transforms.Insert(Math.Min(idx, bone.Transforms.Count), xf); SelectedTransform = xf; RefreshXmlText(); },
+                () => { bone.Transforms.Remove(xf); SelectedTransform = null; RefreshXmlText(); });
         }
 
         // Refresh XML text

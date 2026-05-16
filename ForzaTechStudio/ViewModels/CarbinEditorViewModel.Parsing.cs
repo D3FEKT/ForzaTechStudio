@@ -23,18 +23,13 @@ namespace ForzaTechStudio.ViewModels
 
             if (sceneVersion == 0 || sceneVersion > 20)
             {
-                throw new InvalidDataException($"Invalid scene version: {sceneVersion}. Expected 5, 6, 10, or 11.");
+                throw new InvalidDataException($"Invalid scene version: {sceneVersion}. Expected 5, 6, 7, 10, or 11.");
             }
 
             DetectedSceneVersion = sceneVersion;
 
             // Determine series based on scene version (heuristic from .bt)
-            if (sceneVersion == 6)
-                IsHorizon = true;
-            else if (sceneVersion >= 10)
-                IsHorizon = false;
-            else
-                IsHorizon = true; // Default for v5, refined later by model version
+            IsHorizon = GetSceneSeriesIsHorizon(sceneVersion);
 
             // Build GUID (version >= 3)
             Guid buildGuid = Guid.Empty;
@@ -132,13 +127,15 @@ namespace ForzaTechStudio.ViewModels
                 UpgradableParts.Add(partEntry);
             }
 
-            // FH5 specific field
-            if (IsHorizon && sceneVersion >= 6)
+            // Horizon scene trailer bytes
+            if (IsHorizon && sceneVersion >= 6 && reader.BaseStream.Position < fileLength)
             {
-                if (reader.BaseStream.Position < fileLength)
-                {
-                    reader.ReadByte();
-                }
+                _sceneUnkV6 = reader.ReadByte() != 0;
+            }
+
+            if (IsHorizon && sceneVersion >= 7 && reader.BaseStream.Position < fileLength)
+            {
+                _sceneUnkV7 = reader.ReadByte() != 0;
             }
 
             // Update UI properties
@@ -348,10 +345,9 @@ namespace ForzaTechStudio.ViewModels
             model.OriginalModelVersion = modelVersion;
 
             // Determine series from model version (heuristic from .bt)
-            if (modelVersion == 18 || modelVersion == 15 || modelVersion == 16)
-                IsHorizon = true;
-            else if (modelVersion == 21 || modelVersion == 17 || modelVersion == 14)
-                IsHorizon = false;
+            bool? modelIsHorizon = TryResolveModelSeriesIsHorizon(sceneVersion, modelVersion);
+            if (modelIsHorizon.HasValue)
+                IsHorizon = modelIsHorizon.Value;
 
             // Path
             _lastParsingContext = $"{modelContext} path";
@@ -449,7 +445,7 @@ namespace ForzaTechStudio.ViewModels
                 {
                     string key = ReadString(reader);
                     ulong val;
-                    if (!IsHorizon && modelVersion >= 21)
+                    if (UsesWideMaterialIndexes(modelVersion))
                         val = reader.ReadUInt64();
                     else
                         val = (ulong)reader.ReadInt32();
@@ -575,6 +571,11 @@ namespace ForzaTechStudio.ViewModels
                     model.HorizonId = reader.ReadByte();
                 if (modelVersion >= 18)
                     model.HorizonUnkV18 = reader.ReadUInt32();
+                if (modelVersion >= 21)
+                {
+                    model.HorizonUnkV21Flag = reader.ReadUInt32();
+                    model.HorizonUnkV21Path = ReadString(reader);
+                }
             }
 
             return model;
@@ -616,6 +617,7 @@ namespace ForzaTechStudio.ViewModels
         {
             if (isHorizon)
             {
+                if (sceneVersion == 7 && modelVersion == 21) return 6;
                 if (sceneVersion == 6 && modelVersion == 18) return 5;
                 if (sceneVersion == 5 && modelVersion == 16) return 4;
                 if (sceneVersion == 5 && modelVersion == 15) return 3;

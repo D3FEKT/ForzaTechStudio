@@ -65,9 +65,12 @@ namespace ForzaTechStudio.ViewModels
                 WriteUpgradablePartStructure(writer, part, sceneVersion, modelVersion, isHorizon, ref modelIndex);
             }
 
-            // FH5 specific field
+            // Horizon scene trailer bytes
             if (isHorizon && sceneVersion >= 6)
-                writer.Write((byte)1);
+                writer.Write((byte)(_sceneUnkV6 ? 1 : 0));
+
+            if (isHorizon && sceneVersion >= 7)
+                writer.Write((byte)(_sceneUnkV7 ? 1 : 0));
         }
 
         private void WritePartStructure(BinaryWriter writer, CarbinPartEntry part, ushort sceneVersion, ushort modelVersion, bool isHorizon, ref int modelIndex)
@@ -206,7 +209,7 @@ namespace ForzaTechStudio.ViewModels
                 foreach (var matIdx in model.MaterialIndexes)
                 {
                     WriteString(writer, matIdx.Key);
-                    if (!isHorizon && modelVersion >= 21)
+                    if (UsesWideMaterialIndexes(modelVersion))
                         writer.Write(matIdx.Value);
                     else
                         writer.Write((int)matIdx.Value);
@@ -352,6 +355,11 @@ namespace ForzaTechStudio.ViewModels
                 }
                 if (modelVersion >= 18)
                     writer.Write(model.HorizonUnkV18);
+                if (modelVersion >= 21)
+                {
+                    writer.Write(model.HorizonUnkV21Flag);
+                    WriteString(writer, model.HorizonUnkV21Path ?? "");
+                }
             }
         }
 

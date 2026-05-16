@@ -1,3 +1,4 @@
+using ForzaTechStudio.Helpers;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml;
 using System;
@@ -18,6 +19,11 @@ namespace ForzaTechStudio.Views
         // MenuFlyout is a static resource so its items don't inherit DataContext from the
         // ListViewItem � we capture it in the Opening event instead.
         private ViewModels.CarbinModelEntry? _contextMenuTarget;
+
+        private FileChangeWatcher? _fileWatcher;
+        private bool _changeDialogShowing;
+        private string _watchedFilePath = "";
+
         public CarbinEditorPage()
         {
             this.InitializeComponent();
@@ -25,6 +31,11 @@ namespace ForzaTechStudio.Views
 
             this.Loaded += OnPageLoaded;
             ViewModel.PropertyChanged += ViewModel_PropertyChanged;
+            ViewModel.FileSaved += path => _fileWatcher?.Suppress(path);
+            this.Unloaded += (_, _) => _fileWatcher?.UnwatchAll();
+
+            _fileWatcher = new FileChangeWatcher(this.DispatcherQueue);
+            _fileWatcher.FileChanged += OnFileChangedExternally;
         }
 
         private void OnPageLoaded(object sender, RoutedEventArgs e)
@@ -33,11 +44,31 @@ namespace ForzaTechStudio.Views
             _nonUpgradableModelsList = this.FindName("NonUpgradableModelsList") as ListView;
             _upgradableSearchBox = this.FindName("UpgradableModelSearchBox") as TextBox;
             _upgradableModelsList = this.FindName("UpgradableModelsList") as ListView;
+
+            // Sync tab strip selection to active tab
+            _isSwitchingTabs = true;
+            CarbinTabListView.SelectedItem = ViewModel.ActiveTab;
+            _isSwitchingTabs = false;
         }
 
         private void ViewModel_PropertyChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
         {
-            if (e.PropertyName == nameof(CarbinEditorViewModel.SelectedNonUpgradablePart))
+            if (e.PropertyName == nameof(CarbinEditorViewModel.ActiveTab) && !_isSwitchingTabs)
+            {
+                _isSwitchingTabs = true;
+                CarbinTabListView.SelectedItem = ViewModel.ActiveTab;
+                _isSwitchingTabs = false;
+            }
+            else if (e.PropertyName == nameof(CarbinEditorViewModel.LoadedFilePath))
+            {
+                // Update watcher when the loaded file changes
+                if (!string.IsNullOrEmpty(_watchedFilePath))
+                    _fileWatcher?.Unwatch(_watchedFilePath);
+                _watchedFilePath = ViewModel.LoadedFilePath;
+                if (!string.IsNullOrEmpty(_watchedFilePath))
+                    _fileWatcher?.Watch(_watchedFilePath);
+            }
+            else if (e.PropertyName == nameof(CarbinEditorViewModel.SelectedNonUpgradablePart))
             {
                 if (_nonUpgradableSearchBox != null)
                     _nonUpgradableSearchBox.Text = "";
@@ -88,6 +119,31 @@ namespace ForzaTechStudio.Views
                     .Where(m => m.ModelFileName.Contains(query, StringComparison.OrdinalIgnoreCase)
                              || m.ModelGamePath.Contains(query, StringComparison.OrdinalIgnoreCase))
                     .ToList();
+            }
+        }
+
+        private async void OnFileChangedExternally(string path)
+        {
+            if (_changeDialogShowing) return;
+            _changeDialogShowing = true;
+            try
+            {
+                var fileName = System.IO.Path.GetFileName(path);
+                var dialog = new ContentDialog
+                {
+                    XamlRoot = this.XamlRoot,
+                    Title = "File Changed",
+                    Content = $"\"{fileName}\" was modified outside of ForzaTechStudio. Reload it?",
+                    PrimaryButtonText = "Reload",
+                    CloseButtonText = "Ignore"
+                };
+                var result = await dialog.ShowAsync();
+                if (result == ContentDialogResult.Primary)
+                    await ViewModel.ReloadFileAsync();
+            }
+            finally
+            {
+                _changeDialogShowing = false;
             }
         }
 

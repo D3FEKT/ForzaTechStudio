@@ -710,6 +710,20 @@ namespace ForzaTechStudio.ViewModels
             set => SetProperty(ref _horizonUnkV18, value);
         }
 
+        private uint _horizonUnkV21Flag = 0;
+        public uint HorizonUnkV21Flag
+        {
+            get => _horizonUnkV21Flag;
+            set => SetProperty(ref _horizonUnkV21Flag, value);
+        }
+
+        private string _horizonUnkV21Path = "";
+        public string HorizonUnkV21Path
+        {
+            get => _horizonUnkV21Path;
+            set => SetProperty(ref _horizonUnkV21Path, value);
+        }
+
         // Horizon v15 field - bunch of unknown flags, oh well
         private int _horizonUnkV15 = 0;
         public int HorizonUnkV15
