@@ -98,6 +98,7 @@ namespace ForzaTechStudio.Models
     public partial class PoiViewEntry : ObservableObject
     {
         [ObservableProperty] private string _name         = "";
+        [ObservableProperty] private string _guid         = "";
         [ObservableProperty] private string _locator      = "";
         [ObservableProperty] private string _overrideMode = "Add";
         [ObservableProperty] private bool   _enableBackOut;
@@ -165,6 +166,7 @@ namespace ForzaTechStudio.Models
     {
         public string Template { get; set; } = "Default";
 
+        public ObservableCollection<PoiCondition>    InitialStates { get; } = new();
         public ObservableCollection<PoiViewEntry>    Views { get; } = new();
         public ObservableCollection<PointOfInterest> POIs  { get; } = new();
     }

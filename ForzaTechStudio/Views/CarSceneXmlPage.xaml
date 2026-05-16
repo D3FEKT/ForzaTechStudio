@@ -782,7 +782,6 @@
                             <RowDefinition Height="*"/>
                         </Grid.RowDefinitions>
 
-                        <!-- Root floats -->
                         <Border Grid.Row="0" Style="{StaticResource CardStyle}" MaxWidth="680">
                             <Grid ColumnSpacing="12" RowSpacing="8">
                                 <Grid.ColumnDefinitions>
@@ -791,15 +790,30 @@
                                     <ColumnDefinition Width="180"/>
                                     <ColumnDefinition Width="*"/>
                                 </Grid.ColumnDefinitions>
-                                <TextBlock Grid.Column="0" Text="Hand Grip Amount" Style="{StaticResource PropLabelStyle}" VerticalAlignment="Center"/>
-                                <NumberBox Grid.Column="1"
+                                <Grid.RowDefinitions>
+                                    <RowDefinition Height="Auto"/>
+                                    <RowDefinition Height="Auto"/>
+                                </Grid.RowDefinitions>
+                                <TextBlock Grid.Row="0" Grid.Column="0" Text="Hand Grip Amount" Style="{StaticResource PropLabelStyle}" VerticalAlignment="Center"/>
+                                <NumberBox Grid.Row="0" Grid.Column="1"
                                            Value="{x:Bind ViewModel.IKAnchorBones.HandGripAmount, Mode=TwoWay}"
                                            Minimum="0" Maximum="1" SmallChange="0.05"
                                            SpinButtonPlacementMode="Hidden" ValueChanged="AnyNumber_Changed"/>
-                                <TextBlock Grid.Column="2" Text="Recline Amount" Style="{StaticResource PropLabelStyle}" VerticalAlignment="Center"/>
-                                <NumberBox Grid.Column="3"
+                                <TextBlock Grid.Row="0" Grid.Column="2" Text="Recline Amount" Style="{StaticResource PropLabelStyle}" VerticalAlignment="Center"/>
+                                <NumberBox Grid.Row="0" Grid.Column="3"
                                            Value="{x:Bind ViewModel.IKAnchorBones.ReclineAmount, Mode=TwoWay}"
                                            Minimum="0" Maximum="1" SmallChange="0.05"
+                                           SpinButtonPlacementMode="Hidden" ValueChanged="AnyNumber_Changed"/>
+                                <TextBlock Grid.Row="1" Grid.Column="0" Text="Steering Wheel Max°" Style="{StaticResource PropLabelStyle}" VerticalAlignment="Center"/>
+                                <NumberBox Grid.Row="1" Grid.Column="1"
+                                           Value="{x:Bind ViewModel.IKAnchorBones.SteeringWheelMaxDegrees, Mode=TwoWay}"
+                                           Minimum="0" Maximum="900" SmallChange="10"
+                                           SpinButtonPlacementMode="Hidden" ValueChanged="AnyNumber_Changed"/>
+                                <TextBlock Grid.Row="1" Grid.Column="2" Text="Shifting Family" Style="{StaticResource PropLabelStyle}" VerticalAlignment="Center"
+                                           ToolTipService.ToolTip="FH6: 1 = H-pattern, 0 = absent"/>
+                                <NumberBox Grid.Row="1" Grid.Column="3"
+                                           Value="{x:Bind ViewModel.IKAnchorBones.ShiftingFamily, Mode=TwoWay}"
+                                           Minimum="0" Maximum="99" SmallChange="1"
                                            SpinButtonPlacementMode="Hidden" ValueChanged="AnyNumber_Changed"/>
                             </Grid>
                         </Border>
@@ -834,60 +848,110 @@
                             </Grid>
                         </Border>
 
-                        <!-- Bone rows -->
-                        <ScrollViewer Grid.Row="2" VerticalScrollBarVisibility="Auto">
-                            <StackPanel Spacing="4">
-                                <!-- Column headers -->
-                                <Grid ColumnSpacing="8" Margin="4,0">
-                                    <Grid.ColumnDefinitions>
-                                        <ColumnDefinition Width="*"/>
-                                        <ColumnDefinition Width="100"/>
-                                        <ColumnDefinition Width="100"/>
-                                        <ColumnDefinition Width="100"/>
-                                    </Grid.ColumnDefinitions>
-                                    <TextBlock Grid.Column="0" Text="Bone Name"  Style="{StaticResource PropLabelStyle}"/>
-                                    <TextBlock Grid.Column="1" Text="Offset X"   Style="{StaticResource PropLabelStyle}"/>
-                                    <TextBlock Grid.Column="2" Text="Offset Y"   Style="{StaticResource PropLabelStyle}"/>
-                                    <TextBlock Grid.Column="3" Text="Offset Z"   Style="{StaticResource PropLabelStyle}"/>
-                                </Grid>
+                        <!-- Bone rows + selected-bone detail -->
+                        <Grid Grid.Row="2">
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="*"/>
+                                <RowDefinition Height="Auto"/>
+                            </Grid.RowDefinitions>
 
-                                <ListView ItemsSource="{x:Bind ViewModel.IKAnchorBones.Data.Bones, Mode=OneWay}"
-                                          SelectedItem="{x:Bind ViewModel.IKAnchorBones.SelectedBone, Mode=TwoWay}"
-                                          SelectionMode="Single">
-                                    <ListView.ItemTemplate>
-                                        <DataTemplate x:DataType="models:IKAnchorBone">
-                                            <Grid ColumnSpacing="8" Margin="0,2">
-                                                <Grid.ColumnDefinitions>
-                                                    <ColumnDefinition Width="*"/>
-                                                    <ColumnDefinition Width="100"/>
-                                                    <ColumnDefinition Width="100"/>
-                                                    <ColumnDefinition Width="100"/>
-                                                </Grid.ColumnDefinitions>
-                                                <TextBox Grid.Column="0"
-                                                         Text="{x:Bind Name, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
-                                                         PlaceholderText="bone_name"
-                                                         TextChanged="AnyText_Changed"/>
-                                                <NumberBox Grid.Column="1"
-                                                           Value="{x:Bind OffsetX, Mode=TwoWay}"
-                                                           SmallChange="0.001" SpinButtonPlacementMode="Hidden"
-                                                           ValidationMode="InvalidInputOverwritten"
-                                                           ValueChanged="AnyNumber_Changed"/>
-                                                <NumberBox Grid.Column="2"
-                                                           Value="{x:Bind OffsetY, Mode=TwoWay}"
-                                                           SmallChange="0.001" SpinButtonPlacementMode="Hidden"
-                                                           ValidationMode="InvalidInputOverwritten"
-                                                           ValueChanged="AnyNumber_Changed"/>
-                                                <NumberBox Grid.Column="3"
-                                                           Value="{x:Bind OffsetZ, Mode=TwoWay}"
-                                                           SmallChange="0.001" SpinButtonPlacementMode="Hidden"
-                                                           ValidationMode="InvalidInputOverwritten"
-                                                           ValueChanged="AnyNumber_Changed"/>
-                                            </Grid>
-                                        </DataTemplate>
-                                    </ListView.ItemTemplate>
-                                </ListView>
-                            </StackPanel>
-                        </ScrollViewer>
+                            <ScrollViewer Grid.Row="0" VerticalScrollBarVisibility="Auto">
+                                <StackPanel Spacing="4">
+                                    <!-- Column headers -->
+                                    <Grid ColumnSpacing="8" Margin="4,0">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="*"/>
+                                            <ColumnDefinition Width="100"/>
+                                            <ColumnDefinition Width="100"/>
+                                            <ColumnDefinition Width="100"/>
+                                        </Grid.ColumnDefinitions>
+                                        <TextBlock Grid.Column="0" Text="Bone Name"  Style="{StaticResource PropLabelStyle}"/>
+                                        <TextBlock Grid.Column="1" Text="Offset X"   Style="{StaticResource PropLabelStyle}"/>
+                                        <TextBlock Grid.Column="2" Text="Offset Y"   Style="{StaticResource PropLabelStyle}"/>
+                                        <TextBlock Grid.Column="3" Text="Offset Z"   Style="{StaticResource PropLabelStyle}"/>
+                                    </Grid>
+
+                                    <ListView ItemsSource="{x:Bind ViewModel.IKAnchorBones.Data.Bones, Mode=OneWay}"
+                                              SelectedItem="{x:Bind ViewModel.IKAnchorBones.SelectedBone, Mode=TwoWay}"
+                                              SelectionMode="Single">
+                                        <ListView.ItemTemplate>
+                                            <DataTemplate x:DataType="models:IKAnchorBone">
+                                                <Grid ColumnSpacing="8" Margin="0,2">
+                                                    <Grid.ColumnDefinitions>
+                                                        <ColumnDefinition Width="*"/>
+                                                        <ColumnDefinition Width="100"/>
+                                                        <ColumnDefinition Width="100"/>
+                                                        <ColumnDefinition Width="100"/>
+                                                    </Grid.ColumnDefinitions>
+                                                    <TextBox Grid.Column="0"
+                                                             Text="{x:Bind Name, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                                                             PlaceholderText="bone_name"
+                                                             TextChanged="AnyText_Changed"/>
+                                                    <NumberBox Grid.Column="1"
+                                                               Value="{x:Bind OffsetX, Mode=TwoWay}"
+                                                               SmallChange="0.001" SpinButtonPlacementMode="Hidden"
+                                                               ValidationMode="InvalidInputOverwritten"
+                                                               ValueChanged="AnyNumber_Changed"/>
+                                                    <NumberBox Grid.Column="2"
+                                                               Value="{x:Bind OffsetY, Mode=TwoWay}"
+                                                               SmallChange="0.001" SpinButtonPlacementMode="Hidden"
+                                                               ValidationMode="InvalidInputOverwritten"
+                                                               ValueChanged="AnyNumber_Changed"/>
+                                                    <NumberBox Grid.Column="3"
+                                                               Value="{x:Bind OffsetZ, Mode=TwoWay}"
+                                                               SmallChange="0.001" SpinButtonPlacementMode="Hidden"
+                                                               ValidationMode="InvalidInputOverwritten"
+                                                               ValueChanged="AnyNumber_Changed"/>
+                                                </Grid>
+                                            </DataTemplate>
+                                        </ListView.ItemTemplate>
+                                    </ListView>
+                                </StackPanel>
+                            </ScrollViewer>
+
+                            <!-- Selected bone Rotation / Scale detail -->
+                            <Border Grid.Row="1" Style="{StaticResource CardStyle}" Margin="0,4,0,0"
+                                    Visibility="{x:Bind ViewModel.IKAnchorBones.SelectedBone, Converter={StaticResource NullToVis}, Mode=OneWay}">
+                                <StackPanel Spacing="6">
+                                    <TextBlock Text="Selected Bone" FontSize="11" FontWeight="SemiBold"
+                                               Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
+                                    <Grid ColumnSpacing="8" RowSpacing="6">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="72"/>
+                                            <ColumnDefinition Width="*"/>
+                                        </Grid.ColumnDefinitions>
+                                        <Grid.RowDefinitions>
+                                            <RowDefinition Height="Auto"/>
+                                            <RowDefinition Height="Auto"/>
+                                        </Grid.RowDefinitions>
+                                        <TextBlock Grid.Row="0" Grid.Column="0" Text="Rotation" Style="{StaticResource PropLabelStyle}"/>
+                                        <StackPanel Grid.Row="0" Grid.Column="1" Orientation="Horizontal" Spacing="4">
+                                            <NumberBox Value="{x:Bind ViewModel.IKAnchorBones.SelectedBone.RotX, Mode=TwoWay}"
+                                                       SmallChange="0.5" SpinButtonPlacementMode="Compact" Width="90"
+                                                       Header="X" ValueChanged="AnyNumber_Changed"/>
+                                            <NumberBox Value="{x:Bind ViewModel.IKAnchorBones.SelectedBone.RotY, Mode=TwoWay}"
+                                                       SmallChange="0.5" SpinButtonPlacementMode="Compact" Width="90"
+                                                       Header="Y" ValueChanged="AnyNumber_Changed"/>
+                                            <NumberBox Value="{x:Bind ViewModel.IKAnchorBones.SelectedBone.RotZ, Mode=TwoWay}"
+                                                       SmallChange="0.5" SpinButtonPlacementMode="Compact" Width="90"
+                                                       Header="Z" ValueChanged="AnyNumber_Changed"/>
+                                        </StackPanel>
+                                        <TextBlock Grid.Row="1" Grid.Column="0" Text="Scale" Style="{StaticResource PropLabelStyle}"/>
+                                        <StackPanel Grid.Row="1" Grid.Column="1" Orientation="Horizontal" Spacing="4">
+                                            <NumberBox Value="{x:Bind ViewModel.IKAnchorBones.SelectedBone.ScaleX, Mode=TwoWay}"
+                                                       SmallChange="0.001" SpinButtonPlacementMode="Compact" Width="90"
+                                                       Header="X" ValueChanged="AnyNumber_Changed"/>
+                                            <NumberBox Value="{x:Bind ViewModel.IKAnchorBones.SelectedBone.ScaleY, Mode=TwoWay}"
+                                                       SmallChange="0.001" SpinButtonPlacementMode="Compact" Width="90"
+                                                       Header="Y" ValueChanged="AnyNumber_Changed"/>
+                                            <NumberBox Value="{x:Bind ViewModel.IKAnchorBones.SelectedBone.ScaleZ, Mode=TwoWay}"
+                                                       SmallChange="0.001" SpinButtonPlacementMode="Compact" Width="90"
+                                                       Header="Z" ValueChanged="AnyNumber_Changed"/>
+                                        </StackPanel>
+                                    </Grid>
+                                </StackPanel>
+                            </Border>
+                        </Grid>
                     </Grid>
 
                     <!-- LOCATORS PANEL -->
@@ -1153,6 +1217,7 @@
                                                         <RowDefinition Height="Auto"/>
                                                         <RowDefinition Height="Auto"/>
                                                         <RowDefinition Height="Auto"/>
+                                                        <RowDefinition Height="Auto"/>
                                                     </Grid.RowDefinitions>
 
                                                     <TextBlock Grid.Row="0" Grid.Column="0" Text="Name" Style="{StaticResource PropLabelStyle}"/>
@@ -1160,13 +1225,19 @@
                                                                Text="{x:Bind ViewModel.AvPins.SelectedView.Name, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
                                                                TextChanged="AnyText_Changed"/>
 
-                                                    <TextBlock Grid.Row="1" Grid.Column="0" Text="Locator" Style="{StaticResource PropLabelStyle}"/>
+                                                    <TextBlock Grid.Row="1" Grid.Column="0" Text="Guid" Style="{StaticResource PropLabelStyle}"/>
                                                     <TextBox   Grid.Row="1" Grid.Column="1"
+                                                               Text="{x:Bind ViewModel.AvPins.SelectedView.Guid, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                                                               TextChanged="AnyText_Changed"
+                                                               FontSize="11" FontFamily="Consolas"/>
+
+                                                    <TextBlock Grid.Row="2" Grid.Column="0" Text="Locator" Style="{StaticResource PropLabelStyle}"/>
+                                                    <TextBox   Grid.Row="2" Grid.Column="1"
                                                                Text="{x:Bind ViewModel.AvPins.SelectedView.Locator, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
                                                                TextChanged="AnyText_Changed"/>
 
-                                                    <TextBlock Grid.Row="2" Grid.Column="0" Text="Pos X/Y/Z" Style="{StaticResource PropLabelStyle}"/>
-                                                    <StackPanel Grid.Row="2" Grid.Column="1" Orientation="Horizontal" Spacing="4">
+                                                    <TextBlock Grid.Row="3" Grid.Column="0" Text="Pos X/Y/Z" Style="{StaticResource PropLabelStyle}"/>
+                                                    <StackPanel Grid.Row="3" Grid.Column="1" Orientation="Horizontal" Spacing="4">
                                                         <NumberBox Value="{x:Bind ViewModel.AvPins.SelectedView.PosX, Mode=TwoWay}"
                                                                    SmallChange="0.001" SpinButtonPlacementMode="Compact" Width="72"
                                                                    Header="X" ValueChanged="AnyNumber_Changed"/>
@@ -1178,20 +1249,20 @@
                                                                    Header="Z" ValueChanged="AnyNumber_Changed"/>
                                                     </StackPanel>
 
-                                                    <TextBlock Grid.Row="3" Grid.Column="0" Text="Dir Yaw" Style="{StaticResource PropLabelStyle}"/>
-                                                    <NumberBox Grid.Row="3" Grid.Column="1"
+                                                    <TextBlock Grid.Row="4" Grid.Column="0" Text="Dir Yaw" Style="{StaticResource PropLabelStyle}"/>
+                                                    <NumberBox Grid.Row="4" Grid.Column="1"
                                                                Value="{x:Bind ViewModel.AvPins.SelectedView.DirectionYaw, Mode=TwoWay}"
                                                                SmallChange="0.5" SpinButtonPlacementMode="Inline"
                                                                ValueChanged="AnyNumber_Changed"/>
 
-                                                    <TextBlock Grid.Row="4" Grid.Column="0" Text="Size Width" Style="{StaticResource PropLabelStyle}"/>
-                                                    <NumberBox Grid.Row="4" Grid.Column="1"
+                                                    <TextBlock Grid.Row="5" Grid.Column="0" Text="Size Width" Style="{StaticResource PropLabelStyle}"/>
+                                                    <NumberBox Grid.Row="5" Grid.Column="1"
                                                                Value="{x:Bind ViewModel.AvPins.SelectedView.SizeWidth, Mode=TwoWay}"
                                                                SmallChange="0.01" Minimum="0" SpinButtonPlacementMode="Inline"
                                                                ValueChanged="AnyNumber_Changed"/>
 
-                                                    <TextBlock Grid.Row="5" Grid.Column="0" Text="Yaw Min/Max" Style="{StaticResource PropLabelStyle}"/>
-                                                    <StackPanel Grid.Row="5" Grid.Column="1" Orientation="Horizontal" Spacing="4">
+                                                    <TextBlock Grid.Row="6" Grid.Column="0" Text="Yaw Min/Max" Style="{StaticResource PropLabelStyle}"/>
+                                                    <StackPanel Grid.Row="6" Grid.Column="1" Orientation="Horizontal" Spacing="4">
                                                         <NumberBox Value="{x:Bind ViewModel.AvPins.SelectedView.MinYaw, Mode=TwoWay}"
                                                                    SmallChange="1" SpinButtonPlacementMode="Compact" Width="84"
                                                                    Header="Min" ValueChanged="AnyNumber_Changed"/>
@@ -1200,8 +1271,8 @@
                                                                    Header="Max" ValueChanged="AnyNumber_Changed"/>
                                                     </StackPanel>
 
-                                                    <TextBlock Grid.Row="6" Grid.Column="0" Text="Pitch Min/Max" Style="{StaticResource PropLabelStyle}"/>
-                                                    <StackPanel Grid.Row="6" Grid.Column="1" Orientation="Horizontal" Spacing="4">
+                                                    <TextBlock Grid.Row="7" Grid.Column="0" Text="Pitch Min/Max" Style="{StaticResource PropLabelStyle}"/>
+                                                    <StackPanel Grid.Row="7" Grid.Column="1" Orientation="Horizontal" Spacing="4">
                                                         <NumberBox Value="{x:Bind ViewModel.AvPins.SelectedView.MinPitch, Mode=TwoWay}"
                                                                    SmallChange="1" SpinButtonPlacementMode="Compact" Width="84"
                                                                    Header="Min" ValueChanged="AnyNumber_Changed"/>

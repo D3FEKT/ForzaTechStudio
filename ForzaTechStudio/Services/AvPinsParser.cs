@@ -284,6 +284,7 @@ namespace ForzaTechStudio.Services
         {
             var v = new PoiViewEntry();
             v.Name         = el.Attribute("Name")?.Value ?? el.Element("Name")?.Value?.Trim() ?? "";
+            v.Guid         = el.Attribute("Guid")?.Value ?? "";
             v.Locator      = el.Attribute("Locator")?.Value ?? el.Element("Locator")?.Value?.Trim() ?? "";
             v.OverrideMode = el.Attribute("OverrideMode")?.Value ?? "Add";
             v.EnableBackOut = B(el, "EnableBackOut");
@@ -307,6 +308,8 @@ namespace ForzaTechStudio.Services
         {
             w.WriteStartElement("View");
             w.WriteAttributeString("Name",    v.Name);
+            if (!string.IsNullOrEmpty(v.Guid))
+                w.WriteAttributeString("Guid", v.Guid);
             w.WriteAttributeString("Locator", v.Locator);
             if (v.OverrideMode != "Add")
                 w.WriteAttributeString("OverrideMode", v.OverrideMode);
@@ -358,6 +361,11 @@ namespace ForzaTechStudio.Services
             data.Template = root.Attribute("Template")?.Value
                          ?? root.Element("Template")?.Value?.Trim()
                          ?? "Default";
+
+            // InitialStates
+            var initEl = root.Element("InitialStates");
+            if (initEl != null)
+                ParseConditions(initEl, data.InitialStates);
 
             // Views
             var viewsEl = root.Element("Views");
@@ -424,8 +432,15 @@ namespace ForzaTechStudio.Services
             if (!string.IsNullOrEmpty(data.Template))
                 w.WriteAttributeString("Template", data.Template);
 
-            // InitialStates (empty placeholder — preserved from original if present)
+            // InitialStates
             w.WriteStartElement("InitialStates");
+            foreach (var c in data.InitialStates)
+            {
+                w.WriteStartElement(c.IsSet ? "Set" : "UnSet");
+                w.WriteAttributeString("State", c.State);
+                w.WriteAttributeString("OverrideMode", c.OverrideMode);
+                w.WriteEndElement();
+            }
             w.WriteEndElement();
 
             // Views

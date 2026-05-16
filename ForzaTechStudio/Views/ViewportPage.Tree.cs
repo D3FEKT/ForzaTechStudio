@@ -258,18 +258,44 @@ namespace ForzaTechStudio.Views
 
         private async void FileTree_RightTapped(object sender, Microsoft.UI.Xaml.Input.RightTappedRoutedEventArgs e)
         {
-            if (e.OriginalSource is FrameworkElement element && element.DataContext is TreeViewNode treeNode)
+            if (e.OriginalSource is not FrameworkElement element) return;
+            if (element.DataContext is not TreeViewNode treeNode) return;
+            if (treeNode.Content is not IViewerNode viewerNode) return;
+
+            var menu = new MenuFlyout();
+
+            // Find the root of the right-clicked node
+            IViewerNode root = viewerNode;
+            while (root.Parent != null)
+                root = root.Parent;
+
+            if (ViewModel.Roots.Contains(root))
             {
-                if (treeNode.Content is ModelBinNode binNode && !string.IsNullOrEmpty(binNode.SourceZipPath))
+                var closeItem = new MenuFlyoutItem
                 {
-                    var menu = new MenuFlyout();
-                    var replaceItem = new MenuFlyoutItem { Text = "Replace File in ZIP", Icon = new FontIcon { Glyph = "\uE8E5" } };
-                    replaceItem.Click += async (s, args) => await ReplaceModelBinInZip(binNode);
-                    menu.Items.Add(replaceItem);
-                    
-                    menu.ShowAt(element, e.GetPosition(element));
-                }
+                    Text = $"Close \"{root.Name}\"",
+                    Icon = new FontIcon { Glyph = "\uE8BB" }
+                };
+                closeItem.Click += (s, args) =>
+                {
+                    ViewModel_RequestCloseRoot(this, root);
+                    ViewModel.RemoveRoot(root);
+                    ViewModel.ActiveTab?.Roots.Remove(root);
+                };
+                menu.Items.Add(closeItem);
             }
+
+            if (viewerNode is ModelBinNode binNode && !string.IsNullOrEmpty(binNode.SourceZipPath))
+            {
+                if (menu.Items.Count > 0)
+                    menu.Items.Add(new MenuFlyoutSeparator());
+                var replaceItem = new MenuFlyoutItem { Text = "Replace File in ZIP", Icon = new FontIcon { Glyph = "\uE8E5" } };
+                replaceItem.Click += async (s, args) => await ReplaceModelBinInZip(binNode);
+                menu.Items.Add(replaceItem);
+            }
+
+            if (menu.Items.Count > 0)
+                menu.ShowAt(element, e.GetPosition(element));
         }
 
         private void SyncSelectionToUI()
