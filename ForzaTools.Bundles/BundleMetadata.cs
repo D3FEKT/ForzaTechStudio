@@ -17,6 +17,7 @@ public abstract class BundleMetadata
 
     // Materials (materialbin)
     public const uint TAG_METADATA_Atlas = 0x41545354; // "ATST"
+    public const uint TAG_METADATA_ARTX = 0x58545241; // "ARTX"
     public const uint TAG_METADATA_BLEN = 0x424C454E; // "BLEN"
     public const uint TAG_METADATA_VDCL = 0x5644434C; // "VDCL"
 

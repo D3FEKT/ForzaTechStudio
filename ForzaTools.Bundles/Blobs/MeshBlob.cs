@@ -15,6 +15,10 @@ public class MeshBlob : BundleBlob
 {
     public string NameSuffix { get; set; } = "0";
 
+    // v1.13+: explicit material-group count at the start of the blob.
+    // The rest of the tooling still treats the first group as the active material binding.
+    public List<short[]> MaterialGroups { get; set; } = new();
+
     // v1.9+ Material IDs array (4 shorts; game uses [1] as the actual material index)
     public short[] MaterialIds { get; set; }
     // Pre-v1.9 single material ID (also synced from MaterialIds[1] when reading v1.9)
@@ -43,8 +47,9 @@ public class MeshBlob : BundleBlob
     public bool IsAlphaToCoverage { get; set; }
 
     public byte BucketOrder { get; set; }
-    public byte SkinningElementsCount { get; set; }   
-    public byte MorphWeightsCount { get; set; } = 1;  
+    public byte SkinningElementsCount { get; set; }
+    public uint MorphTargetCount { get; set; } = 1;
+    public uint MorphWeightsCount { get => MorphTargetCount; set => MorphTargetCount = value; }
     public bool IsMorphDamage { get; set; } = true;
     public bool Is32BitIndices { get; set; } = true;
     public ushort Topology { get; set; } = 4;         // D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST = 4
@@ -56,8 +61,9 @@ public class MeshBlob : BundleBlob
     public int PrimCount { get; set; }
     public float ACMR { get; set; } = 0.65f;
     public uint ReferencedVertexCount { get; set; }
-    // v1.12+: optional post-reference index array; the count field is always present but can be 0
-    public uint[] PostRefArray { get; set; } = Array.Empty<uint>();
+    // v1.11+: serialized referenced-vertex list. Older versions synthesize 0..ReferencedVertexCount-1.
+    public uint[] ReferencedVertexIndices { get; set; } = Array.Empty<uint>();
+    public uint[] PostRefArray { get => ReferencedVertexIndices; set => ReferencedVertexIndices = value ?? Array.Empty<uint>(); }
     public int VertexLayoutIndex { get; set; }
     public List<VertexBufferUsage> VertexBuffers { get; set; } = new();
     public int MorphDataBufferIndex { get; set; }
@@ -70,27 +76,40 @@ public class MeshBlob : BundleBlob
 
     // One vertex buffer usage entry in the mesh's VB list.
     // Fields: Index (buffer id), InputSlot (D3D12 slot), Stride (bytes/vertex), Offset.
-    // v1.12+: 5th dword Unknown appended; always 0 in all checked FH6 samples.
+    // FH6 preserves a 5th dword on v1.12+ wire records, but no downstream consumer has been
+    // identified yet, so treat it as reserved-by-wire for now.
     public class VertexBufferUsage
     {
         public int Index { get; set; }
         public uint InputSlot { get; set; }  
         public uint Stride { get; set; }
         public uint Offset { get; set; }
-        public uint Unknown { get; set; }
+        public uint Reserved { get; set; }
+        public uint Unknown { get => Reserved; set => Reserved = value; }
     }
 
     public override void ReadBlobData(BinaryStream bs)
     {
-        // v1.9+: 4-element material ID array; game uses index [1] as the actual material ID
+        int materialGroupCount = IsAtLeastVersion(1, 13) ? bs.ReadInt32() : 1;
+        MaterialGroups = new List<short[]>(materialGroupCount);
+
+        for (int i = 0; i < materialGroupCount; i++)
+        {
+            if (IsAtLeastVersion(1, 9))
+                MaterialGroups.Add(bs.ReadInt16s(4));
+            else
+                MaterialGroups.Add(new short[] { bs.ReadInt16() });
+        }
+
+        short[] primaryMaterialGroup = MaterialGroups.Count > 0 ? MaterialGroups[0] : Array.Empty<short>();
         if (IsAtLeastVersion(1, 9))
         {
-            MaterialIds = bs.ReadInt16s(4);
+            MaterialIds = primaryMaterialGroup.Length >= 4 ? primaryMaterialGroup : new short[] { -1, MaterialId, -1, -1 };
             MaterialId = MaterialIds[1]; // sync the legacy field
         }
         else
         {
-            MaterialId = bs.ReadInt16();
+            MaterialId = primaryMaterialGroup.Length > 0 ? primaryMaterialGroup[0] : (short)0;
         }
 
         RigidBoneIndex = bs.ReadInt16();
@@ -117,8 +136,11 @@ public class MeshBlob : BundleBlob
 
         BucketOrder = bs.Read1Byte();
 
-        if (IsAtLeastVersion(1, 2)) { SkinningElementsCount = bs.Read1Byte(); MorphWeightsCount = bs.Read1Byte(); }
-        if (IsAtLeastVersion(1, 12)) bs.ReadBytes(3); // v1.12+: 3-byte zero pad after MorphWeightsCount
+        if (IsAtLeastVersion(1, 2))
+        {
+            SkinningElementsCount = bs.Read1Byte();
+            MorphTargetCount = IsAtLeastVersion(1, 10) ? bs.ReadUInt32() : bs.Read1Byte();
+        }
         if (IsAtLeastVersion(1, 3)) IsMorphDamage = bs.ReadBoolean();
 
         Is32BitIndices = bs.ReadBoolean();
@@ -133,12 +155,16 @@ public class MeshBlob : BundleBlob
         PrimCount             = bs.ReadInt32();   
 
         if (IsAtLeastVersion(1, 6)) { ACMR = bs.ReadSingle(); ReferencedVertexCount = bs.ReadUInt32(); }
-        if (IsAtLeastVersion(1, 12))
+        if (IsAtLeastVersion(1, 11))
         {
-            uint postRefCount = bs.ReadUInt32();
-            PostRefArray = new uint[postRefCount];
-            for (int i = 0; i < postRefCount; i++)
-                PostRefArray[i] = bs.ReadUInt32();
+            uint referencedVertexIndexCount = bs.ReadUInt32();
+            ReferencedVertexIndices = new uint[referencedVertexIndexCount];
+            for (int i = 0; i < referencedVertexIndexCount; i++)
+                ReferencedVertexIndices[i] = bs.ReadUInt32();
+        }
+        else if (IsAtLeastVersion(1, 6))
+        {
+            ReferencedVertexIndices = BuildIdentityReferencedVertexIndices();
         }
 
         VertexLayoutIndex = bs.ReadInt32();
@@ -152,7 +178,7 @@ public class MeshBlob : BundleBlob
                 InputSlot = bs.ReadUInt32(), 
                 Stride    = bs.ReadUInt32(),
                 Offset    = bs.ReadUInt32(),
-                Unknown   = IsAtLeastVersion(1, 12) ? bs.ReadUInt32() : 0
+                Reserved  = IsAtLeastVersion(1, 12) ? bs.ReadUInt32() : 0
             });
         }
 
@@ -175,16 +201,24 @@ public class MeshBlob : BundleBlob
 
     public override void SerializeBlobData(BinaryStream bs)
     {
+        List<short[]> materialGroups = GetSerializedMaterialGroups();
+        if (IsAtLeastVersion(1, 13))
+            bs.WriteInt32(materialGroups.Count);
+
         if (IsAtLeastVersion(1, 9))
         {
-            if (MaterialIds != null && MaterialIds.Length >= 4)
-                bs.WriteInt16s(MaterialIds);
-            else
-                bs.WriteInt16s(new short[] { -1, MaterialId, -1, -1 });
+            foreach (short[] materialGroup in materialGroups)
+            {
+                if (materialGroup != null && materialGroup.Length >= 4)
+                    bs.WriteInt16s(materialGroup);
+                else
+                    bs.WriteInt16s(new short[] { -1, MaterialId, -1, -1 });
+            }
         }
         else
         {
-            bs.WriteInt16(MaterialId);
+            foreach (short[] materialGroup in materialGroups)
+                bs.WriteInt16(materialGroup != null && materialGroup.Length > 0 ? materialGroup[0] : MaterialId);
         }
 
         bs.WriteInt16(RigidBoneIndex);
@@ -196,8 +230,14 @@ public class MeshBlob : BundleBlob
         bs.WriteUInt16(bucketFlagsRaw);
         bs.WriteByte(BucketOrder);
 
-        if (IsAtLeastVersion(1, 2)) { bs.WriteByte(SkinningElementsCount); bs.WriteByte(MorphWeightsCount); }
-        if (IsAtLeastVersion(1, 12)) { bs.WriteByte(0); bs.WriteByte(0); bs.WriteByte(0); } // v1.12+ zero pad
+        if (IsAtLeastVersion(1, 2))
+        {
+            bs.WriteByte(SkinningElementsCount);
+            if (IsAtLeastVersion(1, 10))
+                bs.WriteUInt32(MorphTargetCount);
+            else
+                bs.WriteByte(checked((byte)MorphTargetCount));
+        }
         if (IsAtLeastVersion(1, 3)) bs.WriteBoolean(IsMorphDamage);
 
         bs.WriteBoolean(Is32BitIndices);
@@ -210,10 +250,10 @@ public class MeshBlob : BundleBlob
         bs.WriteInt32(PrimCount);
 
         if (IsAtLeastVersion(1, 6)) { bs.WriteSingle(ACMR); bs.WriteUInt32(ReferencedVertexCount); }
-        if (IsAtLeastVersion(1, 12))
+        if (IsAtLeastVersion(1, 11))
         {
-            bs.WriteUInt32((uint)PostRefArray.Length);
-            foreach (var v in PostRefArray) bs.WriteUInt32(v);
+            bs.WriteUInt32((uint)ReferencedVertexIndices.Length);
+            foreach (var v in ReferencedVertexIndices) bs.WriteUInt32(v);
         }
 
         bs.WriteInt32(VertexLayoutIndex);
@@ -231,6 +271,9 @@ public class MeshBlob : BundleBlob
 
     public override void CreateModelBinBlobData(BinaryStream bs)
     {
+        if (IsAtLeastVersion(1, 13))
+            bs.WriteInt32(1);
+
         // 1. Material IDs — v1.9 format: 4 shorts, index [1] is the primary material
         bs.WriteInt16(-1);
         bs.WriteInt16(MaterialId);
@@ -254,12 +297,12 @@ public class MeshBlob : BundleBlob
         // 6. Bucket Order
         bs.WriteByte(BucketOrder);
 
-        // 7. Skinning/Morph Counts (always v1.2+ in new files)
+        // 7. Skinning/Morph Counts
         bs.WriteByte(SkinningElementsCount);
-        bs.WriteByte(MorphWeightsCount);
-
-        // v1.12+: zero pad after MorphWeightsCount
-        if (IsAtLeastVersion(1, 12)) { bs.WriteByte(0); bs.WriteByte(0); bs.WriteByte(0); }
+        if (IsAtLeastVersion(1, 10))
+            bs.WriteUInt32(MorphTargetCount);
+        else
+            bs.WriteByte(checked((byte)MorphTargetCount));
 
         // 8. IsMorphDamage (always v1.3+ in new files)
         bs.WriteBoolean(IsMorphDamage);
@@ -282,8 +325,13 @@ public class MeshBlob : BundleBlob
         bs.WriteSingle(ACMR);
         bs.WriteUInt32(ReferencedVertexCount);
 
-        // v1.12+: PostRefCount (0 for newly created meshes)
-        if (IsAtLeastVersion(1, 12)) bs.WriteUInt32(0);
+        if (IsAtLeastVersion(1, 11))
+        {
+            var referencedVertexIndices = GetSerializedReferencedVertexIndices();
+            bs.WriteUInt32((uint)referencedVertexIndices.Length);
+            foreach (var index in referencedVertexIndices)
+                bs.WriteUInt32(index);
+        }
 
         // 13. Vertex Layout Index
         bs.WriteInt32(VertexLayoutIndex);
@@ -340,6 +388,43 @@ public class MeshBlob : BundleBlob
         return raw;
     }
 
+    private uint[] BuildIdentityReferencedVertexIndices()
+    {
+        int count = checked((int)ReferencedVertexCount);
+        if (count == 0)
+            return Array.Empty<uint>();
+
+        var indices = new uint[count];
+        for (int i = 0; i < count; i++)
+            indices[i] = (uint)i;
+
+        return indices;
+    }
+
+    private uint[] GetSerializedReferencedVertexIndices()
+    {
+        if (ReferencedVertexIndices.Length != 0)
+            return ReferencedVertexIndices;
+
+        return BuildIdentityReferencedVertexIndices();
+    }
+
+    private List<short[]> GetSerializedMaterialGroups()
+    {
+        if (MaterialGroups.Count != 0)
+            return MaterialGroups;
+
+        if (IsAtLeastVersion(1, 9))
+        {
+            if (MaterialIds != null && MaterialIds.Length >= 4)
+                return new List<short[]> { MaterialIds };
+
+            return new List<short[]> { new short[] { -1, MaterialId, -1, -1 } };
+        }
+
+        return new List<short[]> { new short[] { MaterialId } };
+    }
+
     private void WriteVertexBuffers(BinaryStream bs)
     {
         bs.WriteInt32(VertexBuffers.Count);
@@ -349,7 +434,7 @@ public class MeshBlob : BundleBlob
             bs.WriteUInt32(vb.InputSlot);
             bs.WriteUInt32(vb.Stride);
             bs.WriteUInt32(vb.Offset);
-            if (IsAtLeastVersion(1, 12)) bs.WriteUInt32(vb.Unknown);
+            if (IsAtLeastVersion(1, 12)) bs.WriteUInt32(vb.Reserved);
         }
     }
 }

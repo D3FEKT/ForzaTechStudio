@@ -1,7 +1,8 @@
 ﻿using Syroot.BinaryData;
+using System;
+using System.Buffers.Binary;
 using System.Collections.Generic;
 using System.Numerics;
-using System.Text;
 
 namespace ForzaTools.Bundles.Blobs
 {
@@ -16,10 +17,26 @@ namespace ForzaTools.Bundles.Blobs
 
     public class SkeletonBlob : BundleBlob
     {
+        private byte[] _attributeData = Array.Empty<byte>();
+        private byte[] _attributeTrailingData = Array.Empty<byte>();
+        private bool _hasStructuredAttributeData;
+
         public List<Bone> Bones { get; set; } = new List<Bone>();
 
-        // The "whole data array" often found at the end of the blob in v1.0+
-        public byte[] UnknownData { get; set; }
+        // v1.0+: length-prefixed skeleton attribute sidecar.
+        public uint AttributesHeader { get; set; }
+        public ulong[] AttributeEntries { get; set; } = Array.Empty<ulong>();
+        public byte[] AttributeData
+        {
+            get => _attributeData;
+            set
+            {
+                _attributeData = value ?? Array.Empty<byte>();
+                _attributeTrailingData = Array.Empty<byte>();
+                _hasStructuredAttributeData = false;
+            }
+        }
+        public byte[] UnknownData { get => AttributeData; set => AttributeData = value ?? Array.Empty<byte>(); }
 
         public SkeletonBlob()
         {
@@ -90,9 +107,7 @@ namespace ForzaTools.Bundles.Blobs
             {
                 var bone = new Bone();
 
-                // Read String (Int32 Length + Chars)
-                int nameLen = bs.ReadInt32();
-                bone.Name = bs.ReadString(nameLen, Encoding.UTF8);
+                bone.Name = bs.ReadString(StringCoding.Int32CharCount);
 
                 bone.ParentId = bs.ReadInt16();
                 bone.FirstChildIndex = bs.ReadInt16();
@@ -114,27 +129,20 @@ namespace ForzaTools.Bundles.Blobs
                 Bones.Add(bone);
             }
 
-            // Read Unknown Data Array (Version >= 1.0)
             if (VersionMajor >= 1)
             {
-                // In some parsers this is reading the remaining bytes or a specific length
-                // Assuming standard length-prefixed format or reading remaining if stream allows
-                // Based on Bundle_grub.txt logic for "unk__v1_0_length"
+                AttributeData = Array.Empty<byte>();
+                AttributeEntries = Array.Empty<ulong>();
 
-                // Note: Some formats might not have the length prefix if it's strictly tail data, 
-                // but usually Forza blobs prefix dynamic arrays.
-                try
+                if (bs.Position + 4 <= bs.Length)
                 {
-                    // Attempt to read length
-                    uint unknownLength = bs.ReadUInt32();
-                    if (unknownLength > 0 && unknownLength < bs.Length - bs.Position + 1000) // Sanity check
+                    uint attributeDataLength = bs.ReadUInt32();
+                    long remaining = bs.Length - bs.Position;
+                    if (attributeDataLength > 0 && attributeDataLength <= remaining)
                     {
-                        UnknownData = bs.ReadBytes((int)unknownLength);
+                        AttributeData = bs.ReadBytes((int)attributeDataLength);
+                        ParseAttributeData();
                     }
-                }
-                catch
-                {
-                    // End of stream or invalid data
                 }
             }
         }
@@ -157,12 +165,8 @@ namespace ForzaTools.Bundles.Blobs
             // 2. Write Each Bone
             foreach (var bone in Bones)
             {
-                // Name (Int32 Length + ASCII/UTF8 Bytes)
-                string name = bone.Name ?? "";
-                bs.WriteInt32(name.Length);
-                bs.Write(Encoding.UTF8.GetBytes(name));
+                bs.WriteString(bone.Name ?? "", StringCoding.Int32CharCount);
 
-                // Indices
                 bs.WriteInt16(bone.ParentId);
                 bs.WriteInt16(bone.FirstChildIndex);
                 bs.WriteInt16(bone.NextIndex);
@@ -176,20 +180,67 @@ namespace ForzaTools.Bundles.Blobs
                 bs.WriteSingle(bone.Matrix.M41); bs.WriteSingle(bone.Matrix.M42); bs.WriteSingle(bone.Matrix.M43); bs.WriteSingle(bone.Matrix.M44);
             }
 
-            // 3. Write Unknown Data Array (If Version >= 1.0)
             if (VersionMajor >= 1)
             {
-                if (UnknownData != null && UnknownData.Length > 0)
+                byte[] attributeData = BuildAttributeData();
+                if (attributeData.Length > 0)
                 {
-                    bs.WriteUInt32((uint)UnknownData.Length);
-                    bs.Write(UnknownData);
+                    bs.WriteUInt32((uint)attributeData.Length);
+                    bs.Write(attributeData);
                 }
                 else
                 {
-                    // Write 0 length if no data present
                     bs.WriteUInt32(0);
                 }
             }
+        }
+
+        private void ParseAttributeData()
+        {
+            _hasStructuredAttributeData = false;
+            _attributeTrailingData = Array.Empty<byte>();
+            AttributesHeader = 0;
+            AttributeEntries = Array.Empty<ulong>();
+
+            if (AttributeData.Length < 8)
+                return;
+
+            ReadOnlySpan<byte> data = AttributeData;
+            AttributesHeader = BinaryPrimitives.ReadUInt32LittleEndian(data);
+            uint entryCount = BinaryPrimitives.ReadUInt32LittleEndian(data.Slice(4, 4));
+            int availableEntries = (data.Length - 8) / 8;
+            int count = (int)Math.Min(entryCount, (uint)availableEntries);
+            int consumedBytes = 8 + (count * 8);
+
+            AttributeEntries = new ulong[count];
+            for (int i = 0; i < count; i++)
+                AttributeEntries[i] = BinaryPrimitives.ReadUInt64LittleEndian(data.Slice(8 + i * 8, 8));
+
+            if (AttributeData.Length > consumedBytes)
+                _attributeTrailingData = data.Slice(consumedBytes).ToArray();
+
+            _hasStructuredAttributeData = true;
+        }
+
+        private byte[] BuildAttributeData()
+        {
+            if (!_hasStructuredAttributeData && AttributeData.Length > 0)
+                return AttributeData;
+
+            if (!_hasStructuredAttributeData && AttributesHeader == 0 && AttributeEntries.Length == 0)
+                return Array.Empty<byte>();
+
+            byte[] data = new byte[8 + (AttributeEntries.Length * 8) + _attributeTrailingData.Length];
+            BinaryPrimitives.WriteUInt32LittleEndian(data.AsSpan(0, 4), AttributesHeader);
+            BinaryPrimitives.WriteUInt32LittleEndian(data.AsSpan(4, 4), (uint)AttributeEntries.Length);
+
+            for (int i = 0; i < AttributeEntries.Length; i++)
+                BinaryPrimitives.WriteUInt64LittleEndian(data.AsSpan(8 + (i * 8), 8), AttributeEntries[i]);
+
+            if (_attributeTrailingData.Length > 0)
+                _attributeTrailingData.CopyTo(data, 8 + (AttributeEntries.Length * 8));
+
+            return data;
         }
     }
 }

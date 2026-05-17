@@ -14,7 +14,7 @@ namespace ForzaTechStudio.Converters
                 {
                     NodeType.Zip => "\uF012", // ZipFolder
                     NodeType.Folder => "\uE8B7", // Folder
-                    NodeType.ModelBin => "\uF2E4", // File
+                    NodeType.ModelBin => "\uF158", // DialShape3
                     NodeType.Mesh => "\uF133", // Mesh
                     NodeType.PhysicsDefinition => "\uE9A6", // Physics
                     NodeType.LightsBin => "\uE706", // Lightbulb

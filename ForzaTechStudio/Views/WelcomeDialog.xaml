@@ -44,7 +44,7 @@
             <!-- Version badge + title -->
             <StackPanel Grid.Row="0" Orientation="Horizontal" Spacing="12" VerticalAlignment="Center">
                 <Border Background="{ThemeResource SystemControlBackgroundAccentBrush}" CornerRadius="6" Padding="10,4">
-                    <TextBlock Text="v0.9.1.5" FontSize="13" FontWeight="SemiBold" Foreground="White"/>
+                    <TextBlock Text="v0.9.1.6" FontSize="13" FontWeight="SemiBold" Foreground="White"/>
                 </Border>
                 <TextBlock Text="What's New" FontSize="28" FontWeight="SemiBold" VerticalAlignment="Center"/>
             </StackPanel>

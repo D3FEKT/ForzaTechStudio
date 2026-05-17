@@ -1,31 +1,14 @@
-﻿# Version 0.9.1.5 - Change Log
+﻿# Version 0.9.1.6 - Change Log
 
 ## General
-- Added support for reload asking if files externally changed
-- Fixed database building shaking bug
-
-## Stringtables
-- Added FH6 support
+- Fixed an issue with saving fh6 modelbin's, should parse and save correctly
+- Added `ARTX` Metadata support (New in Fh6)
 
 ## Modelbin Editor
-- Added FH6 support
-- Added Tabs
-- Added undo / redo buttons
-- Added Reload button
-- Small UI updates
-
-## Carbin Editor
-- Added tabs
-- Added FH6 support
+- Fixed an issue with Tabs not updating the targeted UI
 
 ## 3d viewer
-- Added support for FH6
-- Added tabs
-- Added reload button
-- Started initial material assignment in UI for selected modelbin's
-- Added ctrl + A to select all
+- UI button improvements
 
-## XML viewers
-- added fh6 support for avpins, anchorbones
 
 

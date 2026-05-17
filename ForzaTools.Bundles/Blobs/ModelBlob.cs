@@ -5,7 +5,8 @@ using ForzaTools.Bundles.Metadata;
 namespace ForzaTools.Bundles.Blobs;
 
 // Model blob (tag 'Modl'). Holds mesh, buffer, layout, and material counts plus LOD info.
-// v1.2+ adds a DecompressFlags byte; v1.3+ adds an extra byte and reserved uint16; v1.4+ appends a uint16.
+// FH6 keeps the v1.3+ wire layout to 0x12 bytes: a v1.3 buffer-retention flag at +0x10 and,
+// for v1.4+, a visibility mask byte at +0x11.
 // </summary> 
 public class ModelBlob : BundleBlob
 {
@@ -19,9 +20,8 @@ public class ModelBlob : BundleBlob
     public sbyte MaxLOD { get; set; }
     public ushort LODFlags { get; set; }
     public byte DecompressFlags { get; set; }
-    public byte UnkV1_3 { get; set; }
-    // v1.4+: trailing uint16 appended to payload; always 0x0001 in all checked FH6 samples
-    public ushort UnknownV1_4 { get; set; } = 0x0001;
+    public bool RetainCpuBufferCopy { get; set; }
+    public byte VisibilityFlags { get; set; } = 0x01;
 
     // Bounding box from metadata (populated during read, used during write)
     public Vector3? BoundingBoxMin { get; set; }
@@ -48,15 +48,15 @@ public class ModelBlob : BundleBlob
             DecompressFlags = bs.Read1Byte();
             bs.Read1Byte(); // padding at +0x0F
         }
-        // v1.3+: extra byte + padding + reserved uint16
+        // v1.3+: keep-CPU-copy flag at +0x10 and one reserved/visibility byte at +0x11.
         if (IsAtLeastVersion(1, 3))
         {
-            UnkV1_3 = bs.Read1Byte();
-            bs.Read1Byte();   // pad
-            bs.ReadUInt16();  // reserved
+            RetainCpuBufferCopy = bs.Read1Byte() != 0;
+            if (IsAtLeastVersion(1, 4))
+                VisibilityFlags = bs.Read1Byte();
+            else
+                bs.Read1Byte();
         }
-        // v1.4+: trailing uint16
-        if (IsAtLeastVersion(1, 4)) UnknownV1_4 = bs.ReadUInt16();
 
         var bboxMetadata = GetMetadataByTag<BoundaryBoxMetadata>(BundleMetadata.TAG_METADATA_BBox);
         if (bboxMetadata != null)
@@ -79,8 +79,11 @@ public class ModelBlob : BundleBlob
         bs.WriteUInt16(LODFlags);
 
         if (IsAtLeastVersion(1, 2)) { bs.WriteByte(DecompressFlags); bs.WriteByte(0); }
-        if (IsAtLeastVersion(1, 3)) { bs.WriteByte(UnkV1_3); bs.WriteByte(0); bs.WriteUInt16(0); }
-        if (IsAtLeastVersion(1, 4)) bs.WriteUInt16(UnknownV1_4);
+        if (IsAtLeastVersion(1, 3))
+        {
+            bs.WriteByte((byte)(RetainCpuBufferCopy ? 1 : 0));
+            bs.WriteByte(IsAtLeastVersion(1, 4) ? VisibilityFlags : (byte)0);
+        }
     }
 
     public override void CreateModelBinBlobData(BinaryStream bs)
@@ -103,8 +106,11 @@ public class ModelBlob : BundleBlob
         bs.WriteByte(DecompressFlags);
         bs.WriteByte(0); // padding
 
-        if (IsAtLeastVersion(1, 3)) { bs.WriteByte(UnkV1_3); bs.WriteByte(0); bs.WriteUInt16(0); }
-        if (IsAtLeastVersion(1, 4)) bs.WriteUInt16(UnknownV1_4);
+        if (IsAtLeastVersion(1, 3))
+        {
+            bs.WriteByte((byte)(RetainCpuBufferCopy ? 1 : 0));
+            bs.WriteByte(IsAtLeastVersion(1, 4) ? VisibilityFlags : (byte)0);
+        }
     }
 
     public override void CreateModelBinMetadatas(BinaryStream bs)

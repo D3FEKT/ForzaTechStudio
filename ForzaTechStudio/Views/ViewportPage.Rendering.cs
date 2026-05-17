@@ -309,12 +309,14 @@ namespace ForzaTechStudio.Views
         {
             var geometry = new MeshGeometry3D();
             var posCol = new Vector3Collection();
+            var boneTransform = IsFiniteMatrix(data.BoneTransform) ? data.BoneTransform : Matrix4x4.Identity;
             
             if (data.InitialRenderPositions != null)
             {
                 foreach (var p in data.InitialRenderPositions)
                 {
-                    posCol.Add(new SDX.Vector3(p.X, p.Y, p.Z));
+                    var safe = IsFiniteVector(p) ? p : Vector3.Zero;
+                    posCol.Add(new SDX.Vector3(safe.X, safe.Y, safe.Z));
                 }
             }
             else if (data.RawPositions != null && data.SourceMesh != null)
@@ -337,14 +339,21 @@ namespace ForzaTechStudio.Views
                         scaled = Vector3.Transform(scaled, rotMatrix);
                     
                     var v = new Vector3(scaled.X + trans.X, scaled.Y + trans.Y, scaled.Z + trans.Z);
-                    var transformed = Vector3.Transform(v, data.BoneTransform);
+                    var transformed = Vector3.Transform(v, boneTransform);
+
+                    if (!IsFiniteVector(transformed))
+                        transformed = IsFiniteVector(v) ? v : Vector3.Zero;
 
                     posCol.Add(new SDX.Vector3(transformed.X, transformed.Y, transformed.Z));
                 }
             }
             else if (data.Positions != null)
             {
-                foreach (var p in data.Positions) posCol.Add(new SDX.Vector3(p.X, p.Y, p.Z));
+                foreach (var p in data.Positions)
+                {
+                    var safe = IsFiniteVector(p) ? p : Vector3.Zero;
+                    posCol.Add(new SDX.Vector3(safe.X, safe.Y, safe.Z));
+                }
             }
             
             var normCol = new Vector3Collection();
@@ -354,7 +363,8 @@ namespace ForzaTechStudio.Views
                 bool hasNormRotation = normRotMatrix != Matrix4x4.Identity;
                 foreach (var n in data.Normals)
                 {
-                    var rn = hasNormRotation ? Vector3.Normalize(Vector3.TransformNormal(n, normRotMatrix)) : n;
+                    var rotated = hasNormRotation ? Vector3.TransformNormal(n, normRotMatrix) : n;
+                    var rn = NormalizeOrDefault(rotated, Vector3.UnitY);
                     normCol.Add(new SDX.Vector3(rn.X, rn.Y, rn.Z));
                 }
             }

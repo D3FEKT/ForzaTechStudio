@@ -198,7 +198,8 @@
                         <StackPanel Orientation="Horizontal" Spacing="6">
                             <TextBlock Text="{x:Bind Name, Mode=OneWay}" VerticalAlignment="Center"
                                        MaxWidth="160" TextTrimming="CharacterEllipsis"
-                                       FontSize="12"/>
+                                       FontSize="12"
+                                       ToolTipService.ToolTip="{x:Bind FilePath, Mode=OneWay}"/>
                             <Button Click="CloseTab_Click" Tag="{x:Bind}"
                                     Width="18" Height="18" Padding="0"
                                     CornerRadius="9"

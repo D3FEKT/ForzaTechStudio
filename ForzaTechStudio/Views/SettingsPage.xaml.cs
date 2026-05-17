@@ -15,7 +15,7 @@ namespace ForzaTechStudio.Views
         private void LoadVersion()
         {
             var version = Assembly.GetExecutingAssembly().GetName().Version;
-            VersionText.Text = $"Version Number: {version.Major}.{version.Minor}.{version.Build}";
+            VersionText.Text = $"Version Number: {version?.ToString() ?? "0.0.0.0"}";
         }
 
         private void NavigateToAppearance_Click(object sender, RoutedEventArgs e)

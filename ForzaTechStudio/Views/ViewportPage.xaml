@@ -750,36 +750,41 @@
                                                      FontSize="11"/>
 
                                             <!-- Action buttons -->
-                                            <ScrollViewer HorizontalScrollBarVisibility="Auto"
-                                                          VerticalScrollBarVisibility="Disabled"
-                                                          HorizontalAlignment="Stretch">
-                                                <StackPanel Orientation="Horizontal" Spacing="6">
-                                                    <Button Click="AddMaterialParam_Click" FontSize="11">
-                                                        <StackPanel Orientation="Horizontal" Spacing="6">
-                                                            <SymbolIcon Symbol="Add"/>
-                                                            <TextBlock Text="Add Parameter"/>
-                                                        </StackPanel>
-                                                    </Button>
-                                                    <Button Click="SaveMaterialJson_Click" FontSize="11">
-                                                        <StackPanel Orientation="Horizontal" Spacing="6">
-                                                            <SymbolIcon Symbol="Save"/>
-                                                            <TextBlock Text="Save to JSON"/>
-                                                        </StackPanel>
-                                                    </Button>
-                                                    <Button Click="ReplaceMaterialJson_Click" FontSize="11">
-                                                        <StackPanel Orientation="Horizontal" Spacing="6">
-                                                            <SymbolIcon Symbol="Import"/>
-                                                            <TextBlock Text="Replace JSON"/>
-                                                        </StackPanel>
-                                                    </Button>
-                                                    <Button Click="BrowseMaterialLibrary_Click" FontSize="11">
-                                                        <StackPanel Orientation="Horizontal" Spacing="6">
-                                                            <SymbolIcon Symbol="Library"/>
-                                                            <TextBlock Text="Browse Library"/>
-                                                        </StackPanel>
-                                                    </Button>
-                                                </StackPanel>
-                                            </ScrollViewer>
+                                            <Grid ColumnSpacing="6" RowSpacing="6">
+                                                <Grid.ColumnDefinitions>
+                                                    <ColumnDefinition Width="*"/>
+                                                    <ColumnDefinition Width="*"/>
+                                                </Grid.ColumnDefinitions>
+                                                <Grid.RowDefinitions>
+                                                    <RowDefinition Height="Auto"/>
+                                                    <RowDefinition Height="Auto"/>
+                                                </Grid.RowDefinitions>
+                                                
+                                                <Button Grid.Column="0" Grid.Row="0" Click="AddMaterialParam_Click" FontSize="11" MinHeight="32">
+                                                    <StackPanel Orientation="Horizontal" Spacing="6">
+                                                        <SymbolIcon Symbol="Add"/>
+                                                        <TextBlock Text="Add Parameter"/>
+                                                    </StackPanel>
+                                                </Button>
+                                                <Button Grid.Column="1" Grid.Row="0" Click="SaveMaterialJson_Click" FontSize="11" MinHeight="32">
+                                                    <StackPanel Orientation="Horizontal" Spacing="6">
+                                                        <SymbolIcon Symbol="Save"/>
+                                                        <TextBlock Text="Save to JSON"/>
+                                                    </StackPanel>
+                                                </Button>
+                                                <Button Grid.Column="0" Grid.Row="1" Click="ReplaceMaterialJson_Click" FontSize="11" MinHeight="32">
+                                                    <StackPanel Orientation="Horizontal" Spacing="6">
+                                                        <SymbolIcon Symbol="Import"/>
+                                                        <TextBlock Text="Replace JSON"/>
+                                                    </StackPanel>
+                                                </Button>
+                                                <Button Grid.Column="1" Grid.Row="1" Click="BrowseMaterialLibrary_Click" FontSize="11" MinHeight="32">
+                                                    <StackPanel Orientation="Horizontal" Spacing="6">
+                                                        <SymbolIcon Symbol="Library"/>
+                                                        <TextBlock Text="Browse Library"/>
+                                                    </StackPanel>
+                                                </Button>
+                                            </Grid>
 
                                             <!-- Parameters -->
                                             <controls:MaterialParameterEditorView x:Name="MeshMaterialParamEditor"/>
@@ -1458,6 +1463,28 @@
                 </AppBarButton.KeyboardAccelerators>
             </AppBarButton>
 
+            <AppBarButton Command="{x:Bind ViewModel.CloseSelectedCommand}"
+                          Label="Close Selected"
+                          ToolTipService.ToolTip="Close Selected (Ctrl+W)">
+                <AppBarButton.Icon>
+                    <FontIcon Glyph="&#xE711;"/>
+                </AppBarButton.Icon>
+                <AppBarButton.KeyboardAccelerators>
+                    <KeyboardAccelerator Modifiers="Control" Key="W"/>
+                </AppBarButton.KeyboardAccelerators>
+            </AppBarButton>
+
+            <AppBarButton Command="{x:Bind ViewModel.CloseAllCommand}"
+                          Label="Close All"
+                          ToolTipService.ToolTip="Close All Files (Ctrl+Shift+W)">
+                <AppBarButton.Icon>
+                    <FontIcon Glyph="&#xE74D;"/>
+                </AppBarButton.Icon>
+                <AppBarButton.KeyboardAccelerators>
+                    <KeyboardAccelerator Modifiers="Control,Shift" Key="W"/>
+                </AppBarButton.KeyboardAccelerators>
+            </AppBarButton>
+
             <AppBarButton x:Name="ReloadBtn" Label="Reload"
                           ToolTipService.ToolTip="Reload opened files">
                 <AppBarButton.Icon>
@@ -1542,28 +1569,6 @@
                         </MenuFlyoutItem>
                     </MenuFlyout>
                 </AppBarButton.Flyout>
-            </AppBarButton>
-
-            <AppBarButton Command="{x:Bind ViewModel.CloseSelectedCommand}"
-                          Label="Close Selected"
-                          ToolTipService.ToolTip="Close Selected (Ctrl+W)">
-                <AppBarButton.Icon>
-                    <FontIcon Glyph="&#xE711;"/>
-                </AppBarButton.Icon>
-                <AppBarButton.KeyboardAccelerators>
-                    <KeyboardAccelerator Modifiers="Control" Key="W"/>
-                </AppBarButton.KeyboardAccelerators>
-            </AppBarButton>
-
-            <AppBarButton Command="{x:Bind ViewModel.CloseAllCommand}"
-                          Label="Close All"
-                          ToolTipService.ToolTip="Close All Files (Ctrl+Shift+W)">
-                <AppBarButton.Icon>
-                    <FontIcon Glyph="&#xE74D;"/>
-                </AppBarButton.Icon>
-                <AppBarButton.KeyboardAccelerators>
-                    <KeyboardAccelerator Modifiers="Control,Shift" Key="W"/>
-                </AppBarButton.KeyboardAccelerators>
             </AppBarButton>
 
             <AppBarSeparator/>

@@ -1046,6 +1046,7 @@ public partial class MaterialsAndShadersViewModel : ObservableObject
             new MaterialShaderKeyValueItem { Label = "Shader Path", Value = string.IsNullOrWhiteSpace(material.ShaderPath) ? "Not recorded" : material.ShaderPath },
             new MaterialShaderKeyValueItem { Label = "Overrides", Value = material.Parameters.Count.ToString() },
             new MaterialShaderKeyValueItem { Label = "ATST", Value = material.AtlasSummary },
+            new MaterialShaderKeyValueItem { Label = "ARTX", Value = material.ArtxSummary },
         ];
     }
 
@@ -1080,6 +1081,9 @@ public partial class MaterialsAndShadersViewModel : ObservableObject
             new MaterialShaderKeyValueItem { Label = "Alternate Path v1.1", Value = string.IsNullOrWhiteSpace(material.ShaderPathV1_1) ? "-" : material.ShaderPathV1_1 },
             new MaterialShaderKeyValueItem { Label = "Alternate Path v1.2", Value = string.IsNullOrWhiteSpace(material.ShaderPathV1_2) ? "-" : material.ShaderPathV1_2 },
             new MaterialShaderKeyValueItem { Label = "ATST Metadata", Value = material.AtlasSummary },
+            new MaterialShaderKeyValueItem { Label = "ARTX Metadata", Value = material.ArtxSummary },
+            new MaterialShaderKeyValueItem { Label = "ARTX Fields", Value = material.ArtxFieldsSummary },
+            new MaterialShaderKeyValueItem { Label = "ARTX Observed Use", Value = material.ArtxObservedUseSummary },
             new MaterialShaderKeyValueItem { Label = "Override Footer", Value = material.FooterSummary },
         ];
     }

@@ -64,11 +64,8 @@ public abstract class BundleBlob
             bs.Position -= 4;
 
             BundleMetadata metadata = GetMetadataObjectByTag(metadataTag);
-            if (metadata != null)
-            {
-                metadata.Read(bs);
-                Metadatas.Add(metadata);
-            }
+            metadata.Read(bs);
+            Metadatas.Add(metadata);
         }
 
         // 2. Read Blob Data
@@ -96,13 +93,14 @@ public abstract class BundleBlob
             BundleMetadata.TAG_METADATA_Name => new NameMetadata(),
             BundleMetadata.TAG_METADATA_Identifier => new IdentifierMetadata(),
             BundleMetadata.TAG_METADATA_Atlas => new AtlasMetadata(),
+            BundleMetadata.TAG_METADATA_ARTX => new ARTXMetadata(),
             BundleMetadata.TAG_METADATA_BBox => new BoundaryBoxMetadata(),
             BundleMetadata.TAG_METADATA_TextureContentHeader => new TextureContentHeaderMetadata(),
             BundleMetadata.TAG_METADATA_TRef => new TextureReferencesMetadata(),
             BundleMetadata.TAG_METADATA_ACMR => new ACMRMetadata(),
             BundleMetadata.TAG_METADATA_VDCL => new VDCLMetadata(),
             BundleMetadata.TAG_METADATA_BLEN => new BlendMetadata(),
-            _ => null,
+            _ => new RawMetadata(),
         };
     }
 

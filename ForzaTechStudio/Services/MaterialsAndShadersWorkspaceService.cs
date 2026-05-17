@@ -50,6 +50,9 @@ public sealed class MaterialDocumentSnapshot
     public string ShaderPathV1_1 { get; set; } = string.Empty;
     public string ShaderPathV1_2 { get; set; } = string.Empty;
     public string AtlasSummary { get; set; } = string.Empty;
+    public string ArtxSummary { get; set; } = string.Empty;
+    public string ArtxFieldsSummary { get; set; } = string.Empty;
+    public string ArtxObservedUseSummary { get; set; } = string.Empty;
     public string FooterSummary { get; set; } = string.Empty;
     public ObservableCollection<ShaderParameter> Parameters { get; set; } = [];
 }
@@ -456,6 +459,7 @@ public sealed class MaterialsAndShadersWorkspaceService
             .OfType<MaterialShaderParameterBlob>()
             .FirstOrDefault(blob => blob.Tag == Bundle.TAG_BLOB_MaterialShaderParameter);
         var atlas = matl?.GetMetadataByTag<AtlasMetadata>(BundleMetadata.TAG_METADATA_Atlas);
+        var artx = matl?.GetMetadataByTag<ARTXMetadata>(BundleMetadata.TAG_METADATA_ARTX);
 
         return new MaterialDocumentSnapshot
         {
@@ -470,11 +474,93 @@ public sealed class MaterialsAndShadersWorkspaceService
             AtlasSummary = atlas == null
                 ? "No ATST metadata exposed on MATL."
                 : $"ATST v{atlas.Version}: FlagA={atlas.Unk}, FlagB={atlas.UnkV2}",
+            ArtxSummary = BuildArtxSummary(artx),
+            ArtxFieldsSummary = BuildArtxFieldsSummary(artx),
+            ArtxObservedUseSummary = BuildArtxObservedUseSummary(artx),
             FooterSummary = overrides == null
                 ? "No MTPR override blob present."
                 : $"Parameter CRC: 0x{overrides.Unk1:X8}  |  Texture CRC: 0x{overrides.Unk2:X8}  |  Sampler CRC: 0x{overrides.Unk3:X8}",
             Parameters = overrides?.Parameters ?? [],
         };
+    }
+
+    private static string BuildArtxSummary(ARTXMetadata? artx)
+    {
+        if (artx == null)
+            return "No ARTX metadata exposed on MATL.";
+
+        if (artx.Version < 2)
+            return $"ARTX v{artx.Version}: unknown byte only";
+
+        if (artx.EnableAfterPixelDepth == 0)
+            return artx.Version >= 3
+                ? $"ARTX v{artx.Version}: AfterPixelDepth disabled; FlagsV3 omitted"
+                : $"ARTX v{artx.Version}: AfterPixelDepth disabled";
+
+        if (!artx.HasFlagsV3)
+            return $"ARTX v{artx.Version}: AfterPixelDepth enabled";
+
+        string forceText = artx.ForceAfterPixelDepth ? "forced on" : "resource-driven";
+        return $"ARTX v{artx.Version}: AfterPixelDepth enabled, {forceText}, ModeCode={artx.ModeCodeV3}, FlagsV3=0x{artx.FlagsV3:X2}";
+    }
+
+    private static string BuildArtxFieldsSummary(ARTXMetadata? artx)
+    {
+        if (artx == null)
+            return "No ARTX field data exposed.";
+
+        var parts = new List<string>
+        {
+            $"UnknownV1=0x{artx.UnknownV1:X2}"
+        };
+
+        if (artx.Version >= 2)
+        {
+            parts.Add($"UnusedV2=0x{artx.UnusedV2:X2}");
+            parts.Add($"EnableAfterPixelDepth=0x{artx.EnableAfterPixelDepth:X2}");
+        }
+
+        if (artx.Version >= 3)
+        {
+            parts.Add(artx.HasFlagsV3
+                ? $"FlagsV3=0x{artx.FlagsV3:X2}"
+                : "FlagsV3=not present");
+
+            if (artx.HasFlagsV3)
+            {
+                parts.Add($"ModeCodeV3={artx.ModeCodeV3}");
+                parts.Add($"ForceAfterPixelDepth={(artx.ForceAfterPixelDepth ? "true" : "false")}");
+            }
+        }
+
+        if (artx.Version >= 4)
+            parts.Add($"UnknownV4=0x{artx.UnknownV4:X2}");
+
+        if (artx.Version >= 5)
+            parts.Add($"UnknownV5=0x{artx.UnknownV5:X2}");
+
+        return string.Join("  |  ", parts);
+    }
+
+    private static string BuildArtxObservedUseSummary(ARTXMetadata? artx)
+    {
+        if (artx == null)
+            return "No ARTX runtime use to summarize.";
+
+        if (artx.Version < 2)
+            return "FH6 stores ARTX byte 0, but no dedicated downstream consumer is proven for it yet.";
+
+        if (artx.EnableAfterPixelDepth == 0)
+            return "FH6 reads ARTX byte 2 as an AfterPixelDepth enable byte. When it is zero, the v3 flag byte is skipped and no dedicated AfterPixelDepth path is activated.";
+
+        if (!artx.HasFlagsV3)
+            return "FH6 reads ARTX byte 2 as an AfterPixelDepth enable byte. This version has no v3 flag byte, and the remaining bytes are still unresolved.";
+
+        string afterPixelDepthSource = artx.ForceAfterPixelDepth
+            ? "With FlagsV3 bit 0x08 set, MaterialInstance forces the effective AfterPixelDepth state on."
+            : "With FlagsV3 bit 0x08 clear, MaterialInstance derives the effective AfterPixelDepth state from the resource hashed as AfterPixelDepth.";
+
+        return $"FH6 uses ARTX byte 2 to enable an AfterPixelDepth path. {afterPixelDepthSource} FlagsV3 bits 0x02 and 0x04 decode to mode codes 35, 34, and 33, but their downstream meaning is still unresolved. UnknownV1, UnknownV4, and UnknownV5 are also still unresolved.";
     }
 
     private static ShaderDocumentSnapshot BuildShaderDocument(LoadedBundleSource loaded)

@@ -9,9 +9,9 @@
     <RuntimeIdentifiers>win-x86;win-x64;win-arm64</RuntimeIdentifiers>
     <PublishProfile>win-$(Platform).pubxml</PublishProfile>
     <UseWinUI>true</UseWinUI>
-    <AssemblyVersion>0.9.1.5</AssemblyVersion>
-    <FileVersion>0.9.1.5</FileVersion>
-    <Version>0.9.1.5</Version>
+    <AssemblyVersion>0.9.1.6</AssemblyVersion>
+    <FileVersion>0.9.1.6</FileVersion>
+    <Version>0.9.1.6</Version>
     <EnableMsixTooling>true</EnableMsixTooling>
     <Nullable>enable</Nullable>
     <BuiltInComInteropSupport>true</BuiltInComInteropSupport>
@@ -175,6 +175,11 @@
       <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
       <ExcludeFromSingleFile>true</ExcludeFromSingleFile>
     </None>
+    <Content Include="Data\**\*">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
+      <ExcludeFromSingleFile>true</ExcludeFromSingleFile>
+    </Content>
   </ItemGroup>
   <ItemGroup>
     <Page Update="Views\ModelBinEditorPage.xaml">
@@ -254,8 +259,8 @@
     <AssemblyName>ForzaTech Studio</AssemblyName>
     <Description>Forza Resource Tools</Description>
     <Copyright>D3FEKT</Copyright>
-    <AssemblyVersion>0.9.1.5</AssemblyVersion>
-    <FileVersion>0.9.1.5</FileVersion>
+    <AssemblyVersion>0.9.1.6</AssemblyVersion>
+    <FileVersion>0.9.1.6</FileVersion>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x86'">
     <DebugType>none</DebugType>

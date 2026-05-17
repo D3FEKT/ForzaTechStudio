@@ -72,6 +72,12 @@ namespace ForzaTechStudio.Views
             }
         }
 
+        private void ModelBinTabListView_SelectionChanged(object sender, SelectionChangedEventArgs e)
+        {
+            if (e.AddedItems.Count > 0 && e.AddedItems[0] is FileViewModel selected)
+                ViewModel.SelectedFile = selected;
+        }
+
         private void ModelBinTabClose_Click(object sender, RoutedEventArgs e)
         {
             if (sender is FrameworkElement fe && fe.Tag is FileViewModel file)

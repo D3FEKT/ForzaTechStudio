@@ -204,7 +204,7 @@ namespace ForzaTechStudio.Views
             try
             {
                 var asmVersion = System.Reflection.Assembly.GetExecutingAssembly().GetName().Version;
-                string currentVersion = $"{asmVersion.Major}.{asmVersion.Minor}.{asmVersion.Build}";
+                string currentVersion = asmVersion?.ToString() ?? "0.0.0.0";
 
                 using var client = new HttpClient { Timeout = TimeSpan.FromSeconds(10) };
                 client.DefaultRequestHeaders.UserAgent.ParseAdd("ForzaTechStudio");
