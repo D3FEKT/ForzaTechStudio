@@ -26,6 +26,7 @@ namespace ForzaTechStudio.ViewModels
         private readonly FileService _fileService;
 
         public ObservableCollection<ObjectNode> RootNodes { get; } = new();
+        public ObservableCollection<ObjectNode> SelectedFileRootNodes { get; } = new();
         public ObservableCollection<FileViewModel> LoadedFiles { get; } = new();
 
         // Fired with the saved file path so the page can suppress its file watcher.
@@ -164,6 +165,18 @@ namespace ForzaTechStudio.ViewModels
         partial void OnSelectedFileChanged(FileViewModel value)
         {
             RefreshSimpleView();
+            RefreshTreeView();
+        }
+
+        private void RefreshTreeView()
+        {
+            SelectedFileRootNodes.Clear();
+            SelectedNode = null;
+            if (SelectedFile == null) return;
+            var node = RootNodes.FirstOrDefault(n =>
+                string.Equals(n.FilePath, SelectedFile.FilePath, StringComparison.OrdinalIgnoreCase));
+            if (node != null)
+                SelectedFileRootNodes.Add(node);
         }
 
         private void RefreshSimpleView()

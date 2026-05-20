@@ -231,7 +231,7 @@ namespace ForzaTechStudio.Views
                 else
                 {
                     var tagName = releases[0].GetProperty("tag_name").GetString() ?? string.Empty;
-                    var latestVersion = tagName.TrimStart('v');
+                    var latestVersion = tagName.TrimStart('v', 'V');
 
                     if (string.IsNullOrEmpty(latestVersion) || latestVersion == currentVersion)
                     {

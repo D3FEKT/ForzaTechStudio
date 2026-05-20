@@ -1,4 +1,4 @@
-<Project Sdk="Microsoft.NET.Sdk">
+﻿<Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
     <OutputType>WinExe</OutputType>
     <TargetFramework>net9.0-windows10.0.19041.0</TargetFramework>
@@ -9,9 +9,7 @@
     <RuntimeIdentifiers>win-x86;win-x64;win-arm64</RuntimeIdentifiers>
     <PublishProfile>win-$(Platform).pubxml</PublishProfile>
     <UseWinUI>true</UseWinUI>
-    <AssemblyVersion>0.9.1.6</AssemblyVersion>
-    <FileVersion>0.9.1.6</FileVersion>
-    <Version>0.9.1.6</Version>
+    <Version>0.9.1.7</Version>
     <EnableMsixTooling>true</EnableMsixTooling>
     <Nullable>enable</Nullable>
     <BuiltInComInteropSupport>true</BuiltInComInteropSupport>
@@ -175,10 +173,11 @@
       <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
       <ExcludeFromSingleFile>true</ExcludeFromSingleFile>
     </None>
-    <Content Include="Data\**\*">
+    <Content Include="Data\*.json">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
       <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
       <ExcludeFromSingleFile>true</ExcludeFromSingleFile>
+      <Link>Presets\%(Filename)%(Extension)</Link>
     </Content>
   </ItemGroup>
   <ItemGroup>
@@ -259,8 +258,8 @@
     <AssemblyName>ForzaTech Studio</AssemblyName>
     <Description>Forza Resource Tools</Description>
     <Copyright>D3FEKT</Copyright>
-    <AssemblyVersion>0.9.1.6</AssemblyVersion>
-    <FileVersion>0.9.1.6</FileVersion>
+    <AssemblyVersion>0.9.1.7</AssemblyVersion>
+    <FileVersion>0.9.1.7</FileVersion>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x86'">
     <DebugType>none</DebugType>
@@ -280,25 +279,6 @@
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|ARM64'">
     <DebugType>none</DebugType>
   </PropertyGroup>
-  <ItemGroup>
-    <None Include="Materials\**\*">
-      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-      <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
-      <ExcludeFromSingleFile>true</ExcludeFromSingleFile>
-    </None>
-    <Content Include="Data\LightHashMap_FH3.json">
-      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-      <Link>Presets\LightHashMap_FH3.json</Link>
-    </Content>
-    <Content Include="Data\LightHashMap_FH4.json">
-      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-      <Link>Presets\LightHashMap_FH4.json</Link>
-    </Content>
-    <Content Include="Data\LightHashMap_FH5.json">
-      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-      <Link>Presets\LightHashMap_FH5.json</Link>
-    </Content>
-  </ItemGroup>
   <ItemGroup>
     <Compile Remove="Resources\**" />
     <EmbeddedResource Remove="Resources\**" />

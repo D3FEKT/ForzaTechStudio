@@ -43,6 +43,13 @@ namespace ForzaTools.Bundles
         public const uint TAG_BLOB_VERS = 0x56455253;
         public const uint TAG_BLOB_ParticleBlob = 0x50434C42;
 
+        // Shader-specific blob tags (shaderbin format)
+        public const uint TAG_BLOB_TREV = 0x56455254; // Vertex shader register permutation table
+        public const uint TAG_BLOB_FRXT = 0x54585246; // shader blob (purpose TBD)
+        public const uint TAG_BLOB_CBEX = 0x43424558; // Constant buffer extended register data
+        public const uint TAG_BLOB_PARM = 0x5041524D; // Shader parameter name/ID table
+        public const uint TAG_BLOB_SHUD = 0x53485544; // Shader hint/user-data string pairs
+
         public void Load(Stream stream)
         {
             long baseBundleOffset = stream.Position;
@@ -346,6 +353,11 @@ namespace ForzaTools.Bundles
                 TAG_BLOB_ParticleBlob => new ParticleBlob(),
                 TAG_BLOB_VERS => new VersBlob(),
                 TAG_BLOB_VARS => new VarsBlob(),
+                TAG_BLOB_TREV => new TrevBlob(),
+                TAG_BLOB_FRXT => new FrxtBlob(),
+                TAG_BLOB_CBEX => new CbexBlob(),
+                TAG_BLOB_PARM => new ParmBlob(),
+                TAG_BLOB_SHUD => new ShudBlob(),
                 _ => new GenericBlob()
             };
         }

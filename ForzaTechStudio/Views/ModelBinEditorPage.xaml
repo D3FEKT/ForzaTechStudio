@@ -1797,7 +1797,7 @@
                             </Border>
 
                             <TreeView Grid.Row="1"
-                                      ItemsSource="{x:Bind ViewModel.RootNodes, Mode=OneWay}" 
+                                      ItemsSource="{x:Bind ViewModel.SelectedFileRootNodes, Mode=OneWay}" 
                                       SelectedItem="{x:Bind ViewModel.SelectedNode, Mode=TwoWay}"
                                       Padding="4,4">
                                 <TreeView.ItemTemplate>

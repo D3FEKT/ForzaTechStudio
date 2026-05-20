@@ -1,5 +1,6 @@
 using System;
 using System.IO;
+using System.Reflection;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 
@@ -12,6 +13,13 @@ namespace ForzaTechStudio.Views
         public WelcomeDialog()
         {
             this.InitializeComponent();
+            LoadVersion();
+        }
+
+        private void LoadVersion()
+        {
+            var version = Assembly.GetExecutingAssembly().GetName().Version;
+            VersionBadge.Text = version != null ? $"v{version}" : "v?.?.?.?";
         }
 
         private async void ChangelogButton_Click(object sender, RoutedEventArgs e)

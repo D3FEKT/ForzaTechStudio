@@ -297,7 +297,7 @@ namespace ForzaTechStudio.Views
 
                 var latest = releases[0];
                 string tagName = latest.GetProperty("tag_name").GetString() ?? "";
-                string latestVersion = tagName.TrimStart('v');
+                string latestVersion = tagName.TrimStart('v', 'V');
 
                 if (Version.TryParse(latestVersion, out var remote) &&
                     Version.TryParse(currentVersion, out var local) &&

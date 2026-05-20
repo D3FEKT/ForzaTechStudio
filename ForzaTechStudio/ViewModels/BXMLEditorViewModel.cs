@@ -6,6 +6,7 @@ using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.ComponentModel;
 using System.IO;
+using System.IO.Compression;
 using System.Text;
 using System.Threading.Tasks;
 using System.Xml;
@@ -124,6 +125,14 @@ namespace ForzaTechStudio.ViewModels
             SelectedNode = null;
             _bxmlFile = null;
             _loadedAsBxml = false;
+
+            // Exit ZIP mode
+            IsZipMode = false;
+            ZipEntries.Clear();
+            _selectedZipEntry = null;
+            _loadedZipPath = "";
+            LoadedZipName = "";
+            ZipEntryCount = 0;
 
             try
             {
@@ -329,7 +338,183 @@ namespace ForzaTechStudio.ViewModels
             LoadedFileName = "";
             IsContentVisible = false;
             StatusMessage = "File closed.";
+
+            // Reset ZIP state
+            IsZipMode = false;
+            ZipEntries.Clear();
+            _selectedZipEntry = null;
+            _loadedZipPath = "";
+            LoadedZipName = "";
+            ZipEntryCount = 0;
         }
+
+        // ZIP support
+
+        private string _loadedZipPath = "";
+
+        private string _loadedZipName = "";
+        public string LoadedZipName
+        {
+            get => _loadedZipName;
+            set => SetProperty(ref _loadedZipName, value);
+        }
+
+        private bool _isZipMode;
+        public bool IsZipMode
+        {
+            get => _isZipMode;
+            set
+            {
+                if (SetProperty(ref _isZipMode, value))
+                    OnPropertyChanged(nameof(IsNotZipMode));
+            }
+        }
+        public bool IsNotZipMode => !IsZipMode;
+
+        private int _zipEntryCount;
+        public int ZipEntryCount
+        {
+            get => _zipEntryCount;
+            private set
+            {
+                if (SetProperty(ref _zipEntryCount, value))
+                    OnPropertyChanged(nameof(ZipEntryCountText));
+            }
+        }
+        public string ZipEntryCountText => ZipEntryCount == 1 ? "(1 file)" : $"({ZipEntryCount} files)";
+
+        public ObservableCollection<ZipEntryViewModel> ZipEntries { get; } = new();
+
+        private ZipEntryViewModel? _selectedZipEntry;
+        public ZipEntryViewModel? SelectedZipEntry
+        {
+            get => _selectedZipEntry;
+            set
+            {
+                if (SetProperty(ref _selectedZipEntry, value) && value != null)
+                    SelectZipEntry(value);
+            }
+        }
+
+        [RelayCommand]
+        private async Task OpenZipAsync()
+        {
+            var picker = new FileOpenPicker();
+            WinRT.Interop.InitializeWithWindow.Initialize(picker, App.MainWindowHandle);
+            picker.ViewMode = PickerViewMode.List;
+            picker.SuggestedStartLocation = PickerLocationId.Desktop;
+            picker.FileTypeFilter.Add(".zip");
+
+            var file = await picker.PickSingleFileAsync();
+            if (file == null) return;
+
+            await LoadZipAsync(file.Path);
+        }
+
+        public async Task LoadZipAsync(string zipPath)
+        {
+            IsBusy = true;
+            IsContentVisible = false;
+            StatusMessage = "Opening ZIP\u2026";
+            ZipEntries.Clear();
+            IsZipMode = false;
+            TreeRoot = null;
+            SelectedNode = null;
+            _bxmlFile = null;
+            _loadedAsBxml = false;
+            _loadedZipPath = zipPath;
+            LoadedZipName = Path.GetFileName(zipPath);
+
+            try
+            {
+                var entries = await Task.Run(() =>
+                {
+                    var result = new List<ZipEntryViewModel>();
+                    using var archive = ZipFile.OpenRead(zipPath);
+                    foreach (var entry in archive.Entries)
+                    {
+                        if (!entry.FullName.EndsWith(".bxml", StringComparison.OrdinalIgnoreCase) &&
+                            !entry.FullName.EndsWith(".xml",  StringComparison.OrdinalIgnoreCase))
+                            continue;
+
+                        try
+                        {
+                            using var entryStream = entry.Open();
+                            using var ms = new MemoryStream();
+                            entryStream.CopyTo(ms);
+                            byte[] data = ms.ToArray();
+
+                            bool isBxml = HasBxmlMagicBytes(data);
+                            BXMLFile bxmlFile;
+                            if (isBxml)
+                            {
+                                using var parseStream = new MemoryStream(data);
+                                bxmlFile = BXMLParser.FromStream(parseStream);
+                            }
+                            else
+                            {
+                                var doc = new XmlDocument();
+                                using var xmlStream = new MemoryStream(data);
+                                doc.Load(xmlStream);
+                                bxmlFile = BXMLConverter.FromXmlDocument(doc);
+                            }
+
+                            string xmlText = BxmlFileToXmlString(bxmlFile);
+                            result.Add(new ZipEntryViewModel(entry.FullName, bxmlFile, xmlText, isBxml));
+                        }
+                        catch
+                        {
+                            // Skip entries that cannot be parsed
+                        }
+                    }
+                    return result;
+                });
+
+                if (entries.Count == 0)
+                {
+                    StatusMessage = "No parseable BXML/XML files found in ZIP.";
+                    IsBusy = false;
+                    return;
+                }
+
+                foreach (var e in entries)
+                    ZipEntries.Add(e);
+
+                ZipEntryCount = entries.Count;
+                IsZipMode = true;
+                LoadedFilePath = "";
+                LoadedFileName = LoadedZipName;
+                IsContentVisible = true;
+                StatusMessage = $"ZIP loaded \u2014 {entries.Count} file(s) \u2014 {LoadedZipName}";
+
+                // Auto-select first entry (triggers SelectZipEntry via setter)
+                SelectedZipEntry = entries[0];
+            }
+            catch (Exception ex)
+            {
+                StatusMessage = $"Error opening ZIP: {ex.Message}";
+                IsContentVisible = false;
+            }
+            finally
+            {
+                IsBusy = false;
+            }
+        }
+
+        private void SelectZipEntry(ZipEntryViewModel entry)
+        {
+            _bxmlFile     = entry.BxmlFile;
+            _loadedAsBxml = entry.IsBxml;
+            XmlText       = entry.XmlText;
+            TreeRoot      = BuildTreeViewModel(entry.BxmlFile.Root);
+            SelectedNode  = null;
+            LoadedFilePath = "";
+            LoadedFileName = entry.DisplayName;
+            StatusMessage  = $"Viewing: {entry.DisplayName}";
+        }
+
+        private static bool HasBxmlMagicBytes(byte[] data) =>
+            data.Length >= 4 && data[0] == 0x42 && data[1] == 0x58 && data[2] == 0x4D && data[3] == 0x4C;
 
         // Helpers
 
@@ -477,6 +662,30 @@ namespace ForzaTechStudio.ViewModels
         {
             _name  = name;
             _value = value;
+        }
+    }
+
+    // ZipEntryViewModel — holds one parsed entry from a loaded ZIP archive
+
+    public sealed class ZipEntryViewModel
+    {
+        /// <summary>Full path of the entry inside the ZIP (e.g. "data/cars/car.xml").</summary>
+        public string FullName { get; }
+
+        /// <summary>Just the filename portion, displayed in the picker list.</summary>
+        public string DisplayName { get; }
+
+        public BXMLFile BxmlFile { get; }
+        public string   XmlText  { get; }
+        public bool     IsBxml   { get; }
+
+        public ZipEntryViewModel(string fullName, BXMLFile bxmlFile, string xmlText, bool isBxml)
+        {
+            FullName    = fullName;
+            DisplayName = Path.GetFileName(fullName);
+            BxmlFile    = bxmlFile;
+            XmlText     = xmlText;
+            IsBxml      = isBxml;
         }
     }
 }

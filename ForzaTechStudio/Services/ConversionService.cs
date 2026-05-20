@@ -342,6 +342,7 @@ public class ConversionService
         if (sv >= 10) return "FM2023";
         if (series == GameSeries.Horizon)
         {
+            if (sv >= 7 || mv >= 21) return "FH6";
             if (sv >= 6 || mv >= 18) return "FH5";
             if (mv >= 16) return "FH3 / FH4";
             if (mv >= 15) return "FH2";
@@ -414,6 +415,7 @@ public class ConversionService
         {
             return
             [
+                ForzaGameTarget.FH6,
                 ForzaGameTarget.FH5,
                 ForzaGameTarget.FH4,
                 ForzaGameTarget.FH3,
@@ -428,6 +430,7 @@ public class ConversionService
         {
             return
             [
+                ForzaGameTarget.FH6,
                 ForzaGameTarget.FH5,
                 ForzaGameTarget.FH4,
                 ForzaGameTarget.FH3,
@@ -464,6 +467,7 @@ public class ConversionService
             ForzaGameTarget.FH4 => "Forza Horizon 4",
             ForzaGameTarget.FH5 => "Forza Horizon 5",
             ForzaGameTarget.FM2023 => "Forza Motorsport (2023)",
+            ForzaGameTarget.FH6 => "Forza Horizon 6",
             _ => target.ToString()
         };
     }
@@ -481,6 +485,7 @@ public class ConversionService
             ForzaGameTarget.FH5 => "FH5",
             ForzaGameTarget.FM7 => "FM7",
             ForzaGameTarget.FM2023 => "FM2023",
+            ForzaGameTarget.FH6 => "FH6",
             _ => target.ToString()
         };
     }

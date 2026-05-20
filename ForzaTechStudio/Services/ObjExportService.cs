@@ -10,13 +10,13 @@ using System.Text;
 
 namespace ForzaTechStudio.Services
 {
-    // Groups all mesh data for one ModelBin for OBJ/MTL export.
+    // Groups all mesh data for one Modelbin for OBJ/MTL export.
     public record ModelBinExportData(
         string ModelBinName,
         Bundle? Bundle,
         List<(string Name, ForzaGeometryData Data)> Meshes);
 
-    // Converts <see cref="ForzaGeometryData"/> meshes to Wavefront OBJ / MTL text.
+    // Converts meshes to Wavefront OBJ / MTL text.
     public static class ObjExportService
     {
         // Builds the text content for a .obj file.
@@ -39,88 +39,99 @@ namespace ForzaTechStudio.Services
 
             foreach (var model in models)
             {
-                string safeObjName = SanitiseName(model.ModelBinName);
-                sb.AppendLine($"o {safeObjName}");
+                string safeModelName = SanitiseName(model.ModelBinName);
+
+                // Comment identifies the source Modelbin.
+                sb.AppendLine($"# {safeModelName}");
                 sb.AppendLine();
 
-                foreach (var (meshName, data) in model.Meshes)
+                // Group mesh entries by their geometry name 
+                var meshGroups = model.Meshes
+                    .Where(m => m.Data?.RawPositions != null && m.Data.RawPositions.Length > 0)
+                    .GroupBy(m => m.Data.Name ?? m.Name)
+                    .ToList();
+
+                foreach (var meshGroup in meshGroups)
                 {
-                    // Geometry lives in RawPositions — Positions is intentionally null.
-                    if (data?.RawPositions == null || data.RawPositions.Length == 0)
-                        continue;
+                    string safeObjName = SanitiseName(meshGroup.Key);
 
-                    int vertCount  = data.RawPositions.Length;
-                    bool hasNormals = data.Normals != null && data.Normals.Length == vertCount;
-                    bool hasUVs    = data.UVs     != null && data.UVs.Length     == vertCount;
-                    bool hasIdx    = data.Indices  != null && data.Indices.Length > 0;
-
-                    string safeName = SanitiseName(meshName);
-                    string safeMat  = SanitiseName(data.MaterialName ?? "default");
-
-                    sb.AppendLine($"g {safeName}");
-                    sb.AppendLine($"usemtl {safeMat}");
+                    // One 'o' per unique mesh (LOD); each material becomes a 'g' group inside it.
+                    sb.AppendLine($"o {safeObjName}");
                     sb.AppendLine();
 
-                    // World-space position reconstruction: raw * PositionScale, then rotate, translate, then apply bone transform.
-                    var scale     = data.SourceMesh?.PositionScale     ?? Vector4.One;
-                    var translate = data.SourceMesh?.PositionTranslate ?? Vector4.Zero;
-                    var rotMatrix = data.GetRotationMatrix();
-                    bool hasRot   = rotMatrix != Matrix4x4.Identity;
-                    bool hasBone  = data.BoneTransform != Matrix4x4.Identity;
-
-                    foreach (var raw in data.RawPositions)
+                    foreach (var (_, data) in meshGroup)
                     {
-                        var scaled = new Vector3(raw.X * scale.X, raw.Y * scale.Y, raw.Z * scale.Z);
-                        if (hasRot)
-                            scaled = Vector3.Transform(scaled, rotMatrix);
+                        int vertCount   = data.RawPositions.Length;
+                        bool hasNormals = data.Normals != null && data.Normals.Length == vertCount;
+                        bool hasUVs     = data.UVs     != null && data.UVs.Length     == vertCount;
+                        bool hasIdx     = data.Indices  != null && data.Indices.Length > 0;
 
-                        var v = new Vector3(scaled.X + translate.X, scaled.Y + translate.Y, scaled.Z + translate.Z);
-                        var world = hasBone ? Vector3.Transform(v, data.BoneTransform) : v;
+                        string safeMat = ExtractMaterialBaseName(data.MaterialName ?? "default");
 
-                        sb.AppendLine($"v {world.X.ToString("F6", ci)} {world.Y.ToString("F6", ci)} {world.Z.ToString("F6", ci)}");
-                    }
+                        // Named group for this material section within the mesh object.
+                        sb.AppendLine($"g {safeMat}");
+                        sb.AppendLine($"usemtl {safeMat}");
+                        sb.AppendLine();
 
-                    // Texture coordinates
-                    // ModelImporter.ReadUV already applies the DirectX to OBJ V-flip (1-v),
-                    // so we write UVs as-is without an additional flip.
-                    if (hasUVs)
-                        foreach (var uv in data.UVs)
-                            sb.AppendLine($"vt {uv.X.ToString("F6", ci)} {uv.Y.ToString("F6", ci)}");
+                        // World-space position reconstruction: raw * PositionScale, then rotate, translate, then apply bone transform.
+                        var scale     = data.SourceMesh?.PositionScale     ?? Vector4.One;
+                        var translate = data.SourceMesh?.PositionTranslate ?? Vector4.Zero;
+                        var rotMatrix = data.GetRotationMatrix();
+                        bool hasRot   = rotMatrix != Matrix4x4.Identity;
+                        bool hasBone  = data.BoneTransform != Matrix4x4.Identity;
 
-                    // Normals
-                    if (hasNormals)
-                    {
-                        foreach (var n in data.Normals)
+                        foreach (var raw in data.RawPositions)
                         {
-                            var rn = n;
+                            var scaled = new Vector3(raw.X * scale.X, raw.Y * scale.Y, raw.Z * scale.Z);
                             if (hasRot)
-                                rn = Vector3.Normalize(Vector3.TransformNormal(rn, rotMatrix));
-                            if (hasBone)
-                                rn = Vector3.Normalize(Vector3.TransformNormal(rn, data.BoneTransform));
-                            sb.AppendLine($"vn {rn.X.ToString("F6", ci)} {rn.Y.ToString("F6", ci)} {rn.Z.ToString("F6", ci)}");
+                                scaled = Vector3.Transform(scaled, rotMatrix);
+
+                            var v = new Vector3(scaled.X + translate.X, scaled.Y + translate.Y, scaled.Z + translate.Z);
+                            var world = hasBone ? Vector3.Transform(v, data.BoneTransform) : v;
+
+                            sb.AppendLine($"v {world.X.ToString("F6", ci)} {world.Y.ToString("F6", ci)} {world.Z.ToString("F6", ci)}");
                         }
+
+                        // Texture coordinates
+                        if (hasUVs)
+                            foreach (var uv in data.UVs)
+                                sb.AppendLine($"vt {uv.X.ToString("F6", ci)} {uv.Y.ToString("F6", ci)}");
+
+                        // Normals
+                        if (hasNormals)
+                        {
+                            foreach (var n in data.Normals)
+                            {
+                                var rn = n;
+                                if (hasRot)
+                                    rn = Vector3.Normalize(Vector3.TransformNormal(rn, rotMatrix));
+                                if (hasBone)
+                                    rn = Vector3.Normalize(Vector3.TransformNormal(rn, data.BoneTransform));
+                                sb.AppendLine($"vn {rn.X.ToString("F6", ci)} {rn.Y.ToString("F6", ci)} {rn.Z.ToString("F6", ci)}");
+                            }
+                        }
+
+                        sb.AppendLine();
+
+                        // Faces
+                        if (hasIdx)
+                        {
+                            WriteFaces(sb, data.Indices, vBase, vtBase, vnBase, hasUVs, hasNormals);
+                        }
+                        else
+                        {
+                            // No index buffer - generate sequential triangle indices.
+                            var seq = new int[vertCount];
+                            for (int i = 0; i < vertCount; i++) seq[i] = i;
+                            WriteFaces(sb, seq, vBase, vtBase, vnBase, hasUVs, hasNormals);
+                        }
+
+                        sb.AppendLine();
+
+                        vBase  += vertCount;
+                        if (hasUVs)     vtBase += vertCount;
+                        if (hasNormals) vnBase += vertCount;
                     }
-
-                    sb.AppendLine();
-
-                    // Faces
-                    if (hasIdx)
-                    {
-                        WriteFaces(sb, data.Indices, vBase, vtBase, vnBase, hasUVs, hasNormals);
-                    }
-                    else
-                    {
-                        // No index buffer — generate sequential triangle indices.
-                        var seq = new int[vertCount];
-                        for (int i = 0; i < vertCount; i++) seq[i] = i;
-                        WriteFaces(sb, seq, vBase, vtBase, vnBase, hasUVs, hasNormals);
-                    }
-
-                    sb.AppendLine();
-
-                    vBase  += vertCount;
-                    if (hasUVs)     vtBase += vertCount;
-                    if (hasNormals) vnBase += vertCount;
                 }
             }
 
@@ -128,7 +139,10 @@ namespace ForzaTechStudio.Services
         }
 
         // Builds the text content for a companion .mtl file.
-        public static string BuildMtlContent(IEnumerable<ModelBinExportData> models)
+
+        public static string BuildMtlContent(
+            IEnumerable<ModelBinExportData> models,
+            IReadOnlyDictionary<string, string>? texturePaths = null)
         {
             var ci = CultureInfo.InvariantCulture;
             var sb = new StringBuilder();
@@ -147,7 +161,7 @@ namespace ForzaTechStudio.Services
                     if (data == null) continue;
 
                     string rawMat  = data.MaterialName ?? "default";
-                    string safeMat = SanitiseName(rawMat);
+                    string safeMat = ExtractMaterialBaseName(rawMat);
                     if (seen.ContainsKey(safeMat)) continue;
 
                     Vector3? color = previewColors.TryGetValue(rawMat, out var found) ? found : null;
@@ -163,6 +177,8 @@ namespace ForzaTechStudio.Services
                 sb.AppendLine($"newmtl {name}");
                 sb.AppendLine("Ka 0.000000 0.000000 0.000000");
                 sb.AppendLine($"Kd {color.X.ToString("F6", ci)} {color.Y.ToString("F6", ci)} {color.Z.ToString("F6", ci)}");
+                if (texturePaths != null && texturePaths.TryGetValue(name, out var texPath))
+                    sb.AppendLine($"map_Kd {texPath}");
                 sb.AppendLine("Ks 0.000000 0.000000 0.000000");
                 sb.AppendLine("illum 2");
                 sb.AppendLine();
@@ -243,6 +259,19 @@ namespace ForzaTechStudio.Services
             }
 
             return map;
+        }
+
+        // Extracts a clean material base name from a full asset path.
+
+        internal static string ExtractMaterialBaseName(string rawName)
+        {
+            if (string.IsNullOrWhiteSpace(rawName)) return "default";
+            // Split on path separators to get the last segment
+            var segments = rawName.Split('\\', '/');
+            var leaf = segments[segments.Length - 1];
+            // Strip known material extensions
+            var name = Path.GetFileNameWithoutExtension(leaf);
+            return SanitiseName(string.IsNullOrWhiteSpace(name) ? rawName : name);
         }
 
         private static string SanitiseName(string name)

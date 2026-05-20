@@ -7,7 +7,7 @@ namespace ForzaTools.Bundles.Blobs;
 // Model blob (tag 'Modl'). Holds mesh, buffer, layout, and material counts plus LOD info.
 // FH6 keeps the v1.3+ wire layout to 0x12 bytes: a v1.3 buffer-retention flag at +0x10 and,
 // for v1.4+, a visibility mask byte at +0x11.
-// </summary> 
+
 public class ModelBlob : BundleBlob
 {
     public ushort MeshCount { get; set; }

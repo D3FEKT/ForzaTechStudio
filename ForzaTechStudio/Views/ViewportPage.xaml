@@ -1554,19 +1554,40 @@
 
             <AppBarSeparator/>
 
-            <!-- Export / Close -->
-            <AppBarButton Label="Export OBJ" ToolTipService.ToolTip="Export OBJ">
+            <!-- Export -->
+            <AppBarButton Label="Export" ToolTipService.ToolTip="Export model">
                 <AppBarButton.Icon>
                     <FontIcon Glyph="&#xEDE1;"/>
                 </AppBarButton.Icon>
                 <AppBarButton.Flyout>
                     <MenuFlyout>
-                        <MenuFlyoutItem Text="Export Whole Scene" Click="ExportObjScene_Click">
-                            <MenuFlyoutItem.Icon><FontIcon Glyph="&#xE81C;"/></MenuFlyoutItem.Icon>
-                        </MenuFlyoutItem>
-                        <MenuFlyoutItem Text="Export Selected Model" Click="ExportObjSelected_Click">
-                            <MenuFlyoutItem.Icon><FontIcon Glyph="&#xE722;"/></MenuFlyoutItem.Icon>
-                        </MenuFlyoutItem>
+                        <MenuFlyoutSubItem Text="OBJ">
+                            <MenuFlyoutSubItem.Icon><FontIcon Glyph="&#xEDE1;"/></MenuFlyoutSubItem.Icon>
+                            <MenuFlyoutItem Text="Export Scene" Click="ExportObjScene_Click">
+                                <MenuFlyoutItem.Icon><FontIcon Glyph="&#xE81C;"/></MenuFlyoutItem.Icon>
+                            </MenuFlyoutItem>
+                            <MenuFlyoutItem Text="Export Selected Model" Click="ExportObjSelected_Click">
+                                <MenuFlyoutItem.Icon><FontIcon Glyph="&#xE722;"/></MenuFlyoutItem.Icon>
+                            </MenuFlyoutItem>
+                        </MenuFlyoutSubItem>
+                        <MenuFlyoutSubItem Text="FBX (ASCII)">
+                            <MenuFlyoutSubItem.Icon><FontIcon Glyph="&#xEDE1;"/></MenuFlyoutSubItem.Icon>
+                            <MenuFlyoutItem Text="Export Scene" Click="ExportFbxAsciiScene_Click">
+                                <MenuFlyoutItem.Icon><FontIcon Glyph="&#xE81C;"/></MenuFlyoutItem.Icon>
+                            </MenuFlyoutItem>
+                            <MenuFlyoutItem Text="Export Selected Model" Click="ExportFbxAsciiSelected_Click">
+                                <MenuFlyoutItem.Icon><FontIcon Glyph="&#xE722;"/></MenuFlyoutItem.Icon>
+                            </MenuFlyoutItem>
+                        </MenuFlyoutSubItem>
+                        <MenuFlyoutSubItem Text="FBX (Binary)">
+                            <MenuFlyoutSubItem.Icon><FontIcon Glyph="&#xEDE1;"/></MenuFlyoutSubItem.Icon>
+                            <MenuFlyoutItem Text="Export Scene" Click="ExportFbxBinaryScene_Click">
+                                <MenuFlyoutItem.Icon><FontIcon Glyph="&#xE81C;"/></MenuFlyoutItem.Icon>
+                            </MenuFlyoutItem>
+                            <MenuFlyoutItem Text="Export Selected Model" Click="ExportFbxBinarySelected_Click">
+                                <MenuFlyoutItem.Icon><FontIcon Glyph="&#xE722;"/></MenuFlyoutItem.Icon>
+                            </MenuFlyoutItem>
+                        </MenuFlyoutSubItem>
                     </MenuFlyout>
                 </AppBarButton.Flyout>
             </AppBarButton>
