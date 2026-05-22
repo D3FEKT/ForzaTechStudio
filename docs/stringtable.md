@@ -104,13 +104,25 @@ Use **Export CSV** to save all entries as a comma-separated values file. The CSV
 
 ## File Format Overview
 
-`.str` files use a simple binary layout:
+`.str` files use a simple binary layout. Two format versions are supported:
 
-- A **file header** that stores the format version (`0x0400`) and the table name (the filename without extension, e.g., `CarNames`).
-- A **content section** — an array of hash/offset pairs followed by a packed block of UTF-16 strings containing the display text for each entry.
+### Version `0x0400` 
+
+- A fixed 140-byte **file header** that stores the format version (`0x0400`) and the table name (the filename without extension, e.g., `CarNames`).
+- A **content section** — an array of hash/offset pairs followed by a packed block of UTF-16 LE strings containing the display text for each entry.
 - A **names section** — the same structure but storing the symbolic key name strings. This section may be absent in stripped builds.
 
-All strings are UTF-16 little-endian. The file uses no compression or encryption.
+All strings are UTF-16 little-endian.
+
+### Version `0x0800` (Forza Horizon 6)
+
+- A variable-length **file header** containing the format version (`0x0800`), the table name (126 bytes), and an array of absolute offsets to each table block.
+- Each **table block** contains a size field, a string-data size field, an array of hash/offset pairs, and a packed block of null-terminated UTF-8 strings.
+- Table 0 holds the localized display values; Table 1 (if present) holds the symbolic `IDS_` key names.
+
+All strings are UTF-8 (null-terminated single-byte).
+
+The file uses no compression or encryption in either version.
 
 ---
 
