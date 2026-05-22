@@ -1,25 +1,19 @@
-﻿# Version 0.9.1.0 - Change Log
+﻿# Version 0.9.1.7 - Change Log
 
 ## General
+- General bug fixes
+- Added more bundle grub blob types to support FH6 shaderbin's
 
-- Improved the update checker
+## Conversion tool
+- FH6 Support added to carbin and modelbin conversion
 
-## Conversion Tool
+## 3d viewer
+- Improved export to OBJ
+- Added option to export to FBX Binary + ASCII *Still work in progreess*
+- Auto converts swatchbin's to dds on export if opened a car zip with valid swatchbin's
 
-- Added **Carbin Edits** section
-  - Swap ordinal IDs and media names for car replacement
+## BXML viewer
+- Added option to open zip for batch bxml viewing (FH6 zip contains 100+ bxml's so this is a must have)
 
-## Modelbin Editor
 
-- Fixed saving buttons
-- Fixed several issues in the tree view
 
-## Carbin Editor
-
-- Added **Duplicate Part** button to the Carbin Editor page
-- Added support for setting AO swatchbins from existing parts in an opened carbin
-
-## Swatchbin Viewer
-
-- Added support for displaying the alpha channel
-- Added support for displaying mipmaps

@@ -567,10 +567,10 @@
                                 <NumberBox Grid.Column="0" Header="Parent Index"
                                            Value="{x:Bind SkeletonBlobWrapper.SelectedBoneVm.ParentId, Mode=TwoWay}"
                                            SpinButtonPlacementMode="Compact" MinWidth="0"/>
-                                <NumberBox Grid.Column="1" Header="First Child Index"
+                                <NumberBox Grid.Column="1" Header="First Child"
                                            Value="{x:Bind SkeletonBlobWrapper.SelectedBoneVm.FirstChildIndex, Mode=TwoWay}"
                                            SpinButtonPlacementMode="Compact" MinWidth="0"/>
-                                <NumberBox Grid.Column="2" Header="Next Index"
+                                <NumberBox Grid.Column="2" Header="Next Sibling"
                                            Value="{x:Bind SkeletonBlobWrapper.SelectedBoneVm.NextIndex, Mode=TwoWay}"
                                            SpinButtonPlacementMode="Compact" MinWidth="0"/>
                             </Grid>
@@ -1186,10 +1186,10 @@
                                 <NumberBox Grid.Column="0" Header="Parent Index"
                                            Value="{x:Bind BoneWrapper.ParentId, Mode=TwoWay}"
                                            SpinButtonPlacementMode="Compact" MinWidth="0"/>
-                                <NumberBox Grid.Column="1" Header="First Child Index"
+                                <NumberBox Grid.Column="1" Header="First Child"
                                            Value="{x:Bind BoneWrapper.FirstChildIndex, Mode=TwoWay}"
                                            SpinButtonPlacementMode="Compact" MinWidth="0"/>
-                                <NumberBox Grid.Column="2" Header="Next Index"
+                                <NumberBox Grid.Column="2" Header="Next Sibling"
                                            Value="{x:Bind BoneWrapper.NextIndex, Mode=TwoWay}"
                                            SpinButtonPlacementMode="Compact" MinWidth="0"/>
                             </Grid>
@@ -1373,6 +1373,7 @@
                       x:Name="ModelBinTabListView"
                       ItemsSource="{x:Bind ViewModel.LoadedFiles, Mode=OneWay}"
                       SelectedItem="{x:Bind ViewModel.SelectedFile, Mode=TwoWay}"
+                      SelectionChanged="ModelBinTabListView_SelectionChanged"
                       SelectionMode="Single"
                       ScrollViewer.HorizontalScrollBarVisibility="Auto"
                       ScrollViewer.HorizontalScrollMode="Enabled"
@@ -1396,7 +1397,8 @@
                                        VerticalAlignment="Center"
                                        MaxWidth="160"
                                        TextTrimming="CharacterEllipsis"
-                                       FontSize="12"/>
+                                       FontSize="12"
+                                       ToolTipService.ToolTip="{x:Bind FilePath, Mode=OneWay}"/>
                             <Button Click="ModelBinTabClose_Click"
                                     Tag="{x:Bind}"
                                     Width="18" Height="18"
@@ -1570,7 +1572,7 @@
                                                          <Grid ColumnDefinitions="*,*,*" ColumnSpacing="10" Margin="0,0,0,4">
                                                              <NumberBox Grid.Column="0" Header="Parent Index" Value="{x:Bind SelectedBoneVm.ParentId, Mode=TwoWay}" SpinButtonPlacementMode="Compact" MinWidth="0"/>
                                                              <NumberBox Grid.Column="1" Header="First Child" Value="{x:Bind SelectedBoneVm.FirstChildIndex, Mode=TwoWay}" SpinButtonPlacementMode="Compact" MinWidth="0"/>
-                                                             <NumberBox Grid.Column="2" Header="Next Index" Value="{x:Bind SelectedBoneVm.NextIndex, Mode=TwoWay}" SpinButtonPlacementMode="Compact" MinWidth="0"/>
+                                                             <NumberBox Grid.Column="2" Header="Next Sibling" Value="{x:Bind SelectedBoneVm.NextIndex, Mode=TwoWay}" SpinButtonPlacementMode="Compact" MinWidth="0"/>
                                                          </Grid>
                                                          
                                                          <Grid ColumnDefinitions="*,Auto" Margin="0,8,0,2">
@@ -1795,7 +1797,7 @@
                             </Border>
 
                             <TreeView Grid.Row="1"
-                                      ItemsSource="{x:Bind ViewModel.RootNodes, Mode=OneWay}" 
+                                      ItemsSource="{x:Bind ViewModel.SelectedFileRootNodes, Mode=OneWay}" 
                                       SelectedItem="{x:Bind ViewModel.SelectedNode, Mode=TwoWay}"
                                       Padding="4,4">
                                 <TreeView.ItemTemplate>

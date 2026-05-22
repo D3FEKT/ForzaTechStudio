@@ -582,21 +582,27 @@ public partial class LightsViewModel : ObservableObject
     // Light ID source selection
 
     [ObservableProperty]
-    private int _selectedIdSourceIndex; // 0=FH3, 1=FH4, 2=FH5
+    private int _selectedIdSourceIndex; // 0=FH3, 1=FH4, 2=FH5, 3=FH6
 
     public ObservableCollection<LightHashEntry> Fh5HashEntries { get; } = [];
+    public ObservableCollection<LightHashEntry> Fh6HashEntries { get; } = [];
 
     [ObservableProperty]
     private LightHashEntry _selectedFh5Hash;
 
+    [ObservableProperty]
+    private LightHashEntry _selectedFh6Hash;
+
     partial void OnSelectedIdSourceIndexChanged(int value)
     {
         OnPropertyChanged(nameof(IsFh5IdSource));
+        OnPropertyChanged(nameof(IsFh6IdSource));
         OnPropertyChanged(nameof(IsFh3Fh4IdSource));
     }
 
     public bool IsFh5IdSource => SelectedIdSourceIndex == 2;
-    public bool IsFh3Fh4IdSource => SelectedIdSourceIndex != 2;
+    public bool IsFh6IdSource => SelectedIdSourceIndex == 3;
+    public bool IsFh3Fh4IdSource => SelectedIdSourceIndex != 2 && SelectedIdSourceIndex != 3;
 
     partial void OnLightsVersionChanged(int value)
     {
@@ -606,6 +612,14 @@ public partial class LightsViewModel : ObservableObject
     public bool IsVersion3 => LightsVersion >= 3;
 
     partial void OnSelectedFh5HashChanged(LightHashEntry value)
+    {
+        if (value != null && SelectedLight != null)
+        {
+            SelectedLight.Id = value.HashValue;
+        }
+    }
+
+    partial void OnSelectedFh6HashChanged(LightHashEntry value)
     {
         if (value != null && SelectedLight != null)
         {
@@ -635,6 +649,7 @@ public partial class LightsViewModel : ObservableObject
     public LightsViewModel()
     {
         LoadFh5Hashes();
+        LoadFh6Hashes();
     }
 
     private void LoadFh5Hashes()
@@ -642,7 +657,9 @@ public partial class LightsViewModel : ObservableObject
         try
         {
             string basePath = AppDomain.CurrentDomain.BaseDirectory;
-            string fh5Path = Path.Combine(basePath, "Presets", "LightHashMap_FH5.json");
+            string fh5Path = Path.Combine(basePath, "Data", "LightHashMap_FH5.json");
+            if (!File.Exists(fh5Path))
+                fh5Path = Path.Combine(basePath, "Presets", "LightHashMap_FH5.json");
             if (File.Exists(fh5Path))
             {
                 string json = File.ReadAllText(fh5Path);
@@ -651,6 +668,26 @@ public partial class LightsViewModel : ObservableObject
                 {
                     foreach (var entry in entries.DistinctBy(e => e.Hash).OrderBy(e => e.Name))
                         Fh5HashEntries.Add(entry);
+                }
+            }
+        }
+        catch { /* Non-critical */ }
+    }
+
+    private void LoadFh6Hashes()
+    {
+        try
+        {
+            string basePath = AppDomain.CurrentDomain.BaseDirectory;
+            string fh6Path = Path.Combine(basePath, "Data", "LightHashMap_FH6.json");
+            if (File.Exists(fh6Path))
+            {
+                string json = File.ReadAllText(fh6Path);
+                var entries = JsonSerializer.Deserialize<List<LightHashEntry>>(json);
+                if (entries != null)
+                {
+                    foreach (var entry in entries.DistinctBy(e => e.Hash).OrderBy(e => e.Name))
+                        Fh6HashEntries.Add(entry);
                 }
             }
         }

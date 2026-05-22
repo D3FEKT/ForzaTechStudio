@@ -90,7 +90,7 @@
                                     <TextBox Text="{x:Bind ViewModel.InputFilePath, Mode=OneWay}" IsReadOnly="True" PlaceholderText="No file selected" VerticalAlignment="Center"/>
                                     <Button Grid.Column="1" Command="{x:Bind ViewModel.PickInputFileCommand}" Content="Browse File" Style="{StaticResource AccentButtonStyle}" VerticalAlignment="Center"/>
                                 </Grid>
-
+                                
                                 <Grid ColumnDefinitions="*,*" ColumnSpacing="24" Margin="0,8,0,0" Visibility="{x:Bind ViewModel.IsFileSelected, Mode=OneWay, Converter={StaticResource BoolToVis}}">
                                     <ComboBox Header="Forward Axis" ItemsSource="{x:Bind ViewModel.AxisOptions}" SelectedItem="{x:Bind ViewModel.SelectedForwardAxis, Mode=TwoWay}" HorizontalAlignment="Stretch"/>
                                     <ComboBox Grid.Column="1" Header="Up Axis" ItemsSource="{x:Bind ViewModel.AxisOptions}" SelectedItem="{x:Bind ViewModel.SelectedUpAxis, Mode=TwoWay}" HorizontalAlignment="Stretch"/>
@@ -115,7 +115,7 @@
                                           Header="Multiple zips found — select one to use:"
                                           Visibility="{x:Bind ViewModel.HasMaterialZipDropdown, Mode=OneWay, Converter={StaticResource BoolToVis}}"/>
                                 <TextBlock Text="{x:Bind ViewModel.MaterialZipSourceLabel, Mode=OneWay}" FontSize="12" Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
-
+                                
                                 <StackPanel Spacing="8" Visibility="{x:Bind ViewModel.IsZipLoading, Mode=OneWay, Converter={StaticResource BoolToVis}}">
                                     <ProgressBar IsIndeterminate="True"/>
                                     <TextBlock Text="{x:Bind ViewModel.ZipLoadProgress, Mode=OneWay}" Foreground="{ThemeResource TextFillColorSecondaryBrush}" FontSize="12"/>
@@ -131,7 +131,7 @@
                                 </InfoBar>
                             </StackPanel>
                         </Border>
-
+                        
                         <Button Content="Next: Material Assignment" Style="{StaticResource AccentButtonStyle}" HorizontalAlignment="Right" Click="NextToMaterials_Click" IsEnabled="{x:Bind ViewModel.IsZipLoaded, Mode=OneWay}" Padding="24,12"/>
                     </StackPanel>
                 </ScrollViewer>
@@ -210,7 +210,7 @@
                                 <Grid>
                                     <TextBlock Text="Select an object to view its material" Foreground="{ThemeResource TextFillColorSecondaryBrush}" HorizontalAlignment="Center" VerticalAlignment="Center"
                                                Visibility="{x:Bind ViewModel.SelectedGroupForMaterialAssignment, Mode=OneWay, Converter={StaticResource NullToVis}, ConverterParameter='Invert'}"/>
-
+                                    
                                     <ListView ItemsSource="{x:Bind ViewModel.FilteredMaterialAssignments, Mode=OneWay}" SelectionMode="None"
                                               Visibility="{x:Bind ViewModel.SelectedGroupForMaterialAssignment, Mode=OneWay, Converter={StaticResource NullToVis}}">
                                         <ListView.ItemTemplate>
@@ -321,7 +321,7 @@
                                 <Border Background="{ThemeResource CardBackgroundFillColorDefaultBrush}" BorderBrush="{ThemeResource SurfaceStrokeColorDefaultBrush}" BorderThickness="1" CornerRadius="8" Padding="24">
                                     <StackPanel Spacing="20">
                                         <TextBlock Text="Mesh Options" FontWeight="SemiBold"/>
-
+                                        
                                         <TextBlock Text="Bucket Flags" FontSize="13" Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
                                         <Grid ColumnDefinitions="*, *" ColumnSpacing="16" RowSpacing="10">
                                             <Grid.RowDefinitions>
@@ -386,7 +386,7 @@
                 <RowDefinition Height="Auto"/>
                 <RowDefinition Height="*"/>
             </Grid.RowDefinitions>
-
+            
             <StackPanel Spacing="12" Margin="32">
                 <Grid ColumnDefinitions="*, Auto, Auto" ColumnSpacing="12">
                     <TextBlock Text="Select Material" Style="{StaticResource TitleTextBlockStyle}" VerticalAlignment="Center"/>
@@ -414,8 +414,9 @@
                     </TextBox.Header>
                 </TextBox>
             </StackPanel>
-
+            
             <ListView Grid.Row="1" ItemsSource="{x:Bind ViewModel.BrowserActiveItems, Mode=OneWay}" SelectionMode="Single" x:Name="MaterialBrowserList" Margin="32,0,32,32" Background="{ThemeResource CardBackgroundFillColorDefaultBrush}" BorderBrush="{ThemeResource SurfaceStrokeColorDefaultBrush}" BorderThickness="1" CornerRadius="8"/>
         </Grid>
     </Grid>
 </Page>
+

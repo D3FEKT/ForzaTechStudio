@@ -40,24 +40,50 @@ namespace ForzaTechStudio.ViewModels
             }
         }
 
+        private double _steeringWheelMaxDegrees;
+        public double SteeringWheelMaxDegrees
+        {
+            get => _steeringWheelMaxDegrees;
+            set
+            {
+                if (SetProperty(ref _steeringWheelMaxDegrees, value) && Data != null)
+                    Data.SteeringWheelMaxDegrees = value;
+            }
+        }
+
+        private double _shiftingFamily;
+        public double ShiftingFamily
+        {
+            get => _shiftingFamily;
+            set
+            {
+                if (SetProperty(ref _shiftingFamily, value) && Data != null)
+                    Data.ShiftingFamily = (int)value;
+            }
+        }
+
         // Load / Clear / IO
 
         public void Load(IKAnchorBonesData data)
         {
-            Data            = data;
-            HandGripAmount  = data.HandGripAmount;
-            ReclineAmount   = data.ReclineAmount;
-            SelectedBone    = null;
-            XmlError        = null;
+            Data                   = data;
+            HandGripAmount         = data.HandGripAmount;
+            ReclineAmount          = data.ReclineAmount;
+            SteeringWheelMaxDegrees = data.SteeringWheelMaxDegrees;
+            ShiftingFamily         = data.ShiftingFamily;
+            SelectedBone           = null;
+            XmlError               = null;
         }
 
         public void Clear()
         {
-            Data            = null;
-            HandGripAmount  = 0.8;
-            ReclineAmount   = 0;
-            SelectedBone    = null;
-            XmlError        = null;
+            Data                   = null;
+            HandGripAmount         = 0.8;
+            ReclineAmount          = 0;
+            SteeringWheelMaxDegrees = 0;
+            ShiftingFamily         = 0;
+            SelectedBone           = null;
+            XmlError               = null;
         }
 
         public string Serialize() => Data != null ? IKAnchorBonesParser.Serialize(Data) : "";

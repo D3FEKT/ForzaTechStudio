@@ -11,17 +11,28 @@ public class VDCLMetadata : BundleMetadata
     {
         if (Version >= 2)
         {
-            int count = 1;
-            if (Version >= 3)
-                count = bs.ReadInt32();
 
-            for (int i = 0; i < count; i++)
+            // Version 2: outerCount = 1 (hardcoded), then per-outer: read innerCount(int32), then innerCount*(nameHash+flags)
+            // Version 3: read outerCount(int32), then per-outer: read innerCount(int32), then innerCount*(nameHash+flags)
+            // Version 4+: same as v3 but also read a uint16 permutation index per outer iteration
+            int outerCount = 1;
+            if (Version >= 3)
+                outerCount = bs.ReadInt32();
+
+            for (int o = 0; o < outerCount; o++)
             {
-                Entries.Add(new VDCLEntry
+                if (Version >= 4)
+                    bs.ReadUInt16(); // permutation index (unused by VLay patch)
+
+                int innerCount = bs.ReadInt32();
+                for (int i = 0; i < innerCount; i++)
                 {
-                    NameHash = bs.ReadUInt32(),
-                    VertexInputFlags = bs.ReadUInt32()
-                });
+                    Entries.Add(new VDCLEntry
+                    {
+                        NameHash = bs.ReadUInt32(),
+                        VertexInputFlags = (uint)bs.ReadInt32()
+                    });
+                }
             }
         }
     }
@@ -31,12 +42,16 @@ public class VDCLMetadata : BundleMetadata
         if (Version >= 2)
         {
             if (Version >= 3)
-                bs.WriteInt32(Entries.Count);
+                bs.WriteInt32(Entries.Count); // outerCount = total entries (1 entry per outer group)
+
+            // Always write innerCount = number of entries (or 1 group per outer with all entries if v3+)
+            // For simplicity, we write all entries in a single inner group.
+            bs.WriteInt32(Entries.Count); // innerCount
 
             foreach (var entry in Entries)
             {
                 bs.WriteUInt32(entry.NameHash);
-                bs.WriteUInt32(entry.VertexInputFlags);
+                bs.WriteInt32((int)entry.VertexInputFlags);
             }
         }
     }
@@ -46,13 +61,16 @@ public class VDCLMetadata : BundleMetadata
         if (Version >= 2)
         {
             var safeEntries = Entries ?? new List<VDCLEntry>();
+
             if (Version >= 3)
-                bs.WriteInt32(safeEntries.Count);
+                bs.WriteInt32(safeEntries.Count); // outerCount
+
+            bs.WriteInt32(safeEntries.Count); // innerCount
 
             foreach (var entry in safeEntries)
             {
                 bs.WriteUInt32(entry.NameHash);
-                bs.WriteUInt32(entry.VertexInputFlags);
+                bs.WriteInt32((int)entry.VertexInputFlags);
             }
         }
     }

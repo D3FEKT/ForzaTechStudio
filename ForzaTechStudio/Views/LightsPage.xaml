@@ -342,6 +342,7 @@
                                             <ComboBoxItem Content="FH3"/>
                                             <ComboBoxItem Content="FH4"/>
                                             <ComboBoxItem Content="FH5"/>
+                                            <ComboBoxItem Content="FH6"/>
                                         </ComboBox>
 
                                         <!-- Light ID - FH3/FH4: editable hex text box -->
@@ -363,6 +364,17 @@
                                                   HorizontalAlignment="Stretch"
                                                   IsEditable="True"
                                                   Visibility="{x:Bind ViewModel.IsFh5IdSource, Mode=OneWay, Converter={StaticResource BoolToVis}}"/>
+
+                                        <!-- Light ID - FH6: dropdown from hash map -->
+                                        <TextBlock Grid.Row="1" Style="{StaticResource PropLabelStyle}" Text="Light ID (FH6)"
+                                                   Visibility="{x:Bind ViewModel.IsFh6IdSource, Mode=OneWay, Converter={StaticResource BoolToVis}}"/>
+                                        <ComboBox Grid.Row="1" Grid.Column="1"
+                                                  ItemsSource="{x:Bind ViewModel.Fh6HashEntries}"
+                                                  SelectedItem="{x:Bind ViewModel.SelectedFh6Hash, Mode=TwoWay}"
+                                                  DisplayMemberPath="DisplayText"
+                                                  HorizontalAlignment="Stretch"
+                                                  IsEditable="True"
+                                                  Visibility="{x:Bind ViewModel.IsFh6IdSource, Mode=OneWay, Converter={StaticResource BoolToVis}}"/>
 
                                         <TextBlock Grid.Row="2" Style="{StaticResource PropLabelStyle}" Text="Attachment Index"/>
                                         <NumberBox Grid.Row="2" Grid.Column="1"

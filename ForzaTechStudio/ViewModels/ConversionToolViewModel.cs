@@ -248,6 +248,8 @@ public partial class ConversionToolViewModel : ObservableObject
                         "VLay: COLOR0 NORMAL(Snorm16x2) TANGENT0-1(R10G10B10A2) TEXCOORD0-4, stride=36",
                     Services.ForzaGameTarget.FM2023 =>
                         "VLay: NORMAL(Snorm16x2) TANGENT0-2(R10G10B10A2) TEXCOORD0-4, stride=36",
+                    Services.ForzaGameTarget.FH5 or Services.ForzaGameTarget.FH6 =>
+                        "VLay: COLOR0 NORMAL(Snorm16x2) TANGENT0-2(R10G10B10A2) TEXCOORD0-4, stride=40",
                     _ =>
                         "VLay: COLOR0 NORMAL(Snorm16x2) TANGENT0-2(R10G10B10A2) TEXCOORD0-4, stride=40",
                 };
@@ -940,6 +942,7 @@ public partial class ConversionToolViewModel : ObservableObject
             AvailableTargets.Clear();
             _currentTargets =
             [
+                Services.ForzaGameTarget.FH6,
                 Services.ForzaGameTarget.FH5,
                 Services.ForzaGameTarget.FH4,
                 Services.ForzaGameTarget.FH3,

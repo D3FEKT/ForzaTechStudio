@@ -285,7 +285,7 @@ namespace ForzaTechStudio.Views
                 return;
 
             var newPositions = new Vector3Collection(mesh.GeometryData.RawPositions.Length);
-            var boneTransform = mesh.GeometryData.BoneTransform;
+            var boneTransform = IsFiniteMatrix(mesh.GeometryData.BoneTransform) ? mesh.GeometryData.BoneTransform : Matrix4x4.Identity;
             var rotMatrix = mesh.GeometryData.GetRotationMatrix();
             bool hasRotation = rotMatrix != Matrix4x4.Identity;
             
@@ -304,6 +304,9 @@ namespace ForzaTechStudio.Views
                 
                 var v = new Vector3(scaled.X + tx, scaled.Y + ty, scaled.Z + tz);
                 var transformed = Vector3.Transform(v, boneTransform);
+
+                if (!IsFiniteVector(transformed))
+                    transformed = IsFiniteVector(v) ? v : Vector3.Zero;
                 
                 newPositions.Add(new SDX.Vector3(transformed.X, transformed.Y, transformed.Z));
             }
@@ -316,7 +319,8 @@ namespace ForzaTechStudio.Views
                 var newNormals = new Vector3Collection(mesh.GeometryData.Normals.Length);
                 for (int i = 0; i < mesh.GeometryData.Normals.Length; i++)
                 {
-                    var rn = Vector3.Normalize(Vector3.TransformNormal(mesh.GeometryData.Normals[i], rotMatrix));
+                    var rotated = Vector3.TransformNormal(mesh.GeometryData.Normals[i], rotMatrix);
+                    var rn = NormalizeOrDefault(rotated, Vector3.UnitY);
                     newNormals.Add(new SDX.Vector3(rn.X, rn.Y, rn.Z));
                 }
                 geometry.Normals = newNormals;
@@ -381,7 +385,8 @@ namespace ForzaTechStudio.Views
                 var newNormals = new Vector3Collection(mesh.GeometryData.Normals.Length);
                 for (int i = 0; i < mesh.GeometryData.Normals.Length; i++)
                 {
-                    var rn = Vector3.Normalize(Vector3.TransformNormal(mesh.GeometryData.Normals[i], rotMatrix));
+                    var rotated = Vector3.TransformNormal(mesh.GeometryData.Normals[i], rotMatrix);
+                    var rn = NormalizeOrDefault(rotated, Vector3.UnitY);
                     newNormals.Add(new SDX.Vector3(rn.X, rn.Y, rn.Z));
                 }
                 geometry.Normals = newNormals;
@@ -397,6 +402,20 @@ namespace ForzaTechStudio.Views
                 && float.IsFinite(m.M21) && float.IsFinite(m.M22) && float.IsFinite(m.M23) && float.IsFinite(m.M24)
                 && float.IsFinite(m.M31) && float.IsFinite(m.M32) && float.IsFinite(m.M33) && float.IsFinite(m.M34)
                 && float.IsFinite(m.M41) && float.IsFinite(m.M42) && float.IsFinite(m.M43) && float.IsFinite(m.M44);
+        }
+
+        private static bool IsFiniteVector(Vector3 v)
+        {
+            return float.IsFinite(v.X) && float.IsFinite(v.Y) && float.IsFinite(v.Z);
+        }
+
+        private static Vector3 NormalizeOrDefault(Vector3 v, Vector3 fallback)
+        {
+            if (!IsFiniteVector(v) || v.LengthSquared() <= 1e-12f)
+                return fallback;
+
+            var normalized = Vector3.Normalize(v);
+            return IsFiniteVector(normalized) ? normalized : fallback;
         }
         
         private void ResetTransform_Click(object sender, RoutedEventArgs e)

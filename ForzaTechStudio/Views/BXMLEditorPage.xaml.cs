@@ -107,14 +107,24 @@ namespace ForzaTechStudio.Views
                 return;
 
             var items = await e.DataView.GetStorageItemsAsync();
-            var file  = items
-                .OfType<Windows.Storage.StorageFile>()
-                .FirstOrDefault(f =>
-                    f.Path.EndsWith(".bxml", StringComparison.OrdinalIgnoreCase) ||
-                    f.Path.EndsWith(".xml",  StringComparison.OrdinalIgnoreCase));
+            var files = items.OfType<Windows.Storage.StorageFile>().ToList();
 
-            if (file != null)
-                await ViewModel.LoadFileAsync(file.Path);
+            // Check for ZIP first
+            var zipFile = files.FirstOrDefault(f =>
+                f.Path.EndsWith(".zip", StringComparison.OrdinalIgnoreCase));
+            if (zipFile != null)
+            {
+                await ViewModel.LoadZipAsync(zipFile.Path);
+                return;
+            }
+
+            // Then BXML / XML
+            var xmlFile = files.FirstOrDefault(f =>
+                f.Path.EndsWith(".bxml", StringComparison.OrdinalIgnoreCase) ||
+                f.Path.EndsWith(".xml",  StringComparison.OrdinalIgnoreCase));
+
+            if (xmlFile != null)
+                await ViewModel.LoadFileAsync(xmlFile.Path);
         }
     }
 }

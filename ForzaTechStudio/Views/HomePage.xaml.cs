@@ -204,7 +204,7 @@ namespace ForzaTechStudio.Views
             try
             {
                 var asmVersion = System.Reflection.Assembly.GetExecutingAssembly().GetName().Version;
-                string currentVersion = $"{asmVersion.Major}.{asmVersion.Minor}.{asmVersion.Build}";
+                string currentVersion = asmVersion?.ToString() ?? "0.0.0.0";
 
                 using var client = new HttpClient { Timeout = TimeSpan.FromSeconds(10) };
                 client.DefaultRequestHeaders.UserAgent.ParseAdd("ForzaTechStudio");
@@ -231,7 +231,7 @@ namespace ForzaTechStudio.Views
                 else
                 {
                     var tagName = releases[0].GetProperty("tag_name").GetString() ?? string.Empty;
-                    var latestVersion = tagName.TrimStart('v');
+                    var latestVersion = tagName.TrimStart('v', 'V');
 
                     if (string.IsNullOrEmpty(latestVersion) || latestVersion == currentVersion)
                     {

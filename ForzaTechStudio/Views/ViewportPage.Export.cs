@@ -1,5 +1,6 @@
 ﻿using ForzaTechStudio.Services;
 using ForzaTechStudio.ViewModels.ThreeDViewer;
+using FbxExportFormat = ForzaTechStudio.Services.FbxExportFormat;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using System;
@@ -87,13 +88,20 @@ namespace ForzaTechStudio.Views
                 string mtlFileName = Path.GetFileNameWithoutExtension(outFile.Name) + ".mtl";
                 var modelList = models.ToList();
 
+                // Collect zip paths on the UI thread before handing off to the background.
+                string outputDir = Path.GetDirectoryName(outFile.Path) ?? string.Empty;
+                var zipPathList = CollectSourceZipPaths(ViewModel.Roots).ToList();
+
                 // Build text content on a background thread.
+                // The texture path map is built here too (zip central-directory scan only,
+                // no extraction) so that map_Kd lines are included in the MTL.
                 string? objContent = null;
                 string? mtlContent = null;
                 await Task.Run(() =>
                 {
+                    var texMap = BuildTexturePathMap(zipPathList);
                     objContent = ObjExportService.BuildObjContent(modelList, mtlFileName);
-                    mtlContent = ObjExportService.BuildMtlContent(modelList);
+                    mtlContent = ObjExportService.BuildMtlContent(modelList, texMap);
                 });
 
                 LoadingStatus = "Saving files...";
@@ -113,16 +121,25 @@ namespace ForzaTechStudio.Views
                     await Windows.Storage.FileIO.WriteTextAsync(mtlFile, mtlContent);
                 }
 
+                // Export DDS textures from any source zip(s).
+                LoadingStatus = "Exporting textures...";
+                await Task.Yield();
+                string? texSummary = await ExportZipTextures(zipPathList, outputDir);
+
                 // Hide the overlay before showing the success dialog.
                 IsLoading = false;
                 LoadingStatus = "";
 
                 int meshCount = modelList.Sum(m => m.Meshes.Count);
+                string content = $"Written {meshCount} mesh(es) across {modelList.Count} model(s).\n\n" +
+                                 $"{outFile.Name}\n{mtlFileName}";
+                if (texSummary != null)
+                    content += $"\n\nTextures:\n{texSummary}";
+
                 var dlg = new ContentDialog
                 {
                     Title = "Export Complete",
-                    Content = $"Written {meshCount} mesh(es) across {modelList.Count} model(s).\n\n" +
-                              $"{outFile.Name}\n{mtlFileName}",
+                    Content = content,
                     CloseButtonText = "OK",
                     XamlRoot = this.XamlRoot
                 };
@@ -139,10 +156,133 @@ namespace ForzaTechStudio.Views
             }
         }
 
+        // FBX export handlers
+
+        private async void ExportFbxAsciiScene_Click(object sender, RoutedEventArgs e)
+            => await ExportFbxScene(FbxExportFormat.Ascii);
+
+        private async void ExportFbxAsciiSelected_Click(object sender, RoutedEventArgs e)
+            => await ExportFbxSelected(FbxExportFormat.Ascii);
+
+        private async void ExportFbxBinaryScene_Click(object sender, RoutedEventArgs e)
+            => await ExportFbxScene(FbxExportFormat.Binary);
+
+        private async void ExportFbxBinarySelected_Click(object sender, RoutedEventArgs e)
+            => await ExportFbxSelected(FbxExportFormat.Binary);
+
+        private async Task ExportFbxScene(FbxExportFormat format)
+        {
+            var models = CollectModelBinExportData(ViewModel.Roots).ToList();
+
+            if (models.Count == 0 || models.All(m => m.Meshes.Count == 0))
+            {
+                await ShowError("No meshes are currently loaded.");
+                return;
+            }
+
+            await PerformFbxExport(models, "scene", format);
+        }
+
+        private async Task ExportFbxSelected(FbxExportFormat format)
+        {
+            if (ModelBinSelector.SelectedItem is not ModelBinNode selectedModel)
+            {
+                await ShowError("No model is selected.\n\nSelect a model from the Model dropdown first.");
+                return;
+            }
+
+            var meshes = selectedModel.Children
+                .OfType<MeshNode>()
+                .Where(m => m.GeometryData != null)
+                .Select(m => (Name: m.Name, Data: m.GeometryData!))
+                .ToList();
+
+            if (meshes.Count == 0)
+            {
+                await ShowError("The selected model contains no exportable meshes.");
+                return;
+            }
+
+            var models = new List<ModelBinExportData>
+            {
+                new ModelBinExportData(
+                    selectedModel.Name ?? selectedModel.FileName ?? "model",
+                    selectedModel.Bundle,
+                    meshes)
+            };
+
+            await PerformFbxExport(models, selectedModel.Name ?? selectedModel.FileName ?? "model", format);
+        }
+
+        private async Task PerformFbxExport(
+            IEnumerable<ModelBinExportData> models,
+            string suggestedBaseName,
+            FbxExportFormat format)
+        {
+            var savePicker = new Windows.Storage.Pickers.FileSavePicker();
+            var hWnd = WinRT.Interop.WindowNative.GetWindowHandle(App.MainWindow);
+            WinRT.Interop.InitializeWithWindow.Initialize(savePicker, hWnd);
+            savePicker.SuggestedStartLocation = Windows.Storage.Pickers.PickerLocationId.Desktop;
+            savePicker.SuggestedFileName = suggestedBaseName;
+            savePicker.FileTypeChoices.Add("Autodesk FBX", new[] { ".fbx" });
+
+            var outFile = await savePicker.PickSaveFileAsync();
+            if (outFile == null)
+                return;
+
+            IsLoading = true;
+            LoadingStatus = format == FbxExportFormat.Binary
+                ? "Building FBX Binary geometry..."
+                : "Building FBX ASCII geometry...";
+            await Task.Yield();
+
+            try
+            {
+                var modelList = models.ToList();
+                string outPath = outFile.Path;
+                string outputDir = Path.GetDirectoryName(outPath) ?? string.Empty;
+                var zipPathList = CollectSourceZipPaths(ViewModel.Roots).ToList();
+                var texMap = BuildTexturePathMap(zipPathList);
+
+                await Task.Run(() => FbxExportService.Export(modelList, outPath, format, texMap));
+
+                // Export DDS textures from any source zip(s).
+                LoadingStatus = "Exporting textures...";
+                await Task.Yield();
+                string? texSummary = await ExportZipTextures(zipPathList, outputDir);
+
+                IsLoading = false;
+                LoadingStatus = "";
+
+                int meshCount = modelList.Sum(m => m.Meshes.Count);
+                string formatLabel = format == FbxExportFormat.Binary ? "Binary" : "ASCII";
+                string content = $"Written {meshCount} mesh(es) across {modelList.Count} model(s).\n\nFormat: FBX {formatLabel}\n{outFile.Name}";
+                if (texSummary != null)
+                    content += $"\n\nTextures:\n{texSummary}";
+
+                var dlg = new ContentDialog
+                {
+                    Title = "Export Complete",
+                    Content = content,
+                    CloseButtonText = "OK",
+                    XamlRoot = this.XamlRoot
+                };
+                await dlg.ShowAsync();
+            }
+            catch (Exception ex)
+            {
+                await ShowError($"FBX export failed.\n\nError: {ex.Message}\n\n{ex.InnerException?.Message}");
+            }
+            finally
+            {
+                IsLoading = false;
+                LoadingStatus = "";
+            }
+        }
+
         // Helpers
 
-        // Walks the viewer node tree and returns one <see cref="ModelBinExportData"/>
-        // per <see cref="ModelBinNode"/> found (including those nested inside ZipNodes).
+
         private static IEnumerable<ModelBinExportData> CollectModelBinExportData(
             IEnumerable<IViewerNode> roots)
         {
@@ -173,4 +313,6 @@ namespace ForzaTechStudio.Views
                     yield return data;
         }
     }
+
 }
+

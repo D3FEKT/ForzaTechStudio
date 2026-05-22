@@ -44,7 +44,7 @@
             <!-- Version badge + title -->
             <StackPanel Grid.Row="0" Orientation="Horizontal" Spacing="12" VerticalAlignment="Center">
                 <Border Background="{ThemeResource SystemControlBackgroundAccentBrush}" CornerRadius="6" Padding="10,4">
-                    <TextBlock Text="v0.9.1.0" FontSize="13" FontWeight="SemiBold" Foreground="White"/>
+                    <TextBlock x:Name="VersionBadge" FontSize="13" FontWeight="SemiBold" Foreground="White"/>
                 </Border>
                 <TextBlock Text="What's New" FontSize="28" FontWeight="SemiBold" VerticalAlignment="Center"/>
             </StackPanel>
@@ -63,7 +63,7 @@
                     </Grid.ColumnDefinitions>
                     <Ellipse Width="8" Height="8" Fill="{ThemeResource SystemAccentColorLight2}" VerticalAlignment="Top" Margin="0,6,0,0"/>
                     <TextBlock Grid.Column="1" TextWrapping="Wrap" FontSize="14" Opacity="0.85"
-                               Text="Initial pre-release — many bugs may still be present."/>
+                               Text="Pre-release — many bugs may still be present."/>
                 </Grid>
 
                 <Grid ColumnSpacing="14">
