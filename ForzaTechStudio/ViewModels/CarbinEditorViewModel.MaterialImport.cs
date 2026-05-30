@@ -41,9 +41,10 @@ namespace ForzaTechStudio.ViewModels
                 if (materials.Count > 0)
                 {
                     model.MaterialIndexes.Clear();
+                    bool useHexValue = UsesFh6MaterialHashEditorForModel(model);
                     foreach (var mat in materials)
                     {
-                        model.MaterialIndexes.Add(new MaterialIndexEntry(mat, 0));
+                        model.MaterialIndexes.Add(new MaterialIndexEntry(mat, 0, useHexValue));
                     }
                     StatusMessage = $"Loaded {materials.Count} materials from {file.Name}.";
                 }
@@ -78,9 +79,10 @@ namespace ForzaTechStudio.ViewModels
                 if (selectedModel == null) return;
 
                 targetModel.MaterialIndexes.Clear();
+                bool useHexValue = UsesFh6MaterialHashEditorForModel(targetModel);
                 foreach (var matIdx in selectedModel.MaterialIndexes)
                 {
-                    targetModel.MaterialIndexes.Add(new MaterialIndexEntry(matIdx.Key, matIdx.Value));
+                    targetModel.MaterialIndexes.Add(new MaterialIndexEntry(matIdx.Key, matIdx.Value, useHexValue));
                 }
 
                 string carbinFileName = Path.GetFileName(carbinPath);
@@ -253,6 +255,7 @@ namespace ForzaTechStudio.ViewModels
             // Material Indexes ? this is what we want
             if (modelVersion >= 3)
             {
+                bool useHexValue = UsesFh6MaterialHashEditor(sceneVersion, isHorizon, modelVersion);
                 uint indexesCount = reader.ReadUInt32();
                 for (int i = 0; i < indexesCount; i++)
                 {
@@ -262,7 +265,7 @@ namespace ForzaTechStudio.ViewModels
                         val = reader.ReadUInt64();
                     else
                         val = (ulong)reader.ReadInt32();
-                    info.MaterialIndexes.Add(new MaterialIndexEntry(key, val));
+                    info.MaterialIndexes.Add(new MaterialIndexEntry(key, val, useHexValue));
                 }
             }
 
@@ -671,12 +674,13 @@ namespace ForzaTechStudio.ViewModels
             // Material indexes (v3+)
             if (modelVersion >= 3)
             {
+                bool useHexValue = UsesFh6MaterialHashEditor(sceneVersion, isHorizon, modelVersion);
                 uint indexesCount = reader.ReadUInt32();
                 for (int i = 0; i < indexesCount; i++)
                 {
                     string key = ReadString(reader);
                     ulong val = UsesWideMaterialIndexes(modelVersion) ? reader.ReadUInt64() : (ulong)reader.ReadInt32();
-                    info.MaterialIndexes.Add(new MaterialIndexEntry(key, val));
+                    info.MaterialIndexes.Add(new MaterialIndexEntry(key, val, useHexValue));
                 }
             }
 
@@ -913,8 +917,9 @@ namespace ForzaTechStudio.ViewModels
             // v3+: Material indexes
             if (targetModelVersion >= 3 && source.SourceModelVersion >= 3)
             {
+                bool useHexValue = UsesFh6MaterialHashEditorForCurrentOutput();
                 foreach (var mat in source.MaterialIndexes)
-                    entry.MaterialIndexes.Add(new MaterialIndexEntry(mat.Key, mat.Value));
+                    entry.MaterialIndexes.Add(new MaterialIndexEntry(mat.Key, mat.Value, useHexValue));
             }
 
             // v6+: Droppable

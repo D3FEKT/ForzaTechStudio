@@ -1,13 +1,45 @@
 ﻿using CommunityToolkit.Mvvm.ComponentModel;
 using System;
+using System.Collections.Generic;
 using System.Collections.ObjectModel;
+using System.Globalization;
 using System.Linq;
 using System.Numerics;
 
 namespace ForzaTechStudio.ViewModels
 {
+    public sealed class SavedMaterialHash(string name, ulong hash)
+    {
+        public string Name { get; } = name;
+        public ulong Hash { get; } = hash;
+        public string DisplayText => $"{Name} : 0x{Hash:X16}";
+
+        public override string ToString() => DisplayText;
+    }
+
     public partial class MaterialIndexEntry : ObservableObject
     {
+        private static readonly IReadOnlyList<SavedMaterialHash> _savedMaterialHashes =
+        [
+            new("wheel1", 0x6963CFB9E5C04BBEUL),
+            new("wheel2", 0xA11BBB5668440C18UL),
+            new("wheel3", 0xDCE6592BFA0DFA78UL),
+            new("wheel4", 0xC3F4EEFF7A11DBCDUL),
+            new("caliper", 0xA5495E0A43DF55B9UL),
+            new("carPaint", 0xF7DBE8A7C839A675UL),
+            new("hood_carPaint", 0x6AC1E9D87FE5D953UL),
+            new("carPaint_Secondary", 0x48E5B27611922B17UL),
+            new("mirror_carPaint", 0x1E5FF0F50C741122UL),
+            new("glass_tint", 0x9582FD1BA2FFF9A4UL),
+            new("wing_carPaint", 0xCD48110253EE319AUL),
+            new("p_WingEndPlates", 0xBCEA13C28AA26965UL),
+            new("u_WingPlane", 0x6E3810972EA4DBF4UL),
+            new("u_WingStruts", 0xB0C163FF8ADE48FDUL),
+            new("tow_hook", 0x471A5FA481625396UL),
+        ];
+
+        public IReadOnlyList<SavedMaterialHash> SavedMaterialHashes => _savedMaterialHashes;
+
         private string _key = "";
         public string Key
         {
@@ -19,31 +51,87 @@ namespace ForzaTechStudio.ViewModels
         public ulong Value
         {
             get => _value;
-            set => SetProperty(ref _value, value);
+            set
+            {
+                if (SetProperty(ref _value, value))
+                {
+                    OnPropertyChanged(nameof(ValueAsDouble));
+                    OnPropertyChanged(nameof(ValueHexString));
+                    OnPropertyChanged(nameof(SelectedSavedMaterialHash));
+                }
+            }
         }
 
+        private bool _useHexValue;
+        public bool UseHexValue
+        {
+            get => _useHexValue;
+            set => SetProperty(ref _useHexValue, value);
+        }
 
         public double ValueAsDouble
         {
             get => _value;
             set
             {
-                var newVal = (ulong)value;
-                if (_value != newVal)
+                if (UseHexValue || double.IsNaN(value))
+                    return;
+
+                Value = value <= 0 ? 0 : (ulong)value;
+            }
+        }
+
+        public string ValueHexString
+        {
+            get => $"0x{_value:X16}";
+            set
+            {
+                string text = NormalizeHexValue(value);
+                if (text.Length == 0)
                 {
-                    _value = newVal;
-                    OnPropertyChanged(nameof(Value));
-                    OnPropertyChanged(nameof(ValueAsDouble));
+                    Value = 0;
+                    return;
                 }
+
+                if (text.Length <= 16 && ulong.TryParse(text, NumberStyles.HexNumber, CultureInfo.InvariantCulture, out ulong parsed))
+                    Value = parsed;
+            }
+        }
+
+        public SavedMaterialHash? SelectedSavedMaterialHash
+        {
+            get => SavedMaterialHashes.FirstOrDefault(hash => hash.Hash == Value);
+            set
+            {
+                if (value == null)
+                    return;
+
+                Value = value.Hash;
+                if (string.IsNullOrWhiteSpace(Key) || Key.Equals("material_name", StringComparison.OrdinalIgnoreCase))
+                    Key = value.Name;
             }
         }
 
         public MaterialIndexEntry() { }
 
-        public MaterialIndexEntry(string key, ulong value)
+        public MaterialIndexEntry(string key, ulong value, bool useHexValue = false)
         {
             Key = key;
             Value = value;
+            UseHexValue = useHexValue;
+        }
+
+        private static string NormalizeHexValue(string value)
+        {
+            string text = (value ?? string.Empty).Trim();
+            if (text.StartsWith("0x", StringComparison.OrdinalIgnoreCase))
+                text = text[2..];
+
+            return text
+                .Replace(" ", string.Empty)
+                .Replace("_", string.Empty)
+                .Replace(":", string.Empty)
+                .Replace("-", string.Empty);
         }
     }
 

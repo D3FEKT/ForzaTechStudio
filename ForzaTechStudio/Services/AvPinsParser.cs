@@ -15,21 +15,31 @@ namespace ForzaTechStudio.Services
 
         private static bool   B(XElement? el, string name, bool   def = false)
         {
-            var v = el?.Attribute(name)?.Value ?? el?.Element(name)?.Value?.Trim();
+            var v = el?.Attribute(name)?.Value ?? E(el, name)?.Value?.Trim();
             if (v == null) return def;
             return v == "1" || string.Equals(v, "true", StringComparison.OrdinalIgnoreCase);
         }
 
         private static double D(XElement? el, string name, double def = 0.0)
         {
-            var v = el?.Attribute(name)?.Value ?? el?.Element(name)?.Value?.Trim();
+            var v = el?.Attribute(name)?.Value ?? E(el, name)?.Value?.Trim();
             return double.TryParse(v, NumberStyles.Float, CultureInfo.InvariantCulture, out double r) ? r : def;
         }
 
         private static string S(XElement? el, string name, string def = "")
         {
-            var v = el?.Attribute(name)?.Value ?? el?.Element(name)?.Value?.Trim();
+            var v = el?.Attribute(name)?.Value ?? E(el, name)?.Value?.Trim();
             return v ?? def;
+        }
+
+        private static XElement? E(XElement? el, string localName)
+        {
+            return el?.Elements().FirstOrDefault(child => child.Name.LocalName == localName);
+        }
+
+        private static IEnumerable<XElement> Es(XElement? el, string localName)
+        {
+            return el?.Elements().Where(child => child.Name.LocalName == localName) ?? Enumerable.Empty<XElement>();
         }
 
         private static string Fmt(double v) => v.ToString("F6", CultureInfo.InvariantCulture);
@@ -87,27 +97,27 @@ namespace ForzaTechStudio.Services
             v.InstantSelect = B(el, "InstantSelect");
             v.Locator       = S(el, "Locator");
 
-            var pos = el.Element("Pos");
+            var pos = E(el, "Pos");
             v.PosX = D(pos, "X"); v.PosY = D(pos, "Y"); v.PosZ = D(pos, "Z");
 
-            var axis      = el.Element("Axis");
+            var axis      = E(el, "Axis");
             v.AxisYaw     = D(axis, "Yaw"); v.AxisPitch = D(axis, "Pitch");
 
-            var apex      = el.Element("Apex");
+            var apex      = E(el, "Apex");
             v.ApexYaw     = D(apex, "Yaw"); v.ApexPitch = D(apex, "Pitch");
 
-            var aa        = el.Element("ActiveApex");
+            var aa        = E(el, "ActiveApex");
             v.ActiveApexYaw = D(aa, "Yaw"); v.ActiveApexPitch = D(aa, "Pitch");
 
-            var mid       = el.Element("MidApex");
+            var mid       = E(el, "MidApex");
             v.MidApexYaw  = D(mid, "Yaw"); v.MidApexPitch = D(mid, "Pitch");
 
-            var dist      = el.Element("Distance");
+            var dist      = E(el, "Distance");
             v.NearRadius  = D(dist, "NearRadius");
             v.MidRadius   = D(dist, "MidRadius");
             v.FarRadius   = D(dist, "FarRadius");
 
-            var cam       = el.Element("Camera");
+            var cam       = E(el, "Camera");
             if (cam != null)
             {
                 v.HasCamera            = true;
@@ -115,17 +125,17 @@ namespace ForzaTechStudio.Services
                 v.CameraWalkSpeedScale = D(cam, "WalkSpeedScale");
             }
 
-            var lookAt = el.Element("LookAt");
+            var lookAt = E(el, "LookAt");
             if (lookAt != null)
             {
                 v.HasLookAt       = true;
                 v.LookAtHeightBoost = D(lookAt, "HeightBoost");
                 v.LookAtBlend       = D(lookAt, "Blend");
-                var lp = lookAt.Element("Pos");
+                var lp = E(lookAt, "Pos");
                 v.LookAtPosX = D(lp, "X"); v.LookAtPosY = D(lp, "Y"); v.LookAtPosZ = D(lp, "Z");
             }
 
-            var cursor    = el.Element("Cursor");
+            var cursor    = E(el, "Cursor");
             if (cursor != null)
             {
                 v.HasCursor           = true;
@@ -220,7 +230,7 @@ namespace ForzaTechStudio.Services
             a.FadeOutUITransition   = B(el, "FadeOutUITransition");
             a.SceneName             = S(el, "SceneName", " ");
 
-            var sv = el.Element("SetView");
+            var sv = E(el, "SetView");
             if (sv != null)
             {
                 a.SetViewName               = S(sv, "Name", " ");
@@ -231,10 +241,10 @@ namespace ForzaTechStudio.Services
                 a.TransitionW = D(sv, "TransitionPoint.w");
             }
 
-            var req = el.Element("Requires");
+            var req = E(el, "Requires");
             if (req != null)
             {
-                foreach (var poiEl in req.Elements("POI"))
+                foreach (var poiEl in Es(req, "POI"))
                 {
                     var n = S(poiEl, "Name");
                     if (!string.IsNullOrEmpty(n)) a.RequiredPOIs.Add(n);
@@ -283,19 +293,19 @@ namespace ForzaTechStudio.Services
         private static PoiViewEntry ParseView(XElement el)
         {
             var v = new PoiViewEntry();
-            v.Name         = el.Attribute("Name")?.Value ?? el.Element("Name")?.Value?.Trim() ?? "";
+            v.Name         = el.Attribute("Name")?.Value ?? E(el, "Name")?.Value?.Trim() ?? "";
             v.Guid         = el.Attribute("Guid")?.Value ?? "";
-            v.Locator      = el.Attribute("Locator")?.Value ?? el.Element("Locator")?.Value?.Trim() ?? "";
+            v.Locator      = el.Attribute("Locator")?.Value ?? E(el, "Locator")?.Value?.Trim() ?? "";
             v.OverrideMode = el.Attribute("OverrideMode")?.Value ?? "Add";
             v.EnableBackOut = B(el, "EnableBackOut");
 
-            var pos = el.Element("Pos");
+            var pos = E(el, "Pos");
             v.PosX = D(pos, "X"); v.PosY = D(pos, "Y"); v.PosZ = D(pos, "Z");
 
-            v.DirectionYaw = D(el.Element("Direction"), "Yaw");
-            v.SizeWidth    = D(el.Element("Size"),      "Width", 0.1);
+            v.DirectionYaw = D(E(el, "Direction"), "Yaw");
+            v.SizeWidth    = D(E(el, "Size"),      "Width", 0.1);
 
-            var lim = el.Element("Limits");
+            var lim = E(el, "Limits");
             v.MinYaw   = D(lim, "MinYaw",   -360);
             v.MaxYaw   = D(lim, "MaxYaw",    360);
             v.MinPitch = D(lim, "MinPitch", -360);
@@ -359,22 +369,22 @@ namespace ForzaTechStudio.Services
 
             // Template — may be attribute OR child element
             data.Template = root.Attribute("Template")?.Value
-                         ?? root.Element("Template")?.Value?.Trim()
+                         ?? E(root, "Template")?.Value?.Trim()
                          ?? "Default";
 
             // InitialStates
-            var initEl = root.Element("InitialStates");
+            var initEl = E(root, "InitialStates");
             if (initEl != null)
                 ParseConditions(initEl, data.InitialStates);
 
             // Views
-            var viewsEl = root.Element("Views");
+            var viewsEl = E(root, "Views");
             if (viewsEl != null)
-                foreach (var el in viewsEl.Elements("View"))
+                foreach (var el in Es(viewsEl, "View"))
                     data.Views.Add(ParseView(el));
 
             // PointOfInterest elements
-            foreach (var poiEl in root.Elements("PointOfInterest"))
+            foreach (var poiEl in Es(root, "PointOfInterest"))
             {
                 var poi = new PointOfInterest
                 {
@@ -397,10 +407,10 @@ namespace ForzaTechStudio.Services
                     SpaceControllerAngleError = D(poiEl, "SpaceControllerAngleError"),
                 };
 
-                ParseConditions(poiEl.Element("PreConditions"),  poi.PreConditions);
-                ParseConditions(poiEl.Element("PostConditions"), poi.PostConditions);
-                poi.Visibility = ParseVisibility(poiEl.Element("Visibility"));
-                poi.Action     = ParseAction(poiEl.Element("Action"));
+                ParseConditions(E(poiEl, "PreConditions"),  poi.PreConditions);
+                ParseConditions(E(poiEl, "PostConditions"), poi.PostConditions);
+                poi.Visibility = ParseVisibility(E(poiEl, "Visibility"));
+                poi.Action     = ParseAction(E(poiEl, "Action"));
 
                 foreach (var attr in poiEl.Attributes())
                     if (!_knownPoiAttrs.Contains(attr.Name.LocalName))

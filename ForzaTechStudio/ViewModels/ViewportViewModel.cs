@@ -4,6 +4,7 @@ using ForzaTechStudio.Models;
 using ForzaTechStudio.Services;
 using ForzaTools.Bundles.Blobs;
 using ForzaTools.Bundles.Metadata;
+using ForzaTools.CarScene;
 using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
@@ -42,7 +43,10 @@ namespace ForzaTechStudio.ViewModels.ThreeDViewer
         GsfInfo,
         AvPinsFile,
         AvPin,
-        DamageMesh
+        DamageMesh,
+        CarbinFile,
+        CarbinPart,
+        CarbinModel
     }
 
     public abstract partial class ViewerNode : ObservableObject, IViewerNode
@@ -186,6 +190,7 @@ namespace ForzaTechStudio.ViewModels.ThreeDViewer
     {
         public override NodeType Type => NodeType.Zip;
         public string FilePath { get; set; }
+        public ManufacturerColorsBlob? ManufacturerColors { get; set; }
     }
 
     public class FolderNode : ViewerNode
@@ -235,6 +240,8 @@ namespace ForzaTechStudio.ViewModels.ThreeDViewer
         public string FilePath { get; set; }
         public LightsBinParser.LightsBinData OriginalData { get; set; }
         public bool IsDirty { get; set; }
+        public string? SourceZipPath { get; set; }
+        public string? ZipEntryName { get; set; }
     }
 
     public class LightGroupNode : ViewerNode
@@ -279,6 +286,8 @@ namespace ForzaTechStudio.ViewModels.ThreeDViewer
         public string FilePath { get; set; }
         public LocatorsData LocatorsData { get; set; }
         public bool IsDirty { get; set; }
+        public string? SourceZipPath { get; set; }
+        public string? ZipEntryName { get; set; }
     }
 
     public class LocatorNode : ViewerNode
@@ -335,6 +344,38 @@ namespace ForzaTechStudio.ViewModels.ThreeDViewer
     {
         public override NodeType Type => NodeType.AvPin;
         public PointOfInterest PoiData { get; set; }
+    }
+
+    public class CarbinFileNode : ViewerNode
+    {
+        public override NodeType Type => NodeType.CarbinFile;
+        public string? FilePath { get; set; }
+        public string? SourceZipPath { get; set; }
+        public string? ZipEntryName { get; set; }
+        public CarbinFile? CarbinData { get; set; }
+        public bool IsDirty { get; set; }
+    }
+
+    public class CarbinPartNode : ViewerNode
+    {
+        public override NodeType Type => NodeType.CarbinPart;
+        public string PartCategory { get; set; } = string.Empty;
+        public object? PartData { get; set; }
+    }
+
+    public class CarbinModelNode : ViewerNode
+    {
+        public override NodeType Type => NodeType.CarbinModel;
+        public CarRenderModel Model { get; set; }
+        public int ModelIndex { get; set; }
+        public string PartName { get; set; } = string.Empty;
+
+        private bool _useTransforms = true;
+        public bool UseTransforms
+        {
+            get => _useTransforms;
+            set => SetProperty(ref _useTransforms, value);
+        }
     }
 
     // Represents a single bone's matching status across ModelBin skeleton, GR2 skeleton, and animation tracks.

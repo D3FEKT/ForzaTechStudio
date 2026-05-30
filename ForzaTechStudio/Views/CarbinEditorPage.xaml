@@ -465,8 +465,25 @@
                                                         <FontIcon Glyph="&#xE7F4;" FontSize="12" Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
                                                         <TextBox Grid.Column="1" Text="{x:Bind Key, Mode=TwoWay}" PlaceholderText="Material Name"
                                                                  BorderThickness="0" Background="Transparent" VerticalAlignment="Center"/>
-                                                        <NumberBox Grid.Column="2" Value="{x:Bind ValueAsDouble, Mode=TwoWay}" SpinButtonPlacementMode="Compact"
-                                                                   Width="100" Margin="12,0,0,0"/>
+                                                        <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="6" Margin="12,0,0,0">
+                                                            <NumberBox Value="{x:Bind ValueAsDouble, Mode=TwoWay}"
+                                                                       Visibility="{x:Bind UseHexValue, Mode=OneWay, Converter={StaticResource InvertedBoolToVis}}"
+                                                                       SpinButtonPlacementMode="Compact" Width="100"/>
+                                                            <TextBox Text="{x:Bind ValueHexString, Mode=TwoWay}"
+                                                                     Visibility="{x:Bind UseHexValue, Mode=OneWay, Converter={StaticResource BoolToVis}}"
+                                                                     Width="170" PlaceholderText="0x0000000000000000"/>
+                                                            <ComboBox ItemsSource="{x:Bind SavedMaterialHashes, Mode=OneWay}"
+                                                                      SelectedItem="{x:Bind SelectedSavedMaterialHash, Mode=TwoWay}"
+                                                                      Visibility="{x:Bind UseHexValue, Mode=OneWay, Converter={StaticResource BoolToVis}}"
+                                                                      Width="190" PlaceholderText="Saved hash"
+                                                                      ToolTipService.ToolTip="Choose saved material hash">
+                                                                <ComboBox.ItemTemplate>
+                                                                    <DataTemplate x:DataType="viewmodels:SavedMaterialHash">
+                                                                        <TextBlock Text="{x:Bind DisplayText, Mode=OneWay}"/>
+                                                                    </DataTemplate>
+                                                                </ComboBox.ItemTemplate>
+                                                            </ComboBox>
+                                                        </StackPanel>
                                                     </Grid>
                                                 </DataTemplate>
                                             </ListView.ItemTemplate>
@@ -487,7 +504,7 @@
                                             <NumberBox Header="Pos X" Value="{x:Bind ViewModel.SelectedNonUpgradableModel.PositionX, Mode=TwoWay}" SpinButtonPlacementMode="Compact"/>
                                             <NumberBox Grid.Column="1" Header="Pos Y" Value="{x:Bind ViewModel.SelectedNonUpgradableModel.PositionY, Mode=TwoWay}" SpinButtonPlacementMode="Compact"/>
                                             <NumberBox Grid.Column="2" Header="Pos Z" Value="{x:Bind ViewModel.SelectedNonUpgradableModel.PositionZ, Mode=TwoWay}" SpinButtonPlacementMode="Compact"/>
-                                            <NumberBox Grid.Column="3" Header="Scale" Value="{x:Bind ViewModel.SelectedNonUpgradableModel.Scale, Mode=TwoWay}" SpinButtonPlacementMode="Compact" Minimum="0.001"/>
+                                            <NumberBox Grid.Column="3" Header="Scale" Value="{x:Bind ViewModel.SelectedNonUpgradableModel.Scale, Mode=TwoWay}" SpinButtonPlacementMode="Compact"/>
                                         </Grid>
                                     </StackPanel>
                                 </Border>
@@ -549,6 +566,16 @@
                                         <TextBox Header="GUID" IsReadOnly="True" Text="{x:Bind ViewModel.SelectedNonUpgradableModel.GuidV13, Mode=OneWay}"/>
                                         <TextBox Header="Drop GUID" IsReadOnly="True" Text="{x:Bind ViewModel.SelectedNonUpgradableModel.DropGuidV14, Mode=OneWay}"/>
                                         <TextBox Header="Assembly Name" Text="{x:Bind ViewModel.SelectedNonUpgradableModel.AssemblyName, Mode=TwoWay}" PlaceholderText="Optional assembly reference"/>
+                                    </StackPanel>
+                                </Border>
+
+                                <Border Style="{StaticResource PropertyCardStyle}"
+                                    Visibility="{x:Bind ViewModel.ShouldShowSelectedNonUpgradableDetailsSwatchbin, Mode=OneWay, Converter={StaticResource BoolToVis}}">
+                                    <StackPanel Spacing="12">
+                                        <TextBlock Text="FH6 Details" Style="{StaticResource BodyStrongTextBlockStyle}"/>
+                                        <TextBox Header="Details swatchbin"
+                                                 Text="{x:Bind ViewModel.SelectedNonUpgradableModel.HorizonUnkV21Path, Mode=TwoWay}"
+                                                 PlaceholderText="game:\media\...\details.swatchbin"/>
                                     </StackPanel>
                                 </Border>
                             </StackPanel>
@@ -817,8 +844,25 @@
                                                             <FontIcon Glyph="&#xE7F4;" FontSize="12" Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
                                                             <TextBox Grid.Column="1" Text="{x:Bind Key, Mode=TwoWay}" PlaceholderText="Material Name"
                                                                      BorderThickness="0" Background="Transparent" VerticalAlignment="Center"/>
-                                                            <NumberBox Grid.Column="2" Value="{x:Bind ValueAsDouble, Mode=TwoWay}" SpinButtonPlacementMode="Compact"
-                                                                       Width="100" Margin="12,0,0,0"/>
+                                                            <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="6" Margin="12,0,0,0">
+                                                                <NumberBox Value="{x:Bind ValueAsDouble, Mode=TwoWay}"
+                                                                           Visibility="{x:Bind UseHexValue, Mode=OneWay, Converter={StaticResource InvertedBoolToVis}}"
+                                                                           SpinButtonPlacementMode="Compact" Width="100"/>
+                                                                <TextBox Text="{x:Bind ValueHexString, Mode=TwoWay}"
+                                                                         Visibility="{x:Bind UseHexValue, Mode=OneWay, Converter={StaticResource BoolToVis}}"
+                                                                         Width="170" PlaceholderText="0x0000000000000000"/>
+                                                                <ComboBox ItemsSource="{x:Bind SavedMaterialHashes, Mode=OneWay}"
+                                                                          SelectedItem="{x:Bind SelectedSavedMaterialHash, Mode=TwoWay}"
+                                                                          Visibility="{x:Bind UseHexValue, Mode=OneWay, Converter={StaticResource BoolToVis}}"
+                                                                          Width="190" PlaceholderText="Saved hash"
+                                                                          ToolTipService.ToolTip="Choose saved material hash">
+                                                                    <ComboBox.ItemTemplate>
+                                                                        <DataTemplate x:DataType="viewmodels:SavedMaterialHash">
+                                                                            <TextBlock Text="{x:Bind DisplayText, Mode=OneWay}"/>
+                                                                        </DataTemplate>
+                                                                    </ComboBox.ItemTemplate>
+                                                                </ComboBox>
+                                                            </StackPanel>
                                                         </Grid>
                                                     </DataTemplate>
                                                 </ListView.ItemTemplate>
@@ -839,7 +883,7 @@
                                                 <NumberBox Header="Pos X" Value="{x:Bind ViewModel.SelectedUpgradableModel.PositionX, Mode=TwoWay}" SpinButtonPlacementMode="Compact"/>
                                                 <NumberBox Grid.Column="1" Header="Pos Y" Value="{x:Bind ViewModel.SelectedUpgradableModel.PositionY, Mode=TwoWay}" SpinButtonPlacementMode="Compact"/>
                                                 <NumberBox Grid.Column="2" Header="Pos Z" Value="{x:Bind ViewModel.SelectedUpgradableModel.PositionZ, Mode=TwoWay}" SpinButtonPlacementMode="Compact"/>
-                                                <NumberBox Grid.Column="3" Header="Scale" Value="{x:Bind ViewModel.SelectedUpgradableModel.Scale, Mode=TwoWay}" SpinButtonPlacementMode="Compact" Minimum="0.001"/>
+                                                <NumberBox Grid.Column="3" Header="Scale" Value="{x:Bind ViewModel.SelectedUpgradableModel.Scale, Mode=TwoWay}" SpinButtonPlacementMode="Compact"/>
                                             </Grid>
                                         </StackPanel>
                                     </Border>
@@ -911,6 +955,16 @@
                                                          Text="{x:Bind ViewModel.SelectedUpgradableModel.DropGuidV14, Mode=OneWay}"/>
                                             </Grid>
                                             <TextBox Header="Assembly Name" Text="{x:Bind ViewModel.SelectedUpgradableModel.AssemblyName, Mode=TwoWay}" PlaceholderText="Optional assembly reference"/>
+                                        </StackPanel>
+                                    </Border>
+
+                                        <Border Style="{StaticResource PropertyCardStyle}"
+                                            Visibility="{x:Bind ViewModel.ShouldShowSelectedUpgradableDetailsSwatchbin, Mode=OneWay, Converter={StaticResource BoolToVis}}">
+                                        <StackPanel Spacing="12">
+                                            <TextBlock Text="FH6 Details" Style="{StaticResource BodyStrongTextBlockStyle}"/>
+                                            <TextBox Header="Details swatchbin"
+                                                     Text="{x:Bind ViewModel.SelectedUpgradableModel.HorizonUnkV21Path, Mode=TwoWay}"
+                                                     PlaceholderText="game:\media\...\details.swatchbin"/>
                                         </StackPanel>
                                     </Border>
 

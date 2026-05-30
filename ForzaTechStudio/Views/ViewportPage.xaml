@@ -145,8 +145,9 @@
                 <!-- Tree View -->
                 <TreeView x:Name="FileTree"
                           Grid.Row="1"
-                          SelectionMode="Single"
+                          SelectionMode="Multiple"
                           ItemInvoked="FileTree_ItemInvoked"
+                          SelectionChanged="FileTree_SelectionChanged"
                           RightTapped="FileTree_RightTapped"
                           Padding="0,0,0,8">
                      <TreeView.ItemTemplate>
@@ -787,7 +788,8 @@
                                             </Grid>
 
                                             <!-- Parameters -->
-                                            <controls:MaterialParameterEditorView x:Name="MeshMaterialParamEditor"/>
+                                            <controls:MaterialParameterEditorView x:Name="MeshMaterialParamEditor"
+                                                                                  RemoveParameterCommand="{x:Bind RemoveMeshMaterialParameterCommand}"/>
                                         </StackPanel>
 
                                         <!-- Save Modelbin -->
@@ -1034,6 +1036,97 @@
                                         HorizontalAlignment="Stretch"
                                         Style="{StaticResource AccentButtonStyle}"
                                         Click="SaveLocatorsXml_Click"
+                                        FontSize="12" MinHeight="28"/>
+                            </StackPanel>
+                        </Expander>
+
+                        <!-- Carbin model placement editor -->
+                        <Expander x:Name="CarbinExpander"
+                                  Header="Carbin Properties"
+                                  IsExpanded="True"
+                                  Visibility="Collapsed"
+                                  HorizontalAlignment="Stretch"
+                                  HorizontalContentAlignment="Stretch"
+                                  Padding="12,8"
+                                  Margin="8,0,8,0">
+                            <StackPanel Spacing="8">
+                                <ComboBox x:Name="CarbinModelSelector"
+                                          Header="Model Entry"
+                                          HorizontalAlignment="Stretch"
+                                          SelectionChanged="CarbinModelSelector_SelectionChanged"
+                                          FontSize="12" MinHeight="28">
+                                    <ComboBox.ItemTemplate>
+                                        <DataTemplate>
+                                            <TextBlock Text="{Binding Name}" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" FontSize="12"/>
+                                        </DataTemplate>
+                                    </ComboBox.ItemTemplate>
+                                </ComboBox>
+
+                                <TextBox x:Name="CarbinModelPathBox"
+                                         Header="Modelbin"
+                                         TextChanged="CarbinField_TextChanged"
+                                         FontSize="11" MinHeight="28" Padding="4,2"/>
+
+                                <Grid ColumnSpacing="6">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*"/>
+                                        <ColumnDefinition Width="90"/>
+                                    </Grid.ColumnDefinitions>
+                                    <TextBox x:Name="CarbinBoneNameBox"
+                                             Header="Bone Name"
+                                             TextChanged="CarbinField_TextChanged"
+                                             FontSize="11" MinHeight="28" Padding="4,2"/>
+                                    <TextBox x:Name="CarbinBoneIdBox"
+                                             Grid.Column="1"
+                                             Header="Bone ID"
+                                             TextChanged="CarbinField_TextChanged"
+                                             FontSize="11" MinHeight="28" Padding="4,2"/>
+                                </Grid>
+
+                                <CheckBox x:Name="CarbinUseTransformsCheckBox"
+                                          Content="Use transforms"
+                                          Checked="CarbinUseTransforms_Changed"
+                                          Unchecked="CarbinUseTransforms_Changed"
+                                          FontSize="12"/>
+
+                                <StackPanel Spacing="2">
+                                    <TextBlock Text="Transform Matrix" FontWeight="SemiBold" FontSize="12"/>
+                                    <Grid ColumnSpacing="4" RowSpacing="4">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="*"/>
+                                            <ColumnDefinition Width="*"/>
+                                            <ColumnDefinition Width="*"/>
+                                            <ColumnDefinition Width="*"/>
+                                        </Grid.ColumnDefinitions>
+                                        <Grid.RowDefinitions>
+                                            <RowDefinition Height="Auto"/>
+                                            <RowDefinition Height="Auto"/>
+                                            <RowDefinition Height="Auto"/>
+                                            <RowDefinition Height="Auto"/>
+                                        </Grid.RowDefinitions>
+                                        <TextBox x:Name="CarbinM11" Grid.Row="0" Grid.Column="0" PlaceholderText="_11" TextChanged="CarbinField_TextChanged" FontSize="11" MinHeight="24" Padding="4,2"/>
+                                        <TextBox x:Name="CarbinM12" Grid.Row="0" Grid.Column="1" PlaceholderText="_12" TextChanged="CarbinField_TextChanged" FontSize="11" MinHeight="24" Padding="4,2"/>
+                                        <TextBox x:Name="CarbinM13" Grid.Row="0" Grid.Column="2" PlaceholderText="_13" TextChanged="CarbinField_TextChanged" FontSize="11" MinHeight="24" Padding="4,2"/>
+                                        <TextBox x:Name="CarbinM14" Grid.Row="0" Grid.Column="3" PlaceholderText="_14" TextChanged="CarbinField_TextChanged" FontSize="11" MinHeight="24" Padding="4,2"/>
+                                        <TextBox x:Name="CarbinM21" Grid.Row="1" Grid.Column="0" PlaceholderText="_21" TextChanged="CarbinField_TextChanged" FontSize="11" MinHeight="24" Padding="4,2"/>
+                                        <TextBox x:Name="CarbinM22" Grid.Row="1" Grid.Column="1" PlaceholderText="_22" TextChanged="CarbinField_TextChanged" FontSize="11" MinHeight="24" Padding="4,2"/>
+                                        <TextBox x:Name="CarbinM23" Grid.Row="1" Grid.Column="2" PlaceholderText="_23" TextChanged="CarbinField_TextChanged" FontSize="11" MinHeight="24" Padding="4,2"/>
+                                        <TextBox x:Name="CarbinM24" Grid.Row="1" Grid.Column="3" PlaceholderText="_24" TextChanged="CarbinField_TextChanged" FontSize="11" MinHeight="24" Padding="4,2"/>
+                                        <TextBox x:Name="CarbinM31" Grid.Row="2" Grid.Column="0" PlaceholderText="_31" TextChanged="CarbinField_TextChanged" FontSize="11" MinHeight="24" Padding="4,2"/>
+                                        <TextBox x:Name="CarbinM32" Grid.Row="2" Grid.Column="1" PlaceholderText="_32" TextChanged="CarbinField_TextChanged" FontSize="11" MinHeight="24" Padding="4,2"/>
+                                        <TextBox x:Name="CarbinM33" Grid.Row="2" Grid.Column="2" PlaceholderText="_33" TextChanged="CarbinField_TextChanged" FontSize="11" MinHeight="24" Padding="4,2"/>
+                                        <TextBox x:Name="CarbinM34" Grid.Row="2" Grid.Column="3" PlaceholderText="_34" TextChanged="CarbinField_TextChanged" FontSize="11" MinHeight="24" Padding="4,2"/>
+                                        <TextBox x:Name="CarbinM41" Grid.Row="3" Grid.Column="0" PlaceholderText="_41" TextChanged="CarbinField_TextChanged" FontSize="11" MinHeight="24" Padding="4,2"/>
+                                        <TextBox x:Name="CarbinM42" Grid.Row="3" Grid.Column="1" PlaceholderText="_42" TextChanged="CarbinField_TextChanged" FontSize="11" MinHeight="24" Padding="4,2"/>
+                                        <TextBox x:Name="CarbinM43" Grid.Row="3" Grid.Column="2" PlaceholderText="_43" TextChanged="CarbinField_TextChanged" FontSize="11" MinHeight="24" Padding="4,2"/>
+                                        <TextBox x:Name="CarbinM44" Grid.Row="3" Grid.Column="3" PlaceholderText="_44" TextChanged="CarbinField_TextChanged" FontSize="11" MinHeight="24" Padding="4,2"/>
+                                    </Grid>
+                                </StackPanel>
+
+                                <Button Content="Save Carbin"
+                                        HorizontalAlignment="Stretch"
+                                        Style="{StaticResource AccentButtonStyle}"
+                                        Click="SaveCarbin_Click"
                                         FontSize="12" MinHeight="28"/>
                             </StackPanel>
                         </Expander>
@@ -1422,10 +1515,22 @@
         <CommandBar Grid.Row="0" Grid.ColumnSpan="3"
                     DefaultLabelPosition="Right"
                     Background="{ThemeResource LayerFillColorDefaultBrush}">
+            <CommandBar.Resources>
+                <Style TargetType="AppBarButton">
+                    <Setter Property="FontSize" Value="11"/>
+                    <Setter Property="MinWidth" Value="56"/>
+                    <Setter Property="Padding" Value="5,0"/>
+                </Style>
+                <Style TargetType="AppBarToggleButton">
+                    <Setter Property="FontSize" Value="11"/>
+                    <Setter Property="MinWidth" Value="56"/>
+                    <Setter Property="Padding" Value="5,0"/>
+                </Style>
+            </CommandBar.Resources>
             <CommandBar.Content>
-                <Border VerticalAlignment="Stretch" Padding="8,0,16,0">
+                <Border VerticalAlignment="Stretch" Padding="8,0,12,0">
                     <TextBlock Text="3D Viewer"
-                               FontSize="32"
+                               FontSize="28"
                                FontWeight="SemiBold"
                                VerticalAlignment="Center"/>
                 </Border>
@@ -1634,6 +1739,68 @@
                             <MenuFlyoutItem.Icon><FontIcon Glyph="&#xE8B9;"/></MenuFlyoutItem.Icon>
                         </MenuFlyoutItem>
                     </MenuFlyout>
+                </AppBarButton.Flyout>
+            </AppBarButton>
+
+            <AppBarSeparator/>
+
+            <AppBarButton x:Name="MaterialsBtn"
+                          Label="Materials"
+                          ToolTipService.ToolTip="Viewport material options">
+                <AppBarButton.Icon>
+                    <FontIcon Glyph="&#xE790;"/>
+                </AppBarButton.Icon>
+                <AppBarButton.Flyout>
+                    <Flyout Placement="Bottom">
+                        <StackPanel Width="340" Spacing="10">
+                            <TextBlock Text="Manufacturer Colors" FontWeight="SemiBold" FontSize="13"/>
+                            <ComboBox x:Name="ManufacturerColorCombo"
+                                      HorizontalAlignment="Stretch"
+                                      SelectionChanged="ManufacturerColorCombo_SelectionChanged">
+                                <ComboBox.ItemTemplate>
+                                    <DataTemplate>
+                                        <Grid ColumnSpacing="8">
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="Auto"/>
+                                                <ColumnDefinition Width="*"/>
+                                            </Grid.ColumnDefinitions>
+                                            <Border Width="18" Height="18" CornerRadius="3"
+                                                    BorderThickness="1"
+                                                    BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
+                                                    Background="{Binding SwatchBrush}"/>
+                                            <StackPanel Grid.Column="1" Spacing="1">
+                                                <TextBlock Text="{Binding DisplayName}" TextTrimming="CharacterEllipsis"/>
+                                                <TextBlock Text="{Binding SourceText}" FontSize="11" Opacity="0.65" TextTrimming="CharacterEllipsis"/>
+                                            </StackPanel>
+                                        </Grid>
+                                    </DataTemplate>
+                                </ComboBox.ItemTemplate>
+                            </ComboBox>
+                            <TextBlock x:Name="ManufacturerColorStatusText"
+                                       Text="No manufacturercolors.bin found in the loaded car zip."
+                                       FontSize="11"
+                                       Opacity="0.7"
+                                       TextWrapping="Wrap"/>
+                            <Button x:Name="ResetManufacturerColorBtn"
+                                    Click="ResetManufacturerColor_Click"
+                                    IsEnabled="False"
+                                    HorizontalAlignment="Stretch">
+                                <StackPanel Orientation="Horizontal" Spacing="8">
+                                    <FontIcon Glyph="&#xE72C;" FontSize="12"/>
+                                    <TextBlock Text="Use Default Grey"/>
+                                </StackPanel>
+                            </Button>
+                            <Border Height="1" Background="{ThemeResource DividerStrokeColorDefaultBrush}"/>
+                            <Button x:Name="ZipTexturesBtn"
+                                    Click="ShowZipTextures_Click"
+                                    HorizontalAlignment="Stretch">
+                                <StackPanel Orientation="Horizontal" Spacing="8">
+                                    <FontIcon Glyph="&#xEB9F;" FontSize="12"/>
+                                    <TextBlock Text="Textures"/>
+                                </StackPanel>
+                            </Button>
+                        </StackPanel>
+                    </Flyout>
                 </AppBarButton.Flyout>
             </AppBarButton>
 

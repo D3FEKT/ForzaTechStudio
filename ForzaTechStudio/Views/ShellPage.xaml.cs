@@ -28,6 +28,7 @@ namespace ForzaTechStudio.Views
         {
             this.InitializeComponent();
             Current = this;
+            SetSettingsVersionLabel();
 
             ViewModel.NavigationRequested += (pageType) =>
             {
@@ -97,6 +98,8 @@ namespace ForzaTechStudio.Views
 
         private void ShellPage_Loaded(object sender, RoutedEventArgs e)
         {
+            SetSettingsVersionLabel();
+
             // Initialize ViewModel only once
             if (!ViewModel.IsInitialized)
             {
@@ -144,6 +147,19 @@ namespace ForzaTechStudio.Views
                     await CheckForUpdatesOnStartupAsync();
                 });
             }
+        }
+
+        private void SetSettingsVersionLabel()
+        {
+            if (NavView.SettingsItem is NavigationViewItem settingsItem)
+            {
+                settingsItem.Content = $"Settings v{GetApplicationVersionText()}";
+            }
+        }
+
+        private static string GetApplicationVersionText()
+        {
+            return System.Reflection.Assembly.GetExecutingAssembly().GetName().Version?.ToString() ?? "0.0.0.0";
         }
 
         private void NavItem_PointerEntered(object sender, Microsoft.UI.Xaml.Input.PointerRoutedEventArgs e)

@@ -399,7 +399,7 @@ namespace ForzaTechStudio.ViewModels
         {
             if (SelectedNonUpgradableModel != null)
             {
-                SelectedNonUpgradableModel.MaterialIndexes.Add(new MaterialIndexEntry("material_name", 0));
+                SelectedNonUpgradableModel.MaterialIndexes.Add(new MaterialIndexEntry("material_name", 0, UsesFh6MaterialHashEditorForModel(SelectedNonUpgradableModel)));
                 StatusMessage = $"Added material index. Total: {SelectedNonUpgradableModel.MaterialIndexes.Count}";
             }
         }
@@ -537,7 +537,7 @@ namespace ForzaTechStudio.ViewModels
         {
             if (SelectedUpgradableModel != null)
             {
-                SelectedUpgradableModel.MaterialIndexes.Add(new MaterialIndexEntry("material_name", 0));
+                SelectedUpgradableModel.MaterialIndexes.Add(new MaterialIndexEntry("material_name", 0, UsesFh6MaterialHashEditorForModel(SelectedUpgradableModel)));
                 StatusMessage = $"Added material index. Total: {SelectedUpgradableModel.MaterialIndexes.Count}";
             }
         }
@@ -812,7 +812,7 @@ namespace ForzaTechStudio.ViewModels
             };
 
             foreach (var mat in src.MaterialIndexes)
-                dst.MaterialIndexes.Add(new MaterialIndexEntry(mat.Key, mat.Value));
+                dst.MaterialIndexes.Add(new MaterialIndexEntry(mat.Key, mat.Value, mat.UseHexValue));
 
             foreach (var ao in src.AoMapInfos)
                 dst.AoMapInfos.Add(new AOMapInfoEntry
@@ -844,16 +844,43 @@ namespace ForzaTechStudio.ViewModels
             return dst;
         }
 
+        private bool TryAssignNextDuplicateHorizonId(CarbinModelEntry clone, out bool assignedHorizonId)
+        {
+            assignedHorizonId = false;
+            var (_, modelVersion, isHorizon) = GetVersionInfo();
+            if (!isHorizon || modelVersion < 17) return true;
+
+            int maxHorizonId = NonUpgradableParts.SelectMany(part => part.Models)
+                .Concat(UpgradableParts.SelectMany(part => part.Models))
+                .Select(model => (int)model.HorizonId)
+                .DefaultIfEmpty(0)
+                .Max();
+
+            if (maxHorizonId >= byte.MaxValue)
+            {
+                StatusMessage = "Cannot duplicate model: all Horizon ID values are in use.";
+                return false;
+            }
+
+            clone.HorizonId = (byte)(maxHorizonId + 1);
+            assignedHorizonId = true;
+            return true;
+        }
+
         [RelayCommand]
         private void DuplicateNonUpgradableModel()
         {
             if (SelectedNonUpgradablePart == null || SelectedNonUpgradableModel == null) return;
 
             var clone = DeepCloneModelEntry(SelectedNonUpgradableModel);
+            if (!TryAssignNextDuplicateHorizonId(clone, out bool assignedHorizonId)) return;
+
             int idx = SelectedNonUpgradablePart.Models.IndexOf(SelectedNonUpgradableModel);
             SelectedNonUpgradablePart.Models.Insert(idx + 1, clone);
             SelectedNonUpgradableModel = clone;
-            StatusMessage = $"Duplicated '{clone.ModelFileName}'.";
+            StatusMessage = assignedHorizonId
+                ? $"Duplicated '{clone.ModelFileName}' with Horizon ID {clone.HorizonId}."
+                : $"Duplicated '{clone.ModelFileName}'.";
         }
 
         [RelayCommand]
@@ -862,10 +889,14 @@ namespace ForzaTechStudio.ViewModels
             if (SelectedUpgradablePart == null || SelectedUpgradableModel == null) return;
 
             var clone = DeepCloneModelEntry(SelectedUpgradableModel);
+            if (!TryAssignNextDuplicateHorizonId(clone, out bool assignedHorizonId)) return;
+
             int idx = SelectedUpgradablePart.Models.IndexOf(SelectedUpgradableModel);
             SelectedUpgradablePart.Models.Insert(idx + 1, clone);
             SelectedUpgradableModel = clone;
-            StatusMessage = $"Duplicated '{clone.ModelFileName}'.";
+            StatusMessage = assignedHorizonId
+                ? $"Duplicated '{clone.ModelFileName}' with Horizon ID {clone.HorizonId}."
+                : $"Duplicated '{clone.ModelFileName}'.";
         }
 
         private async Task AddModelsToPartAsync(CarbinPartEntry part)
@@ -930,8 +961,9 @@ namespace ForzaTechStudio.ViewModels
                     var entry = new CarbinModelEntry(file.Path, SceneName);
 
                     var materials = MaterialExtractionService.GetMaterialNames(file.Path);
+                    bool useHexValue = UsesFh6MaterialHashEditorForModel(entry);
                     foreach (var mat in materials)
-                        entry.MaterialIndexes.Add(new MaterialIndexEntry(mat, 0));
+                        entry.MaterialIndexes.Add(new MaterialIndexEntry(mat, 0, useHexValue));
 
                     part.Models.Add(entry);
                     addedCount++;

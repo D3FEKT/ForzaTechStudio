@@ -18,6 +18,7 @@ It uses [HelixToolkit WinUI](https://github.com/helix-toolkit/helix-toolkit) wit
 | `.modelbin` | ForzaTech model binary containing meshes, materials and skeleton data |
 | `.gr2` | Granny binary file containing skeleton and/or animation data. When loaded, sibling `.gsf` files in the same folder are auto-discovered and loaded alongside it |
 | `.bin` | Binary data file. `Lights.bin` files are detected automatically by magic number and display light transform data. `physicsdefinition.bin` loads physics collision geometry |
+| `.carbin` | Car scene file containing modelbin references, bone attachment data and per-instance 4x4 transforms |
 | `.xml` | Locators XML file containing named attachment points and their 4x4 world transform matrices |
 | `.avpins` | Points of Interest file defining named camera anchor points with position, axis and radius data, used for Auto Vista |
 | `.zip` | Archive containing any of the above file types. Contents are extracted and loaded automatically |
@@ -45,7 +46,7 @@ It uses [HelixToolkit WinUI](https://github.com/helix-toolkit/helix-toolkit) wit
 |---|---|---|
 | Open | Ctrl+O | Browse and open one or more supported files |
 | Save | Ctrl+S | Save changes to the currently selected file |
-| Save As | Ctrl+Shift+S | Save the current file to a new location |
+| Save As | Ctrl+Shift+S | Save the current file to a new location. When multiple file nodes are selected, prompts for a destination folder and writes all selected files there |
 | Close Selected | Ctrl+W | Remove the selected node from the scene |
 | Close All | Ctrl+Shift+W | Remove all loaded files from the scene |
 
@@ -114,8 +115,9 @@ The left panel shows the full scene hierarchy for all loaded files. Each file is
 - **Lights bin nodes** - light parts loaded from a `.bin` lights file.
 - **Physics nodes** - collision geometry loaded from `physicsdefinition.bin`.
 - **AvPins nodes** - Points of Interest loaded from an `.avpins` file.
+- **Carbin nodes** - car scene entries loaded from a `.carbin` file, including part groups and modelbin instance references.
 
-Each node has a checkbox to toggle its visibility in the viewport. Click a node to select it and show its properties in the panel below.
+Each node has a checkbox to toggle its visibility in the viewport. Click a node to select it and show its properties in the panel below. Use Ctrl+left-click to select multiple file nodes in the tree; Save writes all selected files in one operation, grouping ZIP-backed entries so each archive is rebuilt once.
 
 ---
 
@@ -152,6 +154,10 @@ Shown when a locator XML node is selected. Displays a full 4x4 world transform m
 ### Points of Interest
 
 Shown when an avpins node is selected. Displays the full set of fields for each point including Position, Axis (Yaw/Pitch), Apex, Active Apex, Mid Apex and Near/Mid/Far radius values. Use the **Save .avpins** button to write changes back to the file.
+
+### Carbin Properties
+
+Shown when a carbin model entry is selected. Displays the referenced modelbin path, bone name, bone ID and 4x4 transform matrix. Matching loaded modelbins are instanced in the viewport for each carbin entry, so repeated references to the same modelbin render as separate transformed instances.
 
 ---
 

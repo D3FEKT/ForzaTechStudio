@@ -30,6 +30,9 @@ namespace ForzaTechStudio.Converters
                     NodeType.AvPinsFile => "\uE81E",    // Map/pin (same as LocatorsXml)
                     NodeType.AvPin => "\uEF3C",          // Location / POI pin
                     NodeType.DamageMesh => "\uE946",     // Wrench/repair icon
+                    NodeType.CarbinFile => "\uE8A5",     // Package
+                    NodeType.CarbinPart => "\uE7C3",     // Components
+                    NodeType.CarbinModel => "\uF158",    // Model
                     _ => "\uE71D"
                 };
             }

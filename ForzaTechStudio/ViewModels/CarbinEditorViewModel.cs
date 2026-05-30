@@ -61,21 +61,42 @@ namespace ForzaTechStudio.ViewModels
         public ushort DetectedSceneVersion
         {
             get => _detectedSceneVersion;
-            set => SetProperty(ref _detectedSceneVersion, value);
+            set
+            {
+                if (SetProperty(ref _detectedSceneVersion, value))
+                {
+                    OnPropertyChanged(nameof(ShouldShowSelectedNonUpgradableDetailsSwatchbin));
+                    OnPropertyChanged(nameof(ShouldShowSelectedUpgradableDetailsSwatchbin));
+                }
+            }
         }
 
         private ushort _detectedModelVersion = 0;
         public ushort DetectedModelVersion
         {
             get => _detectedModelVersion;
-            set => SetProperty(ref _detectedModelVersion, value);
+            set
+            {
+                if (SetProperty(ref _detectedModelVersion, value))
+                {
+                    OnPropertyChanged(nameof(ShouldShowSelectedNonUpgradableDetailsSwatchbin));
+                    OnPropertyChanged(nameof(ShouldShowSelectedUpgradableDetailsSwatchbin));
+                }
+            }
         }
 
         private bool _isHorizon = true;
         public bool IsHorizon
         {
             get => _isHorizon;
-            set => SetProperty(ref _isHorizon, value);
+            set
+            {
+                if (SetProperty(ref _isHorizon, value))
+                {
+                    OnPropertyChanged(nameof(ShouldShowSelectedNonUpgradableDetailsSwatchbin));
+                    OnPropertyChanged(nameof(ShouldShowSelectedUpgradableDetailsSwatchbin));
+                }
+            }
         }
 
         private bool _sceneUnkV6 = true;
@@ -226,11 +247,15 @@ namespace ForzaTechStudio.ViewModels
                 {
                     TrackPropertyChanges(value, old);
                     OnPropertyChanged(nameof(HasSelectedNonUpgradableModel));
+                    OnPropertyChanged(nameof(ShouldShowSelectedNonUpgradableDetailsSwatchbin));
                 }
             }
         }
 
         public bool HasSelectedNonUpgradableModel => SelectedNonUpgradableModel != null;
+
+        public bool ShouldShowSelectedNonUpgradableDetailsSwatchbin =>
+            ShouldShowDetailsSwatchbinForModel(SelectedNonUpgradableModel);
 
         // Upgradable Parts
         public ObservableCollection<CarbinPartEntry> UpgradableParts { get; } = new();
@@ -265,11 +290,15 @@ namespace ForzaTechStudio.ViewModels
                 {
                     TrackPropertyChanges(value, old);
                     OnPropertyChanged(nameof(HasSelectedUpgradableModel));
+                    OnPropertyChanged(nameof(ShouldShowSelectedUpgradableDetailsSwatchbin));
                 }
             }
         }
 
         public bool HasSelectedUpgradableModel => SelectedUpgradableModel != null;
+
+        public bool ShouldShowSelectedUpgradableDetailsSwatchbin =>
+            ShouldShowDetailsSwatchbinForModel(SelectedUpgradableModel);
 
         // Upgrades
         private UpgradeEntry? _selectedUpgrade;
@@ -394,6 +423,35 @@ namespace ForzaTechStudio.ViewModels
         }
 
         private static bool UsesWideMaterialIndexes(ushort modelVersion) => modelVersion >= 21;
+
+        private static bool UsesFh6MaterialHashEditor(ushort sceneVersion, bool isHorizon, ushort modelVersion)
+        {
+            return isHorizon && sceneVersion == 7 && modelVersion >= 21;
+        }
+
+        private bool ShouldShowDetailsSwatchbinForModel(CarbinModelEntry? model)
+        {
+            if (model == null)
+            {
+                return false;
+            }
+
+            ushort modelVersion = model.OriginalModelVersion != 0 ? model.OriginalModelVersion : DetectedModelVersion;
+            return UsesFh6MaterialHashEditor(DetectedSceneVersion, IsHorizon, modelVersion);
+        }
+
+        private bool UsesFh6MaterialHashEditorForModel(CarbinModelEntry model)
+        {
+            var (sceneVersion, targetModelVersion, isHorizon) = GetVersionInfo();
+            ushort modelVersion = model.OriginalModelVersion != 0 ? model.OriginalModelVersion : targetModelVersion;
+            return UsesFh6MaterialHashEditor(sceneVersion, isHorizon, modelVersion);
+        }
+
+        private bool UsesFh6MaterialHashEditorForCurrentOutput()
+        {
+            var (sceneVersion, modelVersion, isHorizon) = GetVersionInfo();
+            return UsesFh6MaterialHashEditor(sceneVersion, isHorizon, modelVersion);
+        }
 
         private (ushort sceneVersion, ushort modelVersion, bool isHorizon) GetVersionInfo()
         {

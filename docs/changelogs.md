@@ -1,19 +1,21 @@
-﻿# Version 0.9.1.7 - Change Log
+﻿# Version 0.9.1.8 - Change Log
+
 
 ## General
-- General bug fixes
-- Added more bundle grub blob types to support FH6 shaderbin's
-
-## Conversion tool
-- FH6 Support added to carbin and modelbin conversion
+- More bug fixes related to fh6
 
 ## 3d viewer
-- Improved export to OBJ
-- Added option to export to FBX Binary + ASCII *Still work in progreess*
-- Auto converts swatchbin's to dds on export if opened a car zip with valid swatchbin's
+- Support added to save multiple at once 
+- Initial carbin support for transform values
+- Fixed an issue with saving back to opened zip
 
-## BXML viewer
-- Added option to open zip for batch bxml viewing (FH6 zip contains 100+ bxml's so this is a must have)
+## Carbin editor
+- Fixed small bug with saving back to file changing parts not touched
+
+## Manufacturer colors
+- Added support for FH6 version of the format
+
+
 
 
 

@@ -15,6 +15,31 @@ public sealed partial class ManufacturerColorsPage : Page
         this.InitializeComponent();
     }
 
+    private async void NewFile_Click(object sender, RoutedEventArgs e)
+    {
+        var dialog = new ContentDialog
+        {
+            Title = "New ManufacturerColors",
+            PrimaryButtonText = "v1 (FH3–FH5)",
+            SecondaryButtonText = "v2 (FH6)",
+            CloseButtonText = "Cancel",
+            DefaultButton = ContentDialogButton.Primary,
+            XamlRoot = this.XamlRoot,
+            Content = new TextBlock
+            {
+                Text = "Choose the format version for the new file.",
+                TextWrapping = TextWrapping.WrapWholeWords
+            }
+        };
+
+        var result = await dialog.ShowAsync();
+        if (result == ContentDialogResult.None)
+            return;
+
+        bool isFh6 = result == ContentDialogResult.Secondary;
+        ViewModel.NewFileWithVersion(isFh6);
+    }
+
     private void Page_DragOver(object sender, DragEventArgs e)
     {
         if (e.DataView.Contains(Windows.ApplicationModel.DataTransfer.StandardDataFormats.StorageItems))
@@ -38,13 +63,8 @@ public sealed partial class ManufacturerColorsPage : Page
 
     private void TreeView_SelectionChanged(TreeView sender, TreeViewSelectionChangedEventArgs args)
     {
-        if (args.AddedItems.Count > 0 && args.AddedItems[0] is ManufacturerColorEntryViewModel entry)
-        {
-            ViewModel.SelectedEntry = entry;
-        }
-        else
-        {
-            ViewModel.SelectedEntry = null;
-        }
+        object selectedItem = args.AddedItems.Count > 0 ? args.AddedItems[0] : null;
+        ViewModel.SelectedGroup = selectedItem as ManufacturerColorGroupViewModel;
+        ViewModel.SelectedEntry = selectedItem as ManufacturerColorEntryViewModel;
     }
 }

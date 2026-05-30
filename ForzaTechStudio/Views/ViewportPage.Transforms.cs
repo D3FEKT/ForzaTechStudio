@@ -526,29 +526,31 @@ namespace ForzaTechStudio.Views
 
              foreach (var mesh in meshList)
              {
-                 if (mesh.GeometryData?.SourceMesh == null) continue;
+                 var geometry = mesh.GeometryData;
+                 if (geometry?.SourceMesh == null) continue;
                  
-                 var meshBlob = mesh.GeometryData.SourceMesh;
+                 var meshBlob = geometry.SourceMesh;
+                 var sourceBone = geometry.SourceBone;
                  
                  // Check if mesh has a bone
-                 bool hasBone = mesh.GeometryData.SourceBone != null && 
-                                BoneTransformService.IsSignificantBone(mesh.GeometryData.BoneIndex);
+                 bool hasBone = sourceBone != null && 
+                                BoneTransformService.IsSignificantBone(geometry.BoneIndex);
 
                  // Reset scale, rotation, and translate
                  meshBlob.PositionScale = mesh.OriginalPositionScale;
                  meshBlob.PositionTranslate = mesh.OriginalPositionTranslate;
-                 mesh.GeometryData.RotationEulerDegrees = mesh.OriginalRotationEulerDegrees;
+                 geometry.RotationEulerDegrees = mesh.OriginalRotationEulerDegrees;
 
                  if (hasBone)
                  {
                      // BONE MODE: Reset bone to original transform
-                     mesh.GeometryData.SourceBone.Matrix = mesh.GeometryData.OriginalBoneTransform;
+                     sourceBone!.Matrix = geometry.OriginalBoneTransform;
                      
                      // Update cached bone transform
-                     mesh.GeometryData.BoneTransform = mesh.GeometryData.OriginalBoneTransform;
+                     geometry.BoneTransform = geometry.OriginalBoneTransform;
                      
                      // Update rendering with original bone matrix
-                     UpdateMeshRenderingWithBoneTransform(mesh, mesh.GeometryData.OriginalBoneTransform);
+                     UpdateMeshRenderingWithBoneTransform(mesh, geometry.OriginalBoneTransform);
                  }
                  else
                  {
@@ -1016,6 +1018,13 @@ namespace ForzaTechStudio.Views
 
         private async void SaveCurrentModel_Click(object sender, RoutedEventArgs e)
         {
+             var selectedSaveNodes = GetSelectedSaveFileNodes();
+             if (selectedSaveNodes.Count > 1)
+             {
+                 await SaveSelectedFileNodesAsync(selectedSaveNodes, saveAsFolder: false);
+                 return;
+             }
+
              // Check if it's a LightGroupNode
              if (ModelBinSelector.SelectedItem is LightGroupNode lightGroup)
              {
@@ -1121,6 +1130,13 @@ namespace ForzaTechStudio.Views
 
         private async void SaveCurrentModelAs_Click(object sender, RoutedEventArgs e)
         {
+             var selectedSaveNodes = GetSelectedSaveFileNodes();
+             if (selectedSaveNodes.Count > 1)
+             {
+                 await SaveSelectedFileNodesAsync(selectedSaveNodes, saveAsFolder: true);
+                 return;
+             }
+
              // Check if it's a LightGroupNode
              if (ModelBinSelector.SelectedItem is LightGroupNode lightGroup)
              {
@@ -1296,7 +1312,21 @@ namespace ForzaTechStudio.Views
 
                 // If we have a file path and it exists, save over it
                 string savePath = node.FilePath;
-                if (!string.IsNullOrEmpty(savePath) && File.Exists(savePath))
+                if (!string.IsNullOrEmpty(node.SourceZipPath) && !string.IsNullOrEmpty(node.ZipEntryName))
+                {
+                    await Task.Run(() => ZipArchiveHelper.ReplaceEntry(node.SourceZipPath, node.ZipEntryName, bytes));
+                    node.IsDirty = false;
+
+                    var dialog = new ContentDialog
+                    {
+                        Title = "Success",
+                        Content = $"Updated entry '{node.ZipEntryName}' inside ZIP archive.",
+                        CloseButtonText = "OK",
+                        XamlRoot = this.XamlRoot
+                    };
+                    await dialog.ShowAsync();
+                }
+                else if (!string.IsNullOrEmpty(savePath) && File.Exists(savePath))
                 {
                     // Save over the current file
                     await File.WriteAllBytesAsync(savePath, bytes);
@@ -1699,15 +1729,16 @@ namespace ForzaTechStudio.Views
                 foreach (var entry in meshAction.Entries)
                 {
                     var mesh = entry.Mesh;
-                    if (mesh.GeometryData?.SourceMesh == null) continue;
+                    var geometry = mesh.GeometryData;
+                    if (geometry?.SourceMesh == null) continue;
 
-                    var meshBlob = mesh.GeometryData.SourceMesh;
-                    bool hasBone = mesh.GeometryData.SourceBone != null &&
-                                   Services.BoneTransformService.IsSignificantBone(mesh.GeometryData.BoneIndex);
+                    var meshBlob = geometry.SourceMesh;
+                    bool hasBone = geometry.SourceBone != null &&
+                                   Services.BoneTransformService.IsSignificantBone(geometry.BoneIndex);
 
                     if (hasBone)
                     {
-                        UpdateMeshRenderingWithBoneTransform(mesh, mesh.GeometryData.BoneTransform);
+                        UpdateMeshRenderingWithBoneTransform(mesh, geometry.BoneTransform);
                     }
                     else
                     {
@@ -1737,13 +1768,15 @@ namespace ForzaTechStudio.Views
             var entries = new List<MeshTransformEntry>();
             foreach (var mesh in meshes)
             {
-                if (mesh.GeometryData?.SourceMesh == null) continue;
+                var geometry = mesh.GeometryData;
+                if (geometry?.SourceMesh == null) continue;
+
                 entries.Add(new MeshTransformEntry
                 {
                     Mesh = mesh,
-                    OldScale = mesh.GeometryData.SourceMesh.PositionScale,
-                    OldTranslate = mesh.GeometryData.SourceMesh.PositionTranslate,
-                    OldRotation = mesh.GeometryData.RotationEulerDegrees
+                    OldScale = geometry.SourceMesh.PositionScale,
+                    OldTranslate = geometry.SourceMesh.PositionTranslate,
+                    OldRotation = geometry.RotationEulerDegrees
                 });
             }
             return new MeshTransformAction(description, entries);
@@ -1755,10 +1788,12 @@ namespace ForzaTechStudio.Views
             bool anyChanged = false;
             foreach (var entry in action.Entries)
             {
-                if (entry.Mesh.GeometryData?.SourceMesh == null) continue;
-                entry.NewScale = entry.Mesh.GeometryData.SourceMesh.PositionScale;
-                entry.NewTranslate = entry.Mesh.GeometryData.SourceMesh.PositionTranslate;
-                entry.NewRotation = entry.Mesh.GeometryData.RotationEulerDegrees;
+                var geometry = entry.Mesh.GeometryData;
+                if (geometry?.SourceMesh == null) continue;
+
+                entry.NewScale = geometry.SourceMesh.PositionScale;
+                entry.NewTranslate = geometry.SourceMesh.PositionTranslate;
+                entry.NewRotation = geometry.RotationEulerDegrees;
 
                 if (entry.OldScale != entry.NewScale || entry.OldTranslate != entry.NewTranslate || entry.OldRotation != entry.NewRotation)
                     anyChanged = true;

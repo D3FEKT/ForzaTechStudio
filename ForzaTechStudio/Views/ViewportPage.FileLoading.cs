@@ -1,5 +1,6 @@
 ﻿using ForzaTools.Bundles;
 using ForzaTools.Bundles.Blobs;
+using ForzaTools.CarScene;
 using ForzaTechStudio.Services;
 using ForzaTechStudio.ViewModels.ThreeDViewer;
 using HelixToolkit.SharpDX.Core;
@@ -100,7 +101,7 @@ namespace ForzaTechStudio.Views
 
             foreach (var avpinsPath in avpinsPaths)
             {
-                var xmlText = File.ReadAllText(avpinsPath, Encoding.UTF8);
+                var xmlText = DecodeXmlText(await File.ReadAllBytesAsync(avpinsPath));
                 var node = LoadAvPins(Path.GetFileName(avpinsPath), xmlText, avpinsPath);
                 if (node != null)
                     loadedNodes.Add((node, avpinsPath));
@@ -234,6 +235,11 @@ namespace ForzaTechStudio.Views
                                         lightsBinNode.FilePath = filePath;
                                 }
                             }
+                            else if (extension == ".carbin")
+                            {
+                                var bytes = await File.ReadAllBytesAsync(filePath, ct);
+                                rootNode = LoadCarbin(fileName, bytes, filePath: filePath);
+                            }
 
                             if (rootNode != null)
                                 parallelResults.Add((rootNode, filePath));
@@ -265,6 +271,8 @@ namespace ForzaTechStudio.Views
                 AddNodeToTree(node, null, deferRendering: true);
             }
 
+            RefreshViewportTextureLookupFromLoadedRoots();
+
             // Now that the tree is built with PropertyChanged handlers attached,
             // apply filters to set IsChecked which triggers rendering.
             foreach (var (node, _) in loadedNodes)
@@ -272,6 +280,9 @@ namespace ForzaTechStudio.Views
                 ApplyLODFilterRecursive(node, l0, l1, l2, l3, l4, l5, shadows);
                 ApplyViewTypeFilterRecursive(node, showLights, showLocators, showPhysics);
             }
+
+            RefreshAllCarbinInstances();
+            RefreshManufacturerColorsFromLoadedRoots();
 
             if (wasEmpty && ViewModel.Roots.Any())
                 AutoFitCamera();
@@ -294,6 +305,13 @@ namespace ForzaTechStudio.Views
             // Check for 0xDEADBEEF magic number
             return magic == 0xDEADBEEF;
         }
+
+        private static string DecodeXmlText(byte[] data)
+        {
+            using var stream = new MemoryStream(data);
+            using var reader = new StreamReader(stream, Encoding.UTF8, detectEncodingFromByteOrderMarks: true);
+            return reader.ReadToEnd();
+        }
         
         private async void OpenFiles_Click(object sender, RoutedEventArgs e)
         {
@@ -308,6 +326,8 @@ namespace ForzaTechStudio.Views
             picker.FileTypeFilter.Add(".minizip");
             picker.FileTypeFilter.Add(".modelbin");
             picker.FileTypeFilter.Add(".bin");
+            picker.FileTypeFilter.Add(".carbin");
+            picker.FileTypeFilter.Add(".carbin");
             picker.FileTypeFilter.Add(".xml");
             picker.FileTypeFilter.Add(".avpins");
             picker.FileTypeFilter.Add(".gr2");
@@ -349,7 +369,7 @@ namespace ForzaTechStudio.Views
 
             foreach (var avpinsFile in avpinsFiles)
             {
-                var xmlText = File.ReadAllText(avpinsFile.Path, Encoding.UTF8);
+                var xmlText = DecodeXmlText(await File.ReadAllBytesAsync(avpinsFile.Path));
                 var node = LoadAvPins(avpinsFile.Name, xmlText, avpinsFile.Path);
                 if (node != null)
                     loadedNodes.Add((node, avpinsFile.Name));
@@ -417,6 +437,11 @@ namespace ForzaTechStudio.Views
                                         lightsBinNode.FilePath = file.Path;
                                 }
                             }
+                            else if (extension == ".carbin")
+                            {
+                                var bytes = await File.ReadAllBytesAsync(file.Path, ct);
+                                rootNode = LoadCarbin(file.Name, bytes, filePath: file.Path);
+                            }
 
                             if (rootNode != null)
                                 parallelResults.Add((rootNode, file.Name));
@@ -448,6 +473,8 @@ namespace ForzaTechStudio.Views
                 AddNodeToTree(node, null, deferRendering: true);
             }
 
+            RefreshViewportTextureLookupFromLoadedRoots();
+
             // Now that the tree is built with PropertyChanged handlers attached,
             // apply filters to set IsChecked which triggers rendering.
             foreach (var (node, _) in loadedNodes)
@@ -455,6 +482,9 @@ namespace ForzaTechStudio.Views
                 ApplyLODFilterRecursive(node, l0, l1, l2, l3, l4, l5, shadows);
                 ApplyViewTypeFilterRecursive(node, showLights, showLocators, showPhysics);
             }
+
+            RefreshAllCarbinInstances();
+            RefreshManufacturerColorsFromLoadedRoots();
 
             if (wasEmpty && ViewModel.Roots.Any())
                 AutoFitCamera();
@@ -527,6 +557,7 @@ namespace ForzaTechStudio.Views
                      var entries = zip.GetEntries().Where(e => !e.IsDirectory && 
                          (e.Name.EndsWith(".modelbin", StringComparison.OrdinalIgnoreCase) ||
                           e.Name.EndsWith(".bin", StringComparison.OrdinalIgnoreCase) ||
+                          e.Name.EndsWith(".carbin", StringComparison.OrdinalIgnoreCase) ||
                           e.Name.EndsWith(".xml", StringComparison.OrdinalIgnoreCase) ||
                           e.Name.EndsWith(".avpins", StringComparison.OrdinalIgnoreCase) ||
                           e.Name.EndsWith(".gr2", StringComparison.OrdinalIgnoreCase) ||
@@ -565,9 +596,19 @@ namespace ForzaTechStudio.Views
 
                                  if (fileName.EndsWith(".bin", StringComparison.OrdinalIgnoreCase))
                                  {
-                                     if (IsLightsBinFile(bytes))
+                                     if (fileName.Equals("manufacturercolors.bin", StringComparison.OrdinalIgnoreCase))
+                                     {
+                                         zipNode.ManufacturerColors = TryLoadManufacturerColors(bytes);
+                                     }
+                                     else if (IsLightsBinFile(bytes))
                                      {
                                          node = LoadLightsBin(fileName, bytes);
+                                         if (node is LightsBinNode lightsNode)
+                                         {
+                                             lightsNode.FilePath = null!;
+                                             lightsNode.SourceZipPath = path;
+                                             lightsNode.ZipEntryName = entry.Name;
+                                         }
                                      }
                                      else if (fileName.Equals("physicsdefinition.bin", StringComparison.OrdinalIgnoreCase))
                                      {
@@ -576,6 +617,12 @@ namespace ForzaTechStudio.Views
                                      else if (fileName.Contains("lights", StringComparison.OrdinalIgnoreCase))
                                      {
                                          node = LoadLightsBin(fileName, bytes);
+                                         if (node is LightsBinNode lightsNode)
+                                         {
+                                             lightsNode.FilePath = null!;
+                                             lightsNode.SourceZipPath = path;
+                                             lightsNode.ZipEntryName = entry.Name;
+                                         }
                                      }
                                  }
                                  else if (fileName.EndsWith(".xml", StringComparison.OrdinalIgnoreCase))
@@ -589,7 +636,9 @@ namespace ForzaTechStudio.Views
                                          node.Name = fileName;
                                          if (node is LocatorsXmlNode locNode)
                                          {
-                                         locNode.FilePath = null!; // Don't save back to temp file
+                                             locNode.FilePath = null!; // Don't save back to temp file
+                                             locNode.SourceZipPath = path;
+                                             locNode.ZipEntryName = entry.Name;
                                          }
                                      }
                                      File.Delete(tempPath);
@@ -598,8 +647,13 @@ namespace ForzaTechStudio.Views
                              else if (fileName.EndsWith(".avpins", StringComparison.OrdinalIgnoreCase))
                              {
                                  var bytes = zip.ExtractToMemory(entry);
-                                 var xmlText = Encoding.UTF8.GetString(bytes);
+                                 var xmlText = DecodeXmlText(bytes);
                                  node = LoadAvPins(fileName, xmlText, null!, path, entry.Name);
+                             }
+                             else if (fileName.EndsWith(".carbin", StringComparison.OrdinalIgnoreCase))
+                             {
+                                 var bytes = zip.ExtractToMemory(entry);
+                                 node = LoadCarbin(fileName, bytes, sourceZipPath: path, zipEntryName: entry.Name);
                              }
                              else if (fileName.EndsWith(".gr2", StringComparison.OrdinalIgnoreCase) ||
                                       fileName.EndsWith(".gsf", StringComparison.OrdinalIgnoreCase))
@@ -615,7 +669,10 @@ namespace ForzaTechStudio.Views
                                  results.Add((entry, node));
                              }
                          }
-                         catch { }
+                         catch (Exception ex)
+                         {
+                             System.Diagnostics.Debug.WriteLine($"Error loading ZIP entry {entry.Name}: {ex}");
+                         }
                      }
                      
                      var folderDict = new Dictionary<string, ViewerNode>();
@@ -658,6 +715,22 @@ namespace ForzaTechStudio.Views
              {
                  return null;
              }
+        }
+
+        private static ManufacturerColorsBlob? TryLoadManufacturerColors(byte[] bytes)
+        {
+            try
+            {
+                using var stream = new MemoryStream(bytes);
+                var bundle = new Bundle();
+                bundle.Load(stream);
+                return bundle.Blobs.OfType<ManufacturerColorsBlob>().FirstOrDefault();
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"Error loading manufacturer colors: {ex}");
+                return null;
+            }
         }
 
         // Loads a Playground MiniZip (.minizip / PGZP) file, extracting all ModelBin entries
@@ -819,6 +892,106 @@ namespace ForzaTechStudio.Views
             {
                 return null;
             }
+        }
+
+        private CarbinFileNode LoadCarbin(string name, byte[] data, string? filePath = null, string? sourceZipPath = null, string? zipEntryName = null)
+        {
+            try
+            {
+                using var stream = new MemoryStream(data);
+                var carbinFile = new CarbinFile();
+                carbinFile.Load(stream);
+
+                var node = new CarbinFileNode
+                {
+                    Name = name,
+                    FilePath = filePath,
+                    SourceZipPath = sourceZipPath,
+                    ZipEntryName = zipEntryName,
+                    CarbinData = carbinFile,
+                    IsChecked = true
+                };
+
+                PopulateCarbinNodes(node);
+                node.UpdateCheckStateFromChildren();
+                return node;
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"Error loading carbin: {ex}");
+                return null;
+            }
+        }
+
+        private static void PopulateCarbinNodes(CarbinFileNode fileNode)
+        {
+            var scene = fileNode.CarbinData?.Scene;
+            if (scene == null)
+                return;
+
+            foreach (var entry in scene.NonUpgradableParts)
+            {
+                string partName = entry.Type.ToString();
+                var partNode = new CarbinPartNode
+                {
+                    Name = $"{partName} ({entry.Part.Models.Count})",
+                    Parent = fileNode,
+                    PartCategory = "Non-Upgradable",
+                    PartData = entry,
+                    IsChecked = true
+                };
+                AddCarbinModelNodes(partNode, entry.Part.Models, partName);
+                fileNode.Children.Add(partNode);
+            }
+
+            foreach (var part in scene.UpgradableParts)
+            {
+                int modelCount = part.Upgrades.Sum(upgrade => upgrade.Models.Count) + part.SharedModels.Count;
+                string partName = part.Type.ToString();
+                var partNode = new CarbinPartNode
+                {
+                    Name = $"{partName} upgrades ({modelCount})",
+                    Parent = fileNode,
+                    PartCategory = "Upgradable",
+                    PartData = part,
+                    IsChecked = true
+                };
+
+                foreach (var upgrade in part.Upgrades)
+                    AddCarbinModelNodes(partNode, upgrade.Models, $"{partName} upgrade {upgrade.Id}");
+
+                foreach (var sharedModel in part.SharedModels)
+                    AddCarbinModelNodes(partNode, new[] { sharedModel.Model }, $"{partName} shared");
+
+                fileNode.Children.Add(partNode);
+            }
+        }
+
+        private static void AddCarbinModelNodes(CarbinPartNode partNode, IEnumerable<CarRenderModel> models, string partName)
+        {
+            int index = 0;
+            foreach (var model in models)
+            {
+                var modelNode = new CarbinModelNode
+                {
+                    Name = BuildCarbinModelDisplayName(model),
+                    Parent = partNode,
+                    Model = model,
+                    ModelIndex = index,
+                    PartName = partName,
+                    UseTransforms = !IsRootCarbinBoneName(model.BoneName),
+                    IsChecked = true
+                };
+                partNode.Children.Add(modelNode);
+                index++;
+            }
+        }
+
+        private static string BuildCarbinModelDisplayName(CarRenderModel model)
+        {
+            string modelName = string.IsNullOrEmpty(model.Path) ? "model" : Path.GetFileName(model.Path.Replace('\\', '/'));
+            string boneText = string.IsNullOrEmpty(model.BoneName) ? $"bone {model.BoneId}" : model.BoneName;
+            return $"{modelName} [{boneText}]";
         }
 
         private PhysicsDefinitionNode LoadPhysicsDefinition(string name, byte[] data)

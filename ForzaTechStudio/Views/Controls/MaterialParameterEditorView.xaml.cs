@@ -13,18 +13,18 @@ namespace ForzaTechStudio.Views.Controls
 {
     public sealed partial class MaterialParameterEditorView : UserControl
     {
-        public IList<ShaderParameter> ParametersSource
+        public IList<ShaderParameter>? ParametersSource
         {
-            get => (IList<ShaderParameter>)GetValue(ParametersSourceProperty);
+            get => (IList<ShaderParameter>?)GetValue(ParametersSourceProperty);
             set => SetValue(ParametersSourceProperty, value);
         }
 
         public static readonly DependencyProperty ParametersSourceProperty =
             DependencyProperty.Register("ParametersSource", typeof(IList<ShaderParameter>), typeof(MaterialParameterEditorView), new PropertyMetadata(null, OnSourceChanged));
 
-        public ICommand RemoveParameterCommand
+        public ICommand? RemoveParameterCommand
         {
-            get => (ICommand)GetValue(RemoveParameterCommandProperty);
+            get => (ICommand?)GetValue(RemoveParameterCommandProperty);
             set => SetValue(RemoveParameterCommandProperty, value);
         }
 
@@ -51,7 +51,7 @@ namespace ForzaTechStudio.Views.Controls
             }
         }
 
-        private void OnCollectionChanged(object sender, NotifyCollectionChangedEventArgs e)
+        private void OnCollectionChanged(object? sender, NotifyCollectionChangedEventArgs e)
         {
             // For simplicity, just reload everything when collection changes.
             // Optimization can be added later if performance issues arise.
@@ -66,6 +66,17 @@ namespace ForzaTechStudio.Views.Controls
         public MaterialParameterEditorView()
         {
             this.InitializeComponent();
+        }
+
+        private void RemoveParameter_Click(object sender, RoutedEventArgs e)
+        {
+            if (sender is not FrameworkElement { Tag: ShaderParameter parameter }) return;
+
+            var command = RemoveParameterCommand;
+            if (command?.CanExecute(parameter) == true)
+            {
+                command.Execute(parameter);
+            }
         }
 
         private void ReloadParameters()

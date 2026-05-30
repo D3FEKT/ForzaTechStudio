@@ -80,6 +80,14 @@ namespace ForzaTechStudio.Views
                     RenderDamageMesh(dmgNode);
                 }
             }
+            else if (node is CarbinModelNode carbinModelNode)
+            {
+                carbinModelNode.PropertyChanged += CarbinModelNode_PropertyChanged;
+                if (!deferRendering && carbinModelNode.IsChecked == true)
+                {
+                    RenderCarbinModel(carbinModelNode);
+                }
+            }
 
             foreach (var child in node.Children)
             {
@@ -107,6 +115,22 @@ namespace ForzaTechStudio.Views
                      RefreshHighlight();
                  }
                  SyncViewDropdownItems();
+                 RefreshCarbinInstancesForModel(meshNode.ParentModelBin);
+            }
+        }
+
+        private void CarbinModelNode_PropertyChanged(object? sender, PropertyChangedEventArgs e)
+        {
+            if ((e.PropertyName == nameof(CarbinModelNode.IsChecked)
+                    || e.PropertyName == nameof(CarbinModelNode.UseTransforms))
+                && sender is CarbinModelNode carbinModelNode)
+            {
+                HideCarbinModel(carbinModelNode);
+                if (carbinModelNode.IsChecked == true && carbinModelNode.UseTransforms)
+                    RenderCarbinModel(carbinModelNode);
+
+                if (ReferenceEquals(ViewModel.SelectedNode, carbinModelNode))
+                    UpdateHighlight(carbinModelNode);
             }
         }
 
@@ -194,6 +218,13 @@ namespace ForzaTechStudio.Views
                  FileTree.RootNodes.Remove(treeNode);
                  CleanupNodeRecusrive(root);
             }
+
+            InvalidateViewportTextureLookup();
+            DispatcherQueue.TryEnqueue(() =>
+            {
+                RefreshManufacturerColorsFromLoadedRoots();
+                UpdateMeshColors(SingleColorToggle?.IsChecked ?? false);
+            });
         }
         
         private void CleanupNodeRecusrive(IViewerNode node)
@@ -232,6 +263,11 @@ namespace ForzaTechStudio.Views
                 dmgNode.PropertyChanged -= DamageMeshNode_PropertyChanged;
                 HideDamageMesh(dmgNode);
             }
+            else if (node is CarbinModelNode carbinModelNode)
+            {
+                carbinModelNode.PropertyChanged -= CarbinModelNode_PropertyChanged;
+                HideCarbinModel(carbinModelNode);
+            }
 
             
             foreach (var child in node.Children)
@@ -254,6 +290,15 @@ namespace ForzaTechStudio.Views
             {
                 ViewModel.SelectedNode = node;
             }
+        }
+
+        private void FileTree_SelectionChanged(TreeView sender, TreeViewSelectionChangedEventArgs args)
+        {
+            if (sender.SelectedItems.Count != 1 || args.AddedItems.Count == 0)
+                return;
+
+            if (TryGetViewerNode(args.AddedItems[0], out var node))
+                ViewModel.SelectedNode = node;
         }
 
         private async void FileTree_RightTapped(object sender, Microsoft.UI.Xaml.Input.RightTappedRoutedEventArgs e)
@@ -327,7 +372,8 @@ namespace ForzaTechStudio.Views
             // appear highlighted when the user manually expands the tree.
             if (_treeNodeMap.TryGetValue(node, out var tvNode))
             {
-                FileTree.SelectedItem = tvNode;
+                if (FileTree.SelectedItems.Count <= 1)
+                    FileTree.SelectedItem = tvNode;
             }
 
             // Handle LocatorNode selection
@@ -341,6 +387,13 @@ namespace ForzaTechStudio.Views
             if (node is AvPinNode avPinNode)
             {
                 ShowAvPinUI(avPinNode);
+                return;
+            }
+
+            // Handle Carbin model selection
+            if (node is CarbinModelNode carbinModelNode)
+            {
+                ShowCarbinModelUI(carbinModelNode);
                 return;
             }
             
@@ -475,6 +528,12 @@ namespace ForzaTechStudio.Views
 
         private void RefreshHighlight()
         {
+            if (ViewModel.SelectedNode is CarbinModelNode carbinModelNode)
+            {
+                UpdateHighlight(carbinModelNode);
+                return;
+            }
+
             if (_currentLightHighlightTargets.Count > 0)
                 UpdateHighlightForLightGroups(_currentLightHighlightTargets);
             else
@@ -558,6 +617,12 @@ namespace ForzaTechStudio.Views
                 return;
             }
 
+            if (node is CarbinModelNode carbinModelNode)
+            {
+                UpdateHighlightForCarbinModel(carbinModelNode);
+                return;
+            }
+
             var meshesToHighlight = new List<MeshNode>();
             if (node is MeshNode mn) meshesToHighlight.Add(mn);
             else if (node is ModelBinNode mb)
@@ -624,6 +689,51 @@ namespace ForzaTechStudio.Views
                         offset += geo.Positions.Count;
                     }
                 }
+            }
+
+            if (pos.Count > 0)
+            {
+                mergedGeo.Positions = pos;
+                mergedGeo.TriangleIndices = ind;
+                _highlightModel.Geometry = mergedGeo;
+                _highlightModel.Visibility = Visibility.Visible;
+            }
+            else
+            {
+                _highlightModel.Visibility = Visibility.Collapsed;
+            }
+        }
+
+        private void UpdateHighlightForCarbinModel(CarbinModelNode node)
+        {
+            if (_highlightModel == null) return;
+
+            _currentHighlightTargets = new List<MeshNode>();
+            _currentLightHighlightTargets = new List<LightGroupNode>();
+
+            if (!_carbinRenderMap.TryGetValue(node, out var models) || models.Count == 0)
+            {
+                _highlightModel.Visibility = Visibility.Collapsed;
+                return;
+            }
+
+            var mergedGeo = new MeshGeometry3D();
+            var pos = new Vector3Collection();
+            var ind = new IntCollection();
+            int offset = 0;
+
+            foreach (var model in models)
+            {
+                if (model.Visibility == Visibility.Collapsed)
+                    continue;
+
+                if (model.Geometry is not MeshGeometry3D geo || geo.Positions == null || geo.Positions.Count == 0)
+                    continue;
+
+                pos.AddRange(geo.Positions);
+                foreach (var i in geo.TriangleIndices)
+                    ind.Add(i + offset);
+                offset += geo.Positions.Count;
             }
 
             if (pos.Count > 0)

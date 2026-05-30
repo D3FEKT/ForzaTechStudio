@@ -257,6 +257,18 @@ namespace ForzaTechStudio.Views
             MeshMaterialParamEditor.ParametersSource = material.Parameters;
         }
 
+        private void RemoveMeshMaterialParameter(ShaderParameter? parameter)
+        {
+            var material = ViewModel.SelectedMeshMaterial;
+            if (parameter == null || material?.Blob == null) return;
+
+            var paramBlob = material.Blob.Bundle?.Blobs.OfType<MaterialShaderParameterBlob>().FirstOrDefault();
+            if (paramBlob == null) return;
+
+            paramBlob.Parameters.Remove(parameter);
+            material.Parameters.Remove(parameter);
+        }
+
         private async void SaveMaterialJson_Click(object sender, RoutedEventArgs e)
         {
             var material = ViewModel.SelectedMeshMaterial;

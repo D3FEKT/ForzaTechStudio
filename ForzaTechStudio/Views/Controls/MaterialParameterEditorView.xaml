@@ -17,42 +17,56 @@
         <converters:IntToDoubleConverter x:Key="IntToDoubleConverter"/>
         
         <DataTemplate x:Key="TextureTemplate" x:DataType="vm:ShaderParameterViewModel">
-             <Grid ColumnSpacing="8">
+             <Grid ColumnSpacing="4">
                  <Grid.ColumnDefinitions>
                      <ColumnDefinition Width="*"/>
                      <ColumnDefinition Width="Auto"/>
                  </Grid.ColumnDefinitions>
-                 <TextBox Text="{x:Bind TexturePath, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" PlaceholderText="Texture Path"/>
+                 <TextBox Text="{x:Bind TexturePath, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                          PlaceholderText="Texture Path"
+                          FontSize="11"
+                          MinHeight="28"
+                          Padding="6,2"/>
                  <Button Grid.Column="1" Content="..." 
                          Command="{x:Bind BrowseTextureCommand}"
+                         MinWidth="28"
+                         MinHeight="28"
+                         Padding="4,2"
                          ToolTipService.ToolTip="Browse File"/>
              </Grid>
         </DataTemplate>
 
         <DataTemplate x:Key="BoolTemplate" x:DataType="vm:ShaderParameterViewModel">
-            <ToggleSwitch IsOn="{x:Bind BoolValue, Mode=TwoWay}" OnContent="True" OffContent="False"/>
+            <ToggleSwitch IsOn="{x:Bind BoolValue, Mode=TwoWay}" OnContent="True" OffContent="False" FontSize="11" MinHeight="28"/>
         </DataTemplate>
 
         <DataTemplate x:Key="FloatTemplate" x:DataType="vm:ShaderParameterViewModel">
-            <NumberBox Value="{x:Bind FloatValue, Mode=TwoWay}" SpinButtonPlacementMode="Inline" SmallChange="0.1" LargeChange="1.0"/>
+            <NumberBox Value="{x:Bind FloatValue, Mode=TwoWay}" SpinButtonPlacementMode="Inline" SmallChange="0.1" LargeChange="1.0" FontSize="11" MinHeight="28"/>
         </DataTemplate>
 
         <DataTemplate x:Key="IntTemplate" x:DataType="vm:ShaderParameterViewModel">
-            <NumberBox Value="{x:Bind IntValue, Mode=TwoWay, Converter={StaticResource IntToDoubleConverter}}" SpinButtonPlacementMode="Inline" SmallChange="1" LargeChange="10"/>
+            <NumberBox Value="{x:Bind IntValue, Mode=TwoWay, Converter={StaticResource IntToDoubleConverter}}" SpinButtonPlacementMode="Inline" SmallChange="1" LargeChange="10" FontSize="11" MinHeight="28"/>
         </DataTemplate>
 
         <DataTemplate x:Key="VectorTemplate" x:DataType="vm:ShaderParameterViewModel">
-            <StackPanel Orientation="Horizontal" Spacing="4">
-                <NumberBox Header="X" Value="{x:Bind VectorX, Mode=TwoWay}" Width="80" SpinButtonPlacementMode="Compact"/>
-                <NumberBox Header="Y" Value="{x:Bind VectorY, Mode=TwoWay}" Width="80" SpinButtonPlacementMode="Compact"/>
-                <NumberBox Header="Z" Value="{x:Bind VectorZ, Mode=TwoWay}" Width="80" SpinButtonPlacementMode="Compact"/>
-                <NumberBox Header="W" Value="{x:Bind VectorW, Mode=TwoWay}" Width="80" SpinButtonPlacementMode="Compact"/>
+            <StackPanel Orientation="Horizontal" Spacing="3">
+                <NumberBox Header="X" Value="{x:Bind VectorX, Mode=TwoWay}" Width="62" SpinButtonPlacementMode="Compact" FontSize="10" MinHeight="28"/>
+                <NumberBox Header="Y" Value="{x:Bind VectorY, Mode=TwoWay}" Width="62" SpinButtonPlacementMode="Compact" FontSize="10" MinHeight="28"/>
+                <NumberBox Header="Z" Value="{x:Bind VectorZ, Mode=TwoWay}" Width="62" SpinButtonPlacementMode="Compact" FontSize="10" MinHeight="28"/>
+                <NumberBox Header="W" Value="{x:Bind VectorW, Mode=TwoWay}" Width="62" SpinButtonPlacementMode="Compact" FontSize="10" MinHeight="28"/>
             </StackPanel>
         </DataTemplate>
 
         <DataTemplate x:Key="ColorTemplate" x:DataType="vm:ShaderParameterViewModel">
-            <StackPanel Orientation="Horizontal" Spacing="8">
-                 <Button Width="50" Height="30" Padding="0" BorderThickness="1" BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}">
+            <Grid ColumnSpacing="4">
+                 <Grid.ColumnDefinitions>
+                     <ColumnDefinition Width="Auto"/>
+                     <ColumnDefinition Width="*"/>
+                     <ColumnDefinition Width="*"/>
+                     <ColumnDefinition Width="*"/>
+                     <ColumnDefinition Width="*"/>
+                 </Grid.ColumnDefinitions>
+                 <Button Width="42" Height="28" Padding="0" BorderThickness="1" BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}">
                      <Button.Flyout>
                          <Flyout>
                              <ColorPicker Color="{Binding CurrentColor, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" 
@@ -66,25 +80,22 @@
                          </Rectangle.Fill>
                      </Rectangle>
                  </Button>
-                 <StackPanel Orientation="Horizontal" Spacing="4" VerticalAlignment="Center">
-                    <TextBlock Text="Vals:" Opacity="0.6" VerticalAlignment="Center" Margin="0,0,4,0"/>
-                    <NumberBox Value="{x:Bind VectorX, Mode=TwoWay}" Width="60" ToolTipService.ToolTip="Red (Linear)" SpinButtonPlacementMode="Compact"/>
-                    <NumberBox Value="{x:Bind VectorY, Mode=TwoWay}" Width="60" ToolTipService.ToolTip="Green (Linear)" SpinButtonPlacementMode="Compact"/>
-                    <NumberBox Value="{x:Bind VectorZ, Mode=TwoWay}" Width="60" ToolTipService.ToolTip="Blue (Linear)" SpinButtonPlacementMode="Compact"/>
-                    <NumberBox Value="{x:Bind VectorW, Mode=TwoWay}" Width="60" ToolTipService.ToolTip="Alpha" SpinButtonPlacementMode="Compact"/>
-                 </StackPanel>
-            </StackPanel>
+                 <NumberBox Grid.Column="1" Value="{x:Bind VectorX, Mode=TwoWay}" ToolTipService.ToolTip="Red (Linear)" SpinButtonPlacementMode="Compact" FontSize="10" MinHeight="28"/>
+                 <NumberBox Grid.Column="2" Value="{x:Bind VectorY, Mode=TwoWay}" ToolTipService.ToolTip="Green (Linear)" SpinButtonPlacementMode="Compact" FontSize="10" MinHeight="28"/>
+                 <NumberBox Grid.Column="3" Value="{x:Bind VectorZ, Mode=TwoWay}" ToolTipService.ToolTip="Blue (Linear)" SpinButtonPlacementMode="Compact" FontSize="10" MinHeight="28"/>
+                 <NumberBox Grid.Column="4" Value="{x:Bind VectorW, Mode=TwoWay}" ToolTipService.ToolTip="Alpha" SpinButtonPlacementMode="Compact" FontSize="10" MinHeight="28"/>
+            </Grid>
         </DataTemplate>
         
         <DataTemplate x:Key="SamplerTemplate" x:DataType="vm:ShaderParameterViewModel">
              <StackPanel Spacing="4" Orientation="Horizontal">
-                 <ComboBox Header="Address U" SelectedIndex="{x:Bind AddressU, Mode=TwoWay}" MinWidth="100">
+                 <ComboBox Header="Address U" SelectedIndex="{x:Bind AddressU, Mode=TwoWay}" MinWidth="84" FontSize="11" MinHeight="28">
                      <x:String>Wrap</x:String> 
                      <x:String>Mirror</x:String> 
                      <x:String>Clamp</x:String>
                      <x:String>Border</x:String>
                  </ComboBox>
-                 <ComboBox Header="Address V" SelectedIndex="{x:Bind AddressV, Mode=TwoWay}" MinWidth="100">
+                 <ComboBox Header="Address V" SelectedIndex="{x:Bind AddressV, Mode=TwoWay}" MinWidth="84" FontSize="11" MinHeight="28">
                      <x:String>Wrap</x:String> 
                      <x:String>Mirror</x:String> 
                      <x:String>Clamp</x:String>
@@ -113,37 +124,40 @@
     <ListView ItemsSource="{Binding Source={StaticResource GroupedParams}}" SelectionMode="None">
         <ListView.ItemTemplate>
             <DataTemplate x:DataType="vm:ShaderParameterViewModel">
-               <Grid Margin="0,4,0,12" Padding="0,0,12,0">
+               <Grid Margin="0,4,0,10" Padding="0,0,8,0" RowSpacing="4">
                    <Grid.RowDefinitions>
                        <RowDefinition Height="Auto"/>
                        <RowDefinition Height="Auto"/>
                    </Grid.RowDefinitions>
-                   <Grid.ColumnDefinitions>
-                       <ColumnDefinition Width="220"/>
-                       <ColumnDefinition Width="*"/>
-                       <ColumnDefinition Width="Auto"/>
-                   </Grid.ColumnDefinitions>
                    
-                   <StackPanel VerticalAlignment="Top" Margin="0,0,12,0">
-                       <TextBlock Text="{x:Bind Name}" TextWrapping="Wrap" FontWeight="SemiBold"/>
-                       <TextBlock Text="{x:Bind NameHash, Converter={StaticResource NameHashConverter}}" 
-                                  FontSize="10" Opacity="0.5" Margin="0,2,0,0"/>
-                   </StackPanel>
+                   <Grid ColumnSpacing="8">
+                       <Grid.ColumnDefinitions>
+                           <ColumnDefinition Width="*"/>
+                           <ColumnDefinition Width="Auto"/>
+                       </Grid.ColumnDefinitions>
 
-                   <ContentControl Grid.Column="1" 
+                       <StackPanel VerticalAlignment="Top">
+                           <TextBlock Text="{x:Bind Name}" TextWrapping="Wrap" FontWeight="SemiBold" FontSize="12"/>
+                           <TextBlock Text="{x:Bind NameHash, Converter={StaticResource NameHashConverter}}" 
+                                      FontSize="9" Opacity="0.5" Margin="0,1,0,0"/>
+                       </StackPanel>
+
+                        <Button Grid.Column="1" 
+                                VerticalAlignment="Top"
+                                MinWidth="28"
+                                MinHeight="26"
+                                Padding="6,3"
+                                Click="RemoveParameter_Click"
+                                Tag="{x:Bind Parameter}"
+                                ToolTipService.ToolTip="Remove Parameter">
+                            <SymbolIcon Symbol="Delete"/>
+                        </Button>
+                   </Grid>
+
+                   <ContentControl Grid.Row="1" 
                                    Content="{x:Bind}" 
                                    ContentTemplateSelector="{StaticResource ParamSelector}" 
                                    HorizontalContentAlignment="Stretch"/>
-
-                    <Button Grid.Column="2" 
-                            Margin="8,0,0,0"
-                            VerticalAlignment="Top"
-                            Padding="8,4"
-                            ToolTipService.ToolTip="Remove Parameter"
-                            Command="{Binding ElementName=RootControl, Path=RemoveParameterCommand}"
-                            CommandParameter="{x:Bind Parameter}">
-                        <SymbolIcon Symbol="Delete"/>
-                    </Button>
                </Grid>
             </DataTemplate>
         </ListView.ItemTemplate>

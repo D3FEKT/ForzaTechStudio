@@ -2,7 +2,6 @@
 using CommunityToolkit.Mvvm.Input;
 using ForzaTools.Bundles;
 using ForzaTools.Bundles.Blobs;
-using Microsoft.UI;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using System;
@@ -39,19 +38,49 @@ public partial class ManufacturerColorEntryViewModel : ManufacturerColorNode
     {
         _entry = entry;
         Owner = owner;
+
+        foreach (var name in entry.MaterialNames)
+            Parts.Add(new PartNameEntry { Name = name });
     }
 
     public override string DisplayName => string.IsNullOrEmpty(Path) ? "[New Entry]" : System.IO.Path.GetFileName(Path);
     public override IEnumerable Children => null;
+    public bool UsesMaterialNames => Owner?.IsFh6VersionLoaded == true;
+    public bool UsesMaterialIndexMask => !UsesMaterialNames;
+
+    public ObservableCollection<PartNameEntry> Parts { get; } = new();
+
+    private PartNameEntry _selectedPart;
+    public PartNameEntry SelectedPart
+    {
+        get => _selectedPart;
+        set => SetProperty(ref _selectedPart, value);
+    }
+
+    [RelayCommand]
+    private void AddPart()
+    {
+        var entry = new PartNameEntry();
+        Parts.Add(entry);
+        SelectedPart = entry;
+    }
+
+    [RelayCommand]
+    private void RemovePart(PartNameEntry part)
+    {
+        if (part != null)
+            Parts.Remove(part);
+    }
 
     public string Path
     {
         get => _entry.Path;
         set
         {
-            if (_entry.Path != value)
+            string newValue = value ?? string.Empty;
+            if (_entry.Path != newValue)
             {
-                _entry.Path = value;
+                _entry.Path = newValue;
                 OnPropertyChanged();
                 OnPropertyChanged(nameof(DisplayName));
             }
@@ -73,13 +102,10 @@ public partial class ManufacturerColorEntryViewModel : ManufacturerColorNode
 
     public Color UiColor
     {
-        get => Color.FromArgb(255, 
-            (byte)Math.Clamp(_entry.PreviewColor.X * 255f, 0, 255),
-            (byte)Math.Clamp(_entry.PreviewColor.Y * 255f, 0, 255),
-            (byte)Math.Clamp(_entry.PreviewColor.Z * 255f, 0, 255));
+        get => ToUiColor(_entry.PreviewColor);
         set
         {
-            var newVector = new Vector3(value.R / 255f, value.G / 255f, value.B / 255f);
+            var newVector = ToVector3(value);
             if (_entry.PreviewColor != newVector)
             {
                 _entry.PreviewColor = newVector;
@@ -133,12 +159,38 @@ public partial class ManufacturerColorEntryViewModel : ManufacturerColorNode
         }
     }
 
-    public ManufacturerColorEntry GetEntry() => _entry;
+    private static Color ToUiColor(Vector3 value)
+    {
+        return Color.FromArgb(255,
+            (byte)Math.Clamp(value.X * 255f, 0, 255),
+            (byte)Math.Clamp(value.Y * 255f, 0, 255),
+            (byte)Math.Clamp(value.Z * 255f, 0, 255));
+    }
+
+    private static Vector3 ToVector3(Color value)
+    {
+        return new Vector3(value.R / 255f, value.G / 255f, value.B / 255f);
+    }
+
+    public ManufacturerColorEntry GetEntry()
+    {
+        if (UsesMaterialNames)
+            _entry.MaterialNames = Parts.Select(p => p.Name).ToList();
+        return _entry;
+    }
+}
+
+public partial class PartNameEntry : ObservableObject
+{
+    [ObservableProperty]
+    private string _name = string.Empty;
 }
 
 public partial class ManufacturerColorGroupViewModel : ManufacturerColorNode
 {
+    private readonly ManufacturerColorGroup _group;
     private string _groupName;
+
     public string GroupName
     {
         get => _groupName;
@@ -153,13 +205,149 @@ public partial class ManufacturerColorGroupViewModel : ManufacturerColorNode
 
     public override string DisplayName => GroupName;
     public override IEnumerable Children => Entries;
+    public int EntryCount => Entries.Count;
+    public bool UsesFh6Fields => Owner?.IsFh6VersionLoaded == true;
 
     public ObservableCollection<ManufacturerColorEntryViewModel> Entries { get; } = new();
 
-    public ManufacturerColorGroupViewModel(string name, ManufacturerColorsViewModel owner)
+    public ManufacturerColorGroupViewModel(ManufacturerColorGroup group, string name, ManufacturerColorsViewModel owner)
     {
+        _group = group;
         _groupName = name;
         Owner = owner;
+
+        foreach (var entry in group.Entries)
+            Entries.Add(new ManufacturerColorEntryViewModel(entry, owner));
+
+        Entries.CollectionChanged += (_, _) => OnPropertyChanged(nameof(EntryCount));
+    }
+
+    public int PrimaryGroupPreviewPresent
+    {
+        get => _group.PrimaryGroupPreviewPresent;
+        set => SetByteProperty(_group.PrimaryGroupPreviewPresent, value, newValue => _group.PrimaryGroupPreviewPresent = newValue);
+    }
+
+    public int GroupPreviewZero
+    {
+        get => _group.GroupPreviewZero;
+        set => SetByteProperty(_group.GroupPreviewZero, value, newValue => _group.GroupPreviewZero = newValue);
+    }
+
+    public int SecondaryGroupPreviewPresent
+    {
+        get => _group.SecondaryGroupPreviewPresent;
+        set => SetByteProperty(_group.SecondaryGroupPreviewPresent, value, newValue => _group.SecondaryGroupPreviewPresent = newValue);
+    }
+
+    public Color PrimaryGroupUiColor
+    {
+        get => ToUiColor(_group.PrimaryGroupPreviewColor);
+        set
+        {
+            Vector3 newValue = ToVector3(value);
+            if (_group.PrimaryGroupPreviewColor != newValue)
+            {
+                _group.PrimaryGroupPreviewColor = newValue;
+                OnPropertyChanged();
+                OnPropertyChanged(nameof(PrimaryGroupPreviewColorX));
+                OnPropertyChanged(nameof(PrimaryGroupPreviewColorY));
+                OnPropertyChanged(nameof(PrimaryGroupPreviewColorZ));
+            }
+        }
+    }
+
+    public float PrimaryGroupPreviewColorX
+    {
+        get => _group.PrimaryGroupPreviewColor.X;
+        set => SetVectorComponent(_group.PrimaryGroupPreviewColor, value, static (vector, component) => new Vector3(component, vector.Y, vector.Z), newValue => _group.PrimaryGroupPreviewColor = newValue, nameof(PrimaryGroupUiColor));
+    }
+
+    public float PrimaryGroupPreviewColorY
+    {
+        get => _group.PrimaryGroupPreviewColor.Y;
+        set => SetVectorComponent(_group.PrimaryGroupPreviewColor, value, static (vector, component) => new Vector3(vector.X, component, vector.Z), newValue => _group.PrimaryGroupPreviewColor = newValue, nameof(PrimaryGroupUiColor));
+    }
+
+    public float PrimaryGroupPreviewColorZ
+    {
+        get => _group.PrimaryGroupPreviewColor.Z;
+        set => SetVectorComponent(_group.PrimaryGroupPreviewColor, value, static (vector, component) => new Vector3(vector.X, vector.Y, component), newValue => _group.PrimaryGroupPreviewColor = newValue, nameof(PrimaryGroupUiColor));
+    }
+
+    public Color SecondaryGroupUiColor
+    {
+        get => ToUiColor(_group.SecondaryGroupPreviewColor);
+        set
+        {
+            Vector3 newValue = ToVector3(value);
+            if (_group.SecondaryGroupPreviewColor != newValue)
+            {
+                _group.SecondaryGroupPreviewColor = newValue;
+                OnPropertyChanged();
+                OnPropertyChanged(nameof(SecondaryGroupPreviewColorX));
+                OnPropertyChanged(nameof(SecondaryGroupPreviewColorY));
+                OnPropertyChanged(nameof(SecondaryGroupPreviewColorZ));
+            }
+        }
+    }
+
+    public float SecondaryGroupPreviewColorX
+    {
+        get => _group.SecondaryGroupPreviewColor.X;
+        set => SetVectorComponent(_group.SecondaryGroupPreviewColor, value, static (vector, component) => new Vector3(component, vector.Y, vector.Z), newValue => _group.SecondaryGroupPreviewColor = newValue, nameof(SecondaryGroupUiColor));
+    }
+
+    public float SecondaryGroupPreviewColorY
+    {
+        get => _group.SecondaryGroupPreviewColor.Y;
+        set => SetVectorComponent(_group.SecondaryGroupPreviewColor, value, static (vector, component) => new Vector3(vector.X, component, vector.Z), newValue => _group.SecondaryGroupPreviewColor = newValue, nameof(SecondaryGroupUiColor));
+    }
+
+    public float SecondaryGroupPreviewColorZ
+    {
+        get => _group.SecondaryGroupPreviewColor.Z;
+        set => SetVectorComponent(_group.SecondaryGroupPreviewColor, value, static (vector, component) => new Vector3(vector.X, vector.Y, component), newValue => _group.SecondaryGroupPreviewColor = newValue, nameof(SecondaryGroupUiColor));
+    }
+
+    public ManufacturerColorGroup GetGroup()
+    {
+        _group.Entries = Entries.Select(entry => entry.GetEntry()).ToList();
+        return _group;
+    }
+
+    private void SetByteProperty(byte currentValue, int requestedValue, Action<byte> setValue)
+    {
+        byte newValue = (byte)Math.Clamp(requestedValue, 0, byte.MaxValue);
+        if (currentValue == newValue)
+            return;
+
+        setValue(newValue);
+        OnPropertyChanged();
+    }
+
+    private void SetVectorComponent(Vector3 currentValue, float componentValue, Func<Vector3, float, Vector3> update, Action<Vector3> setValue, string colorPropertyName)
+    {
+        Vector3 newValue = update(currentValue, componentValue);
+        if (currentValue == newValue)
+            return;
+
+        setValue(newValue);
+        OnPropertyChanged();
+        OnPropertyChanged(colorPropertyName);
+    }
+
+    private static Color ToUiColor(Vector3 value)
+    {
+        return Color.FromArgb(255,
+            (byte)Math.Clamp(value.X * 255f, 0, 255),
+            (byte)Math.Clamp(value.Y * 255f, 0, 255),
+            (byte)Math.Clamp(value.Z * 255f, 0, 255));
+    }
+
+    private static Vector3 ToVector3(Color value)
+    {
+        return new Vector3(value.R / 255f, value.G / 255f, value.B / 255f);
     }
 }
 
@@ -180,8 +368,21 @@ public partial class ManufacturerColorsViewModel : ObservableObject
     }
 
     public bool IsFileLoaded => _colorsBlob != null;
+    public bool IsFh6VersionLoaded => _colorsBlob?.IsAtLeastVersion(2, 0) == true;
+    public string BlobVersionText => _colorsBlob == null ? string.Empty : $"Blob v{_colorsBlob.VersionMajor}.{_colorsBlob.VersionMinor}";
 
     public ObservableCollection<ManufacturerColorGroupViewModel> Groups { get; } = new();
+
+    private ManufacturerColorGroupViewModel _selectedGroup;
+    public ManufacturerColorGroupViewModel SelectedGroup
+    {
+        get => _selectedGroup;
+        set
+        {
+            if (SetProperty(ref _selectedGroup, value))
+                NotifySelectionStateChanged();
+        }
+    }
 
     private ManufacturerColorEntryViewModel _selectedEntry;
     public ManufacturerColorEntryViewModel SelectedEntry
@@ -190,25 +391,28 @@ public partial class ManufacturerColorsViewModel : ObservableObject
         set
         {
             if (SetProperty(ref _selectedEntry, value))
-            {
-                OnPropertyChanged(nameof(IsEntrySelected));
-            }
+                NotifySelectionStateChanged();
         }
     }
 
     public bool IsEntrySelected => SelectedEntry != null;
+    public bool IsGroupSelected => SelectedGroup != null;
+    public bool ShowGroupDetails => SelectedGroup != null;
+    public bool ShowEmptyDetailState => SelectedEntry == null && SelectedGroup == null;
 
-    [RelayCommand]
-    private void NewFile()
+    // Called from code-behind after the user picks a version.
+    public void NewFileWithVersion(bool isFh6)
     {
         Groups.Clear();
         _currentBundle = new Bundle();
         _colorsBlob = new ManufacturerColorsBlob();
-        _colorsBlob.VersionMajor = 1;
-        _colorsBlob.VersionMinor = 1;
+        _colorsBlob.VersionMajor = (byte)(isFh6 ? 2 : 1);
+        _colorsBlob.VersionMinor = 0;
         _currentBundle.Blobs.Add(_colorsBlob);
         FileName = "New ManufacturerColors.bin";
-        OnPropertyChanged(nameof(IsFileLoaded));
+        SelectedEntry = null;
+        SelectedGroup = null;
+        NotifyLoadedStateChanged();
         AddGroup();
     }
 
@@ -247,17 +451,14 @@ public partial class ManufacturerColorsViewModel : ObservableObject
             _currentBundle = bundle;
             _colorsBlob = blob;
             FileName = Path.GetFileName(filePath);
-            OnPropertyChanged(nameof(IsFileLoaded));
+            SelectedEntry = null;
+            SelectedGroup = null;
+            NotifyLoadedStateChanged();
 
             Groups.Clear();
             for (int i = 0; i < blob.Groups.Count; i++)
             {
-                var groupVm = new ManufacturerColorGroupViewModel($"Group {i}", this);
-                foreach (var entry in blob.Groups[i].Entries)
-                {
-                    groupVm.Entries.Add(new ManufacturerColorEntryViewModel(entry, this));
-                }
-                Groups.Add(groupVm);
+                Groups.Add(new ManufacturerColorGroupViewModel(blob.Groups[i], $"Group {i}", this));
             }
         }
         catch (Exception ex)
@@ -303,28 +504,26 @@ public partial class ManufacturerColorsViewModel : ObservableObject
         _currentBundle = null;
         _colorsBlob = null;
         FileName = null;
+        SelectedGroup = null;
         SelectedEntry = null;
-        OnPropertyChanged(nameof(IsFileLoaded));
+        NotifyLoadedStateChanged();
     }
 
     private void SyncBlobFromViewModel()
     {
         _colorsBlob.Groups.Clear();
         foreach (var groupVm in Groups)
-        {
-            var group = new ManufacturerColorGroup();
-            foreach (var entryVm in groupVm.Entries)
-            {
-                group.Entries.Add(entryVm.GetEntry());
-            }
-            _colorsBlob.Groups.Add(group);
-        }
+            _colorsBlob.Groups.Add(groupVm.GetGroup());
     }
 
     [RelayCommand]
     private void AddGroup()
     {
-        Groups.Add(new ManufacturerColorGroupViewModel($"Group {Groups.Count}", this));
+        var group = new ManufacturerColorGroup();
+        var groupVm = new ManufacturerColorGroupViewModel(group, $"Group {Groups.Count}", this);
+        Groups.Add(groupVm);
+        SelectedGroup = groupVm;
+        SelectedEntry = null;
     }
 
     [RelayCommand]
@@ -333,6 +532,8 @@ public partial class ManufacturerColorsViewModel : ObservableObject
         if (node is ManufacturerColorGroupViewModel group)
         {
             Groups.Remove(group);
+            if (SelectedGroup == group)
+                SelectedGroup = null;
             // Re-index names
             for (int i = 0; i < Groups.Count; i++)
             {
@@ -360,6 +561,7 @@ public partial class ManufacturerColorsViewModel : ObservableObject
         var entry = new ManufacturerColorEntry { Path = file.Path };
         var entryVm = new ManufacturerColorEntryViewModel(entry, this);
         group.Entries.Add(entryVm);
+        SelectedGroup = null;
         SelectedEntry = entryVm;
     }
 
@@ -373,9 +575,25 @@ public partial class ManufacturerColorsViewModel : ObservableObject
             if (group.Entries.Contains(entry))
             {
                 group.Entries.Remove(entry);
+                SelectedGroup = group;
                 break;
             }
         }
         SelectedEntry = null;
+    }
+
+    private void NotifyLoadedStateChanged()
+    {
+        OnPropertyChanged(nameof(IsFileLoaded));
+        OnPropertyChanged(nameof(IsFh6VersionLoaded));
+        OnPropertyChanged(nameof(BlobVersionText));
+    }
+
+    private void NotifySelectionStateChanged()
+    {
+        OnPropertyChanged(nameof(IsEntrySelected));
+        OnPropertyChanged(nameof(IsGroupSelected));
+        OnPropertyChanged(nameof(ShowGroupDetails));
+        OnPropertyChanged(nameof(ShowEmptyDetailState));
     }
 }

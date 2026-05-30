@@ -36,7 +36,7 @@ namespace ForzaTechStudio.Views
             }
             else
             {
-                var geometry = CreateMesh3D(node.GeometryData);
+                var geometry = CreateMesh3D(node.GeometryData, node.ParentModelBin);
                 _modelGroup.Children.Add(geometry);
                 _renderMap[node] = geometry;
             }
@@ -55,7 +55,7 @@ namespace ForzaTechStudio.Views
         {
             if (_damageRenderMap.ContainsKey(node)) return;
 
-            var geometry = CreateMesh3D(node.GeometryData);
+            var geometry = CreateMesh3D(node.GeometryData, node.ParentModelBin);
             _modelGroup.Children.Add(geometry);
             _damageRenderMap[node] = geometry;
         }
@@ -305,7 +305,7 @@ namespace ForzaTechStudio.Views
 
         // Existing methods
 
-        private MeshGeometryModel3D CreateMesh3D(ForzaGeometryData data)
+        private MeshGeometryModel3D CreateMesh3D(ForzaGeometryData data, ModelBinNode? modelBin = null)
         {
             var geometry = new MeshGeometry3D();
             var posCol = new Vector3Collection();
@@ -383,17 +383,7 @@ namespace ForzaTechStudio.Views
             geometry.TriangleIndices = indCol;
             geometry.UpdateBounds();
 
-            var material = new PhongMaterial();
-            
-            if (SingleColorToggle?.IsChecked == true)
-            {
-                material.DiffuseColor = new SDX.Color4(_singleColor.Red, _singleColor.Green, _singleColor.Blue, _sceneOpacity);
-            }
-            else
-            {
-                var rnd = new Random(data.Name?.GetHashCode() ?? 0);
-                material.DiffuseColor = new SDX.Color4((float)rnd.NextDouble(), (float)rnd.NextDouble(), (float)rnd.NextDouble(), _sceneOpacity);
-            }
+            var material = CreateViewportMaterial(data, modelBin);
 
             return new MeshGeometryModel3D
             {
@@ -549,31 +539,27 @@ namespace ForzaTechStudio.Views
 
         private void UpdateMeshColors(bool useSingleColor)
         {
-            var fixedMaterial = new PhongMaterial 
-            { 
-                DiffuseColor = new SDX.Color4(_singleColor.Red, _singleColor.Green, _singleColor.Blue, _sceneOpacity) 
-            };
-
             foreach (var kvp in _renderMap)
             {
                 var node = kvp.Key;
                 var model = kvp.Value;
 
-                if (model is MeshGeometryModel3D meshModel)
+                if (model is MeshGeometryModel3D meshModel && node is MeshNode meshNode)
                 {
-                    if (useSingleColor)
-                    {
-                        meshModel.Material = fixedMaterial;
-                    }
-                    else
-                    {
-                         var rnd = new Random(node.Name?.GetHashCode() ?? 0);
-                         meshModel.Material = new PhongMaterial 
-                         { 
-                             DiffuseColor = new SDX.Color4((float)rnd.NextDouble(), (float)rnd.NextDouble(), (float)rnd.NextDouble(), _sceneOpacity) 
-                         };
-                    }
+                    ApplyViewportMaterial(meshModel, meshNode.GeometryData, meshNode.ParentModelBin);
                 }
+            }
+
+            foreach (var kvp in _damageRenderMap)
+            {
+                if (kvp.Value is MeshGeometryModel3D meshModel)
+                    ApplyViewportMaterial(meshModel, kvp.Key.GeometryData, kvp.Key.ParentModelBin);
+            }
+
+            foreach (var kvp in _carbinMaterialContextMap)
+            {
+                if (kvp.Key is MeshGeometryModel3D meshModel)
+                    ApplyViewportMaterial(meshModel, kvp.Value.Geometry, kvp.Value.ModelBin);
             }
         }
 

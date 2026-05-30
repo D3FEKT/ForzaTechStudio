@@ -319,7 +319,7 @@ namespace ForzaTechStudio.Views
                     }
                 }
 
-                if (mesh.Name.Contains("Proxy", StringComparison.OrdinalIgnoreCase)) isVisible = false;
+                if (mesh.Name?.Contains("Proxy", StringComparison.OrdinalIgnoreCase) == true) isVisible = false;
 
                 mesh.IsChecked = isVisible;
             }
@@ -400,6 +400,7 @@ namespace ForzaTechStudio.Views
             UpdateLocatorExpanderVisibility();
             UpdateLightTransformExpanderVisibility();
             UpdateAnimationExpanderVisibility();
+            UpdateCarbinExpanderVisibility();
 
             // Show Model Properties expander only when at least one .modelbin is loaded
             bool hasModelBin = allItems.OfType<ModelBinNode>().Any();
@@ -620,7 +621,7 @@ namespace ForzaTechStudio.Views
 
         private void LOD_Click(object sender, RoutedEventArgs e)
         {
-            if (sender == ShadowsItem)
+            if (sender is ToggleMenuFlyoutItem item && item == ShadowsItem)
             {
                 // Only toggle shadow meshes; don't re-evaluate regular meshes.
                 bool shadows = ShadowsItem.IsChecked;
@@ -1110,7 +1111,23 @@ namespace ForzaTechStudio.Views
 
                 var parser = new LocatorsXmlParser();
 
-                if (!string.IsNullOrEmpty(xmlRoot.FilePath) && System.IO.File.Exists(xmlRoot.FilePath))
+                if (!string.IsNullOrEmpty(xmlRoot.SourceZipPath) && !string.IsNullOrEmpty(xmlRoot.ZipEntryName))
+                {
+                    var xmlBytes = System.Text.Encoding.UTF8.GetBytes(parser.Serialize(xmlRoot.LocatorsData));
+                    await System.Threading.Tasks.Task.Run(() =>
+                        ZipArchiveHelper.ReplaceEntry(xmlRoot.SourceZipPath, xmlRoot.ZipEntryName, xmlBytes));
+                    xmlRoot.IsDirty = false;
+
+                    var dlg = new ContentDialog
+                    {
+                        Title = "Success",
+                        Content = $"Saved {xmlRoot.Name} into {System.IO.Path.GetFileName(xmlRoot.SourceZipPath)}",
+                        CloseButtonText = "OK",
+                        XamlRoot = this.XamlRoot
+                    };
+                    await dlg.ShowAsync();
+                }
+                else if (!string.IsNullOrEmpty(xmlRoot.FilePath) && System.IO.File.Exists(xmlRoot.FilePath))
                 {
                     await System.Threading.Tasks.Task.Run(() => parser.Save(xmlRoot.LocatorsData));
                     xmlRoot.IsDirty = false;

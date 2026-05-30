@@ -1,3 +1,5 @@
+using CommunityToolkit.Mvvm.Input;
+using ForzaTools.Bundles.Blobs;
 using ForzaTechStudio.ViewModels.ThreeDViewer;
 using HelixToolkit.SharpDX.Core;
 using HelixToolkit.WinUI;
@@ -10,6 +12,7 @@ using System.Collections.Specialized;
 using System.ComponentModel;
 using System.Linq;
 using System.Numerics;
+using System.Windows.Input;
 using SDX = SharpDX;
 using Color = Windows.UI.Color;
 
@@ -43,6 +46,7 @@ namespace ForzaTechStudio.Views
     public sealed partial class ViewportPage : Page
     {
         public ViewportViewModel ViewModel { get; } = new();
+        public ICommand RemoveMeshMaterialParameterCommand { get; }
 
         private bool _isUpdatingUi = false;
         private Viewport3DX? _viewport;
@@ -76,7 +80,6 @@ namespace ForzaTechStudio.Views
         private double _savedFarPlane = 50000;
         private double _savedNearPlane = 0.1;
         
-        private IViewerNode? _uiNodeContext;
         private Dictionary<IViewerNode, TreeViewNode> _treeNodeMap = new();
 
         public bool IsLoading
@@ -95,6 +98,7 @@ namespace ForzaTechStudio.Views
 
         public ViewportPage()
         {
+            RemoveMeshMaterialParameterCommand = new RelayCommand<ShaderParameter>(RemoveMeshMaterialParameter);
             this.InitializeComponent();
             this.NavigationCacheMode = NavigationCacheMode.Required;
             this.Loaded += Page_Loaded;
@@ -332,6 +336,10 @@ namespace ForzaTechStudio.Views
                     var morphDmgEntry = _damageRenderMap.FirstOrDefault(x => x.Value == modelHit);
                     if (morphDmgEntry.Key != null) node = morphDmgEntry.Key;
                 }
+                if (node == null && _carbinHitMap.TryGetValue(modelHit, out var carbinNode))
+                {
+                    node = carbinNode;
+                }
                 if (node != null)
                 {
                     // Handle locator selection ? never multi-select
@@ -397,6 +405,15 @@ namespace ForzaTechStudio.Views
                         ViewModel.SelectedNode = damageMeshNode;
                         if (_treeNodeMap.TryGetValue(damageMeshNode, out var dmgTreeNode))
                             FileTree.SelectedItem = dmgTreeNode;
+                        return;
+                    }
+
+                    if (node is CarbinModelNode carbinModelNode)
+                    {
+                        ClearMultiSelection();
+                        ViewModel.SelectedNode = carbinModelNode;
+                        if (_treeNodeMap.TryGetValue(carbinModelNode, out var carbinTreeNode))
+                            FileTree.SelectedItem = carbinTreeNode;
                         return;
                     }
 

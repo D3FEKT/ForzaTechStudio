@@ -372,10 +372,6 @@ namespace ForzaTechStudio.ViewModels
                 m41, m42, m43, m44);
 
             model.TransformMatrix = transformMatrix;
-            model.PositionX = m41;
-            model.PositionY = m42;
-            model.PositionZ = m43;
-            model.Scale = m11;
 
             // LOD Flags
             _lastParsingContext = $"{modelContext} LOD flags";
@@ -440,6 +436,7 @@ namespace ForzaTechStudio.ViewModels
             {
                 _lastParsingContext = $"{modelContext} material indexes";
                 _lastFilePosition = reader.BaseStream.Position;
+                bool useHexValue = UsesFh6MaterialHashEditor(sceneVersion, IsHorizon, modelVersion);
                 uint indexesCount = reader.ReadUInt32();
                 for (int i = 0; i < indexesCount; i++)
                 {
@@ -449,7 +446,7 @@ namespace ForzaTechStudio.ViewModels
                         val = reader.ReadUInt64();
                     else
                         val = (ulong)reader.ReadInt32();
-                    model.MaterialIndexes.Add(new MaterialIndexEntry(key, val));
+                    model.MaterialIndexes.Add(new MaterialIndexEntry(key, val, useHexValue));
                 }
             }
 
