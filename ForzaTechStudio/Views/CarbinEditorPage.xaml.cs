@@ -72,15 +72,15 @@ namespace ForzaTechStudio.Views
             {
                 if (_nonUpgradableSearchBox != null)
                     _nonUpgradableSearchBox.Text = "";
-                if (_nonUpgradableModelsList != null && ViewModel.SelectedNonUpgradablePart != null)
-                    _nonUpgradableModelsList.ItemsSource = ViewModel.SelectedNonUpgradablePart.Models;
+                if (_nonUpgradableModelsList != null)
+                    _nonUpgradableModelsList.ItemsSource = ViewModel.SelectedNonUpgradablePart?.Models;
             }
             else if (e.PropertyName == nameof(CarbinEditorViewModel.SelectedUpgradablePart))
             {
                 if (_upgradableSearchBox != null)
                     _upgradableSearchBox.Text = "";
-                if (_upgradableModelsList != null && ViewModel.SelectedUpgradablePart != null)
-                    _upgradableModelsList.ItemsSource = ViewModel.SelectedUpgradablePart.Models;
+                if (_upgradableModelsList != null)
+                    _upgradableModelsList.ItemsSource = ViewModel.SelectedUpgradablePart?.Models;
             }
         }
 

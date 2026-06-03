@@ -748,8 +748,15 @@ namespace ForzaTechStudio.ViewModels
 
         // Shared Helpers
 
-        private static CarbinModelEntry DeepCloneModelEntry(CarbinModelEntry src)
+        private static CarbinModelEntry DeepCloneModelEntry(CarbinModelEntry src, bool preserveIdentityValues = false)
         {
+            int selectedMaterialIndex = src.SelectedMaterialIndex != null
+                ? src.MaterialIndexes.IndexOf(src.SelectedMaterialIndex)
+                : -1;
+            int selectedUpgradeIdWrapperIndex = src.SelectedUpgradeIdWrapper != null
+                ? src.UpgradeIdWrappers.IndexOf(src.SelectedUpgradeIdWrapper)
+                : -1;
+
             var dst = new CarbinModelEntry
             {
                 ModelFileName = src.ModelFileName,
@@ -783,8 +790,8 @@ namespace ForzaTechStudio.ViewModels
                 ReceivesRubber = src.ReceivesRubber,
                 ReceivesRain = src.ReceivesRain,
                 AssemblyName = src.AssemblyName,
-                GuidV13 = Guid.NewGuid(),
-                DropGuidV14 = Guid.Empty,
+                GuidV13 = preserveIdentityValues ? src.GuidV13 : Guid.NewGuid(),
+                DropGuidV14 = preserveIdentityValues ? src.DropGuidV14 : Guid.Empty,
                 AoMapInfoIdV14 = src.AoMapInfoIdV14,
                 IsInterior = src.IsInterior,
                 IsLeftSideWindow = src.IsLeftSideWindow,
@@ -814,6 +821,9 @@ namespace ForzaTechStudio.ViewModels
             foreach (var mat in src.MaterialIndexes)
                 dst.MaterialIndexes.Add(new MaterialIndexEntry(mat.Key, mat.Value, mat.UseHexValue));
 
+            if (selectedMaterialIndex >= 0 && selectedMaterialIndex < dst.MaterialIndexes.Count)
+                dst.SelectedMaterialIndex = dst.MaterialIndexes[selectedMaterialIndex];
+
             foreach (var ao in src.AoMapInfos)
                 dst.AoMapInfos.Add(new AOMapInfoEntry
                 {
@@ -834,6 +844,9 @@ namespace ForzaTechStudio.ViewModels
 
             foreach (var w in src.UpgradeIdWrappers)
                 dst.UpgradeIdWrappers.Add(new UpgradeIdWrapper(w.Value));
+
+            if (selectedUpgradeIdWrapperIndex >= 0 && selectedUpgradeIdWrapperIndex < dst.UpgradeIdWrappers.Count)
+                dst.SelectedUpgradeIdWrapper = dst.UpgradeIdWrappers[selectedUpgradeIdWrapperIndex];
 
             foreach (var guid in src.DamageGuids)
                 dst.DamageGuids.Add(guid);

@@ -2,6 +2,7 @@ using CommunityToolkit.Mvvm.ComponentModel;
 using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
+using System.Linq;
 
 namespace ForzaTechStudio.ViewModels
 {
@@ -43,6 +44,11 @@ namespace ForzaTechStudio.ViewModels
         // Part snapshots 
         public List<CarbinPartEntry> NonUpgradablePartsSnapshot = new();
         public List<CarbinPartEntry> UpgradablePartsSnapshot = new();
+        public int SelectedNonUpgradablePartIndex = -1;
+        public int SelectedNonUpgradableModelIndex = -1;
+        public int SelectedUpgradablePartIndex = -1;
+        public int SelectedUpgradableModelIndex = -1;
+        public int SelectedUpgradeIndex = -1;
 
         // Per-tab undo/redo history
         public Stack<(Action Undo, Action Redo)> UndoHistory = new();
@@ -109,10 +115,79 @@ namespace ForzaTechStudio.ViewModels
             tab.LodFlagLOD3 = LodFlagLOD3;
             tab.LodFlagLOD4 = LodFlagLOD4;
             tab.LodFlagLOD5 = LodFlagLOD5;
-            tab.NonUpgradablePartsSnapshot = new List<CarbinPartEntry>(NonUpgradableParts);
-            tab.UpgradablePartsSnapshot = new List<CarbinPartEntry>(UpgradableParts);
+            tab.NonUpgradablePartsSnapshot = NonUpgradableParts.Select(DeepClonePartEntry).ToList();
+            tab.UpgradablePartsSnapshot = UpgradableParts.Select(DeepClonePartEntry).ToList();
+            tab.SelectedNonUpgradablePartIndex = SelectedNonUpgradablePart != null
+                ? NonUpgradableParts.IndexOf(SelectedNonUpgradablePart)
+                : -1;
+            tab.SelectedNonUpgradableModelIndex = SelectedNonUpgradablePart != null && SelectedNonUpgradableModel != null
+                ? SelectedNonUpgradablePart.Models.IndexOf(SelectedNonUpgradableModel)
+                : -1;
+            tab.SelectedUpgradablePartIndex = SelectedUpgradablePart != null
+                ? UpgradableParts.IndexOf(SelectedUpgradablePart)
+                : -1;
+            tab.SelectedUpgradableModelIndex = SelectedUpgradablePart != null && SelectedUpgradableModel != null
+                ? SelectedUpgradablePart.Models.IndexOf(SelectedUpgradableModel)
+                : -1;
+            tab.SelectedUpgradeIndex = SelectedUpgradablePart != null && SelectedUpgrade != null
+                ? SelectedUpgradablePart.Upgrades.IndexOf(SelectedUpgrade)
+                : -1;
             tab.UndoHistory = _undoStack;
             tab.RedoHistory = _redoStack;
+        }
+
+        private static T? GetItemAtOrDefault<T>(IList<T> items, int index) where T : class
+        {
+            return index >= 0 && index < items.Count ? items[index] : null;
+        }
+
+        private static UpgradeEntry DeepCloneUpgradeEntry(UpgradeEntry src)
+        {
+            return new UpgradeEntry
+            {
+                Version = src.Version,
+                Level = src.Level,
+                IsStock = src.IsStock,
+                Id = src.Id,
+                CarBodyId = src.CarBodyId,
+                ParentIsStock = src.ParentIsStock,
+                BoundsMinX = src.BoundsMinX,
+                BoundsMinY = src.BoundsMinY,
+                BoundsMinZ = src.BoundsMinZ,
+                BoundsMinW = src.BoundsMinW,
+                BoundsMaxX = src.BoundsMaxX,
+                BoundsMaxY = src.BoundsMaxY,
+                BoundsMaxZ = src.BoundsMaxZ,
+                BoundsMaxW = src.BoundsMaxW,
+            };
+        }
+
+        private static CarbinPartEntry DeepClonePartEntry(CarbinPartEntry src)
+        {
+            var dst = new CarbinPartEntry(name => { })
+            {
+                PartTypeName = src.PartTypeName,
+                PartType = src.PartType,
+                BoundsMinX = src.BoundsMinX,
+                BoundsMinY = src.BoundsMinY,
+                BoundsMinZ = src.BoundsMinZ,
+                BoundsMinW = src.BoundsMinW,
+                BoundsMaxX = src.BoundsMaxX,
+                BoundsMaxY = src.BoundsMaxY,
+                BoundsMaxZ = src.BoundsMaxZ,
+                BoundsMaxW = src.BoundsMaxW,
+                OriginalPartVersion = src.OriginalPartVersion,
+                OriginalUpgradablePartVersion = src.OriginalUpgradablePartVersion,
+                OriginalPartTypeUint = src.OriginalPartTypeUint,
+            };
+
+            foreach (var model in src.Models)
+                dst.Models.Add(DeepCloneModelEntry(model, preserveIdentityValues: true));
+
+            foreach (var upgrade in src.Upgrades)
+                dst.Upgrades.Add(DeepCloneUpgradeEntry(upgrade));
+
+            return dst;
         }
 
         // Restore ViewModel state from a tab snapshot (does NOT call ClearAll to avoid wiping part data).
@@ -154,6 +229,24 @@ namespace ForzaTechStudio.ViewModels
             LodFlagLOD3 = tab.LodFlagLOD3;
             LodFlagLOD4 = tab.LodFlagLOD4;
             LodFlagLOD5 = tab.LodFlagLOD5;
+
+            SelectedNonUpgradablePart = GetItemAtOrDefault(NonUpgradableParts, tab.SelectedNonUpgradablePartIndex)
+                ?? NonUpgradableParts.FirstOrDefault();
+            if (SelectedNonUpgradablePart != null)
+            {
+                SelectedNonUpgradableModel = GetItemAtOrDefault(SelectedNonUpgradablePart.Models, tab.SelectedNonUpgradableModelIndex)
+                    ?? SelectedNonUpgradablePart.Models.FirstOrDefault();
+            }
+
+            SelectedUpgradablePart = GetItemAtOrDefault(UpgradableParts, tab.SelectedUpgradablePartIndex)
+                ?? UpgradableParts.FirstOrDefault();
+            if (SelectedUpgradablePart != null)
+            {
+                SelectedUpgradableModel = GetItemAtOrDefault(SelectedUpgradablePart.Models, tab.SelectedUpgradableModelIndex)
+                    ?? SelectedUpgradablePart.Models.FirstOrDefault();
+                SelectedUpgrade = GetItemAtOrDefault(SelectedUpgradablePart.Upgrades, tab.SelectedUpgradeIndex)
+                    ?? SelectedUpgradablePart.Upgrades.FirstOrDefault();
+            }
 
             // Restore per-tab undo/redo stacks
             _undoStack = tab.UndoHistory;

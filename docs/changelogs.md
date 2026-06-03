@@ -14,7 +14,7 @@
 - Multi file save support
 - Improved loading speed
 - Added export options and general export improvements
-- Changed to pyrimids instead of cones on points in the viewport for cleaner look
+- Changed to pyramids instead of cones on points in the viewport for a cleaner look (Looking at you varsinity)
 
 ## Modelbin Creator
 - Initial support, bugs still expected
@@ -23,20 +23,16 @@
 - Supports all LOD's and shadows
 - Single modelbin building with multiple meshes and multi modelbin output
 
-
 ## Carbin editor
 - Fixed small bug with saving back to file changing parts not touched
 - Support for FH6 material index hash ID's
 - General UI improvements
+- Fixed bug with more than 1 tab opened not displaying correctly
 
-## Manufacturer colors
+## Manufacturer colours
 - Added support for FH6 version of the format
 
 ## BXML editor
 - General UI improvements
 - FH6 manifest support
 - Fixed an issue with converting from xml to bxml
-
-
-
-
