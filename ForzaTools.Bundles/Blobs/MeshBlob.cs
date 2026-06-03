@@ -252,8 +252,9 @@ public class MeshBlob : BundleBlob
         if (IsAtLeastVersion(1, 6)) { bs.WriteSingle(ACMR); bs.WriteUInt32(ReferencedVertexCount); }
         if (IsAtLeastVersion(1, 11))
         {
-            bs.WriteUInt32((uint)ReferencedVertexIndices.Length);
-            foreach (var v in ReferencedVertexIndices) bs.WriteUInt32(v);
+            uint[] referencedVertexIndices = ReferencedVertexIndices ?? Array.Empty<uint>();
+            bs.WriteUInt32((uint)referencedVertexIndices.Length);
+            foreach (var v in referencedVertexIndices) bs.WriteUInt32(v);
         }
 
         bs.WriteInt32(VertexLayoutIndex);
@@ -327,10 +328,9 @@ public class MeshBlob : BundleBlob
 
         if (IsAtLeastVersion(1, 11))
         {
-            var referencedVertexIndices = GetSerializedReferencedVertexIndices();
-            bs.WriteUInt32((uint)referencedVertexIndices.Length);
-            foreach (var index in referencedVertexIndices)
-                bs.WriteUInt32(index);
+
+            bs.WriteUInt32(0); //temporary placeholder for ReferencedVertexIndices count; will be patched later if needed
+
         }
 
         // 13. Vertex Layout Index
@@ -399,14 +399,6 @@ public class MeshBlob : BundleBlob
             indices[i] = (uint)i;
 
         return indices;
-    }
-
-    private uint[] GetSerializedReferencedVertexIndices()
-    {
-        if (ReferencedVertexIndices.Length != 0)
-            return ReferencedVertexIndices;
-
-        return BuildIdentityReferencedVertexIndices();
     }
 
     private List<short[]> GetSerializedMaterialGroups()

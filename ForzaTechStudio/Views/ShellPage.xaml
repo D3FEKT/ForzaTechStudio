@@ -62,11 +62,11 @@
                             </NavigationViewItem.Icon>
                         </NavigationViewItem>
                         <!--modelbin creator-->
-                        <!--<NavigationViewItem Tag="CreateModelBinPage" Content="Modelbin Creator">
+                        <NavigationViewItem Tag="CreateModelBinPage" Content="Modelbin Creator">
                             <NavigationViewItem.Icon>
                                 <FontIcon Glyph="&#xE710;" />
                             </NavigationViewItem.Icon>
-                        </NavigationViewItem>-->
+                        </NavigationViewItem>
                         <NavigationViewItem Tag="ConversionTool" Content="Conversion Tool">
                             <NavigationViewItem.Icon>
                                 <FontIcon Glyph="&#xE8AB;" />

@@ -4,6 +4,7 @@ using ForzaTechStudio.ViewModels.ThreeDViewer;
 using ForzaTools.Bundles;
 using ForzaTools.Bundles.Blobs;
 using ForzaTools.Bundles.Metadata;
+using HelixToolkit.WinUI;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using System;
@@ -162,6 +163,7 @@ namespace ForzaTechStudio.Views
             }
 
             AssignMaterialBtn.Visibility = Visibility.Collapsed;
+            RefreshSelectedMeshMaterialInScene(material);
         }
 
         private void MeshMatId_ValueChanged(NumberBox sender, NumberBoxValueChangedEventArgs args)
@@ -176,6 +178,8 @@ namespace ForzaTechStudio.Views
                 idMeta.Id = newId;
             else
                 material.Blob.Id = newId;
+
+            RefreshSelectedMeshMaterialInScene(material, materialId: null);
         }
 
         private async void AddMaterialParam_Click(object sender, RoutedEventArgs e)
@@ -255,6 +259,7 @@ namespace ForzaTechStudio.Views
             paramBlob.Parameters.Add(newParam);
             material.Parameters.Add(newParam);
             MeshMaterialParamEditor.ParametersSource = material.Parameters;
+            RefreshSelectedMeshMaterialInScene(material);
         }
 
         private void RemoveMeshMaterialParameter(ShaderParameter? parameter)
@@ -267,6 +272,67 @@ namespace ForzaTechStudio.Views
 
             paramBlob.Parameters.Remove(parameter);
             material.Parameters.Remove(parameter);
+            RefreshSelectedMeshMaterialInScene(material);
+        }
+
+        private void MeshMaterialParamEditor_ParameterValueChanged(object? sender, EventArgs e)
+        {
+            if (_isUpdatingMaterialUi) return;
+            RefreshSelectedMeshMaterialInScene(ViewModel.SelectedMeshMaterial);
+        }
+
+        private void RefreshSelectedMeshMaterialInScene(ViewportMaterialItem? material, short? materialId = null)
+        {
+            if (material?.Blob == null) return;
+
+            var modelBin = ModelBinSelector.SelectedItem as ModelBinNode
+                ?? _activeMaterialMeshNode?.ParentModelBin;
+            if (modelBin?.Bundle == null) return;
+
+            InvalidateViewportMaterialCache(modelBin);
+            RefreshRenderedMaterialsForModelBin(modelBin, materialId ?? (short)material.MaterialId);
+        }
+
+        private void InvalidateViewportMaterialCache(ModelBinNode modelBin)
+        {
+            foreach (var key in _viewportAssignedMaterialCache.Keys.Where(key => ReferenceEquals(key.ModelBin, modelBin)).ToList())
+                _viewportAssignedMaterialCache.TryRemove(key, out _);
+        }
+
+        private void RefreshRenderedMaterialsForModelBin(ModelBinNode modelBin, short? materialId)
+        {
+            foreach (var mesh in modelBin.Children.OfType<MeshNode>())
+            {
+                if (mesh.GeometryData == null)
+                    continue;
+                if (materialId.HasValue && GetAssignedMaterialId(mesh.GeometryData) != materialId.Value)
+                    continue;
+
+                if (_renderMap.TryGetValue(mesh, out var model) && model is MeshGeometryModel3D meshModel)
+                    ApplyViewportMaterial(meshModel, mesh.GeometryData, modelBin);
+            }
+
+            foreach (var damageMesh in modelBin.Children.OfType<DamageMeshNode>())
+            {
+                if (damageMesh.GeometryData == null)
+                    continue;
+                if (materialId.HasValue && GetAssignedMaterialId(damageMesh.GeometryData) != materialId.Value)
+                    continue;
+
+                if (_damageRenderMap.TryGetValue(damageMesh, out var model) && model is MeshGeometryModel3D meshModel)
+                    ApplyViewportMaterial(meshModel, damageMesh.GeometryData, modelBin);
+            }
+
+            foreach (var kvp in _carbinMaterialContextMap)
+            {
+                if (!ReferenceEquals(kvp.Value.ModelBin, modelBin))
+                    continue;
+                if (materialId.HasValue && GetAssignedMaterialId(kvp.Value.Geometry) != materialId.Value)
+                    continue;
+
+                if (kvp.Key is MeshGeometryModel3D meshModel)
+                    ApplyViewportMaterial(meshModel, kvp.Value.Geometry, kvp.Value.ModelBin);
+            }
         }
 
         private async void SaveMaterialJson_Click(object sender, RoutedEventArgs e)
@@ -344,6 +410,7 @@ namespace ForzaTechStudio.Views
                 ApplyMaterialBlobData(material.Blob, blobData, selectedName);
                 material.Refresh();
                 PopulateMeshMaterialDetails(material);
+                RefreshSelectedMeshMaterialInScene(material, materialId: null);
                 App.ShowInfoDialog($"Material replaced with '{selectedName}' successfully!\n\nRemember to save the modelbin.", "Replace Complete");
             }
             catch (Exception ex)
@@ -441,6 +508,7 @@ namespace ForzaTechStudio.Views
                     ApplyMaterialBlobData(material.Blob, blobData, selectedItem.Name);
                     material.Refresh();
                     PopulateMeshMaterialDetails(material);
+                    RefreshSelectedMeshMaterialInScene(material, materialId: null);
                     App.ShowInfoDialog($"Material replaced with '{selectedItem.Name}' from library.\n\nRemember to save the modelbin.", "Replace Complete");
                 }
             }

@@ -110,7 +110,7 @@ namespace ForzaTechStudio.Views
             // Granny files are loaded on the UI thread (no native DLL threading issues)
             foreach (var grannyPath in grannyPaths)
             {
-                LoadingStatus = $"Loading {Path.GetFileName(grannyPath)}...";
+                LoadingDetail = Path.GetFileName(grannyPath);
                 var node = LoadGrannyFile(grannyPath);
                 if (node != null)
                     loadedNodes.Add((node, grannyPath));
@@ -174,7 +174,7 @@ namespace ForzaTechStudio.Views
             // Load discovered companion files
             foreach (var compPath in companionPaths)
             {
-                LoadingStatus = $"Auto-loading {Path.GetFileName(compPath)}...";
+                LoadingDetail = Path.GetFileName(compPath);
                 var compNode = LoadGrannyFile(compPath);
                 if (compNode != null)
                     loadedNodes.Add((compNode, compPath));
@@ -195,6 +195,7 @@ namespace ForzaTechStudio.Views
                             ViewerNode? rootNode = null;
                             string extension = Path.GetExtension(filePath).ToLowerInvariant();
                             string fileName = Path.GetFileName(filePath);
+                            DispatcherQueue.TryEnqueue(() => LoadingDetail = fileName);
 
                             if (extension == ".zip")
                             {
@@ -273,16 +274,27 @@ namespace ForzaTechStudio.Views
 
             RefreshViewportTextureLookupFromLoadedRoots();
 
-            // Now that the tree is built with PropertyChanged handlers attached,
-            // apply filters to set IsChecked which triggers rendering.
+            // Bulk-load mode: defer geometry building so we can batch it on background threads.
+            _isBulkLoading = true;
             foreach (var (node, _) in loadedNodes)
             {
                 ApplyLODFilterRecursive(node, l0, l1, l2, l3, l4, l5, shadows);
                 ApplyViewTypeFilterRecursive(node, showLights, showLocators, showPhysics);
             }
+            _isBulkLoading = false;
 
+            // Build all pending mesh geometries in parallel, then add them to the scene.
+            LoadingStatus = "Building scene...";
+            LoadingDetail = "";
+            await BatchRenderPendingMeshesAsync();
+
+            SyncViewDropdownItems();
             RefreshAllCarbinInstances();
             RefreshManufacturerColorsFromLoadedRoots();
+
+            // Geometry is now rendered with color-only materials for instant display.
+            // Kick off async texture loading so textures appear within a few seconds.
+            _ = StartViewportTextureRefreshAsync();
 
             if (wasEmpty && ViewModel.Roots.Any())
                 AutoFitCamera();
@@ -291,6 +303,7 @@ namespace ForzaTechStudio.Views
 
             IsLoading = false;
             LoadingStatus = "";
+            LoadingDetail = "";
         }
 
         private bool IsLightsBinFile(byte[] data)
@@ -377,7 +390,7 @@ namespace ForzaTechStudio.Views
 
             foreach (var grannyFile in grannyFiles)
             {
-                LoadingStatus = $"Loading {grannyFile.Name}...";
+                LoadingDetail = grannyFile.Name;
                 var node = LoadGrannyFile(grannyFile.Path);
                 if (node != null)
                     loadedNodes.Add((node, grannyFile.Name));
@@ -397,6 +410,7 @@ namespace ForzaTechStudio.Views
                         {
                             ViewerNode? rootNode = null;
                             string extension = Path.GetExtension(file.Path).ToLowerInvariant();
+                            DispatcherQueue.TryEnqueue(() => LoadingDetail = file.Name);
 
                             if (extension == ".zip")
                             {
@@ -475,16 +489,27 @@ namespace ForzaTechStudio.Views
 
             RefreshViewportTextureLookupFromLoadedRoots();
 
-            // Now that the tree is built with PropertyChanged handlers attached,
-            // apply filters to set IsChecked which triggers rendering.
+            // Bulk-load mode: defer geometry building so we can batch it on background threads.
+            _isBulkLoading = true;
             foreach (var (node, _) in loadedNodes)
             {
                 ApplyLODFilterRecursive(node, l0, l1, l2, l3, l4, l5, shadows);
                 ApplyViewTypeFilterRecursive(node, showLights, showLocators, showPhysics);
             }
+            _isBulkLoading = false;
 
+            // Build all pending mesh geometries in parallel, then add them to the scene.
+            LoadingStatus = "Building scene...";
+            LoadingDetail = "";
+            await BatchRenderPendingMeshesAsync();
+
+            SyncViewDropdownItems();
             RefreshAllCarbinInstances();
             RefreshManufacturerColorsFromLoadedRoots();
+
+            // Geometry is now rendered with color-only materials for instant display.
+            // Kick off async texture loading so textures appear within a few seconds.
+            _ = StartViewportTextureRefreshAsync();
 
             if (wasEmpty && ViewModel.Roots.Any())
                 AutoFitCamera();
@@ -493,6 +518,7 @@ namespace ForzaTechStudio.Views
 
             IsLoading = false;
             LoadingStatus = "";
+            LoadingDetail = "";
         }
         
         private LightsBinNode LoadLightsBin(string name, byte[] data)
@@ -573,6 +599,7 @@ namespace ForzaTechStudio.Views
                          {
                              string fileName = Path.GetFileName(entry.Name);
                              ViewerNode? node = null;
+                             DispatcherQueue.TryEnqueue(() => LoadingDetail = fileName);
 
                              if (fileName.EndsWith(".modelbin", StringComparison.OrdinalIgnoreCase))
                              {
@@ -706,8 +733,9 @@ namespace ForzaTechStudio.Views
                          
                          node.Parent = currentParent;
                          currentParent.Children.Add(node);
-                         currentParent.UpdateCheckStateFromChildren();
                      }
+
+                     zipNode.UpdateCheckStateFromChildren();
                  }
                  return zipNode;
              }
@@ -816,7 +844,13 @@ namespace ForzaTechStudio.Views
                     bundle.Load(rms);
                 }
                 
-                var binNode = new ModelBinNode { Name = name, Bundle = bundle, IsChecked = true };
+                var binNode = new ModelBinNode
+                {
+                    Name = name,
+                    FileName = Path.GetFileName(name),
+                    Bundle = bundle,
+                    IsChecked = !ContainsProxyToken(name)
+                };
 
                 var importer = new ModelImporter();
                 var result = importer.ExtractModels(bundle);

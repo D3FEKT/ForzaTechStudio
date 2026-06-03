@@ -1,6 +1,8 @@
 ﻿using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml;
 using ForzaTechStudio.ViewModels;
+using System.ComponentModel;
+using Microsoft.UI.Xaml.Navigation;
 
 namespace ForzaTechStudio.Views
 {
@@ -12,20 +14,27 @@ namespace ForzaTechStudio.Views
         {
             this.InitializeComponent();
             this.DataContext = App.ModelBinCreatorViewModel;
-            this.NavigationCacheMode = Microsoft.UI.Xaml.Navigation.NavigationCacheMode.Required;
-            this.Loaded += ModelBinCreatorPage_Loaded;
+            this.NavigationCacheMode = NavigationCacheMode.Required;
+            ViewModel.PropertyChanged += ViewModel_PropertyChanged;
         }
 
-        private async void ModelBinCreatorPage_Loaded(object sender, RoutedEventArgs e)
+        protected override async void OnNavigatedTo(NavigationEventArgs e)
         {
+            base.OnNavigatedTo(e);
+            SetStep(ViewModel.CurrentStep);
+
+            if (e.NavigationMode == NavigationMode.Back) return;
+
+            ViewModel.BeginZipSelectionRestore();
             await ViewModel.InitializeAsync();
+            DispatcherQueue.TryEnqueue(Microsoft.UI.Dispatching.DispatcherQueuePriority.Low, () => ViewModel.EndZipSelectionRestore());
         }
 
-        private void Step_Click(object sender, RoutedEventArgs e)
+        private void ViewModel_PropertyChanged(object sender, PropertyChangedEventArgs e)
         {
-            if (sender is Button btn && btn.Tag is string tag)
+            if (e.PropertyName == nameof(ViewModel.CurrentStep))
             {
-                SetStep(tag);
+                SetStep(ViewModel.CurrentStep);
             }
         }
 
@@ -60,16 +69,6 @@ namespace ForzaTechStudio.Views
                     Step3Btn.Style = activeStyle;
                 }
             }
-        }
-
-        private void NextToMaterials_Click(object sender, RoutedEventArgs e)
-        {
-            SetStep("Materials");
-        }
-
-        private void NextToConfig_Click(object sender, RoutedEventArgs e)
-        {
-            SetStep("Config");
         }
     }
 }

@@ -1,5 +1,6 @@
 ﻿using ForzaTools.Bundles;
 using ForzaTools.Bundles.Blobs;
+using ForzaTechStudio.Models;
 using System;
 using System.Collections.Generic;
 using System.Globalization;
@@ -22,8 +23,14 @@ namespace ForzaTechStudio.Services
         // Builds the text content for a .obj file.
         public static string BuildObjContent(
             IEnumerable<ModelBinExportData> models,
-            string mtlFileName)
+            string mtlFileName,
+            ExportOptions? options = null)
         {
+            var opt = options ?? new ExportOptions();
+            var axisScale = opt.GetAxisScaleMatrix();
+            bool hasAxisScale = opt.HasAxisScale;
+            bool includeUVs = opt.IncludeUVs;
+            bool includeColors = opt.IncludeVertexColors;
             var ci = CultureInfo.InvariantCulture;
             var sb = new StringBuilder();
 
@@ -63,7 +70,8 @@ namespace ForzaTechStudio.Services
                     {
                         int vertCount   = data.RawPositions.Length;
                         bool hasNormals = data.Normals != null && data.Normals.Length == vertCount;
-                        bool hasUVs     = data.UVs     != null && data.UVs.Length     == vertCount;
+                        bool hasUVs     = includeUVs && data.UVs != null && data.UVs.Length == vertCount;
+                        bool hasColors  = includeColors && data.Colors != null && data.Colors.Length == vertCount;
                         bool hasIdx     = data.Indices  != null && data.Indices.Length > 0;
 
                         string safeMat = ExtractMaterialBaseName(data.MaterialName ?? "default");
@@ -80,16 +88,25 @@ namespace ForzaTechStudio.Services
                         bool hasRot   = rotMatrix != Matrix4x4.Identity;
                         bool hasBone  = data.BoneTransform != Matrix4x4.Identity;
 
-                        foreach (var raw in data.RawPositions)
+                        for (int vi = 0; vi < data.RawPositions.Length; vi++)
                         {
+                            var raw = data.RawPositions[vi];
                             var scaled = new Vector3(raw.X * scale.X, raw.Y * scale.Y, raw.Z * scale.Z);
                             if (hasRot)
                                 scaled = Vector3.Transform(scaled, rotMatrix);
 
                             var v = new Vector3(scaled.X + translate.X, scaled.Y + translate.Y, scaled.Z + translate.Z);
                             var world = hasBone ? Vector3.Transform(v, data.BoneTransform) : v;
+                            if (hasAxisScale)
+                                world = Vector3.Transform(world, axisScale);
 
-                            sb.AppendLine($"v {world.X.ToString("F6", ci)} {world.Y.ToString("F6", ci)} {world.Z.ToString("F6", ci)}");
+                            string line = $"v {world.X.ToString("F6", ci)} {world.Y.ToString("F6", ci)} {world.Z.ToString("F6", ci)}";
+                            if (hasColors)
+                            {
+                                var c = data.Colors[vi];
+                                line += $" {c.X.ToString("F6", ci)} {c.Y.ToString("F6", ci)} {c.Z.ToString("F6", ci)}";
+                            }
+                            sb.AppendLine(line);
                         }
 
                         // Texture coordinates
@@ -107,6 +124,8 @@ namespace ForzaTechStudio.Services
                                     rn = Vector3.Normalize(Vector3.TransformNormal(rn, rotMatrix));
                                 if (hasBone)
                                     rn = Vector3.Normalize(Vector3.TransformNormal(rn, data.BoneTransform));
+                                if (hasAxisScale)
+                                    rn = Vector3.Normalize(Vector3.TransformNormal(rn, axisScale));
                                 sb.AppendLine($"vn {rn.X.ToString("F6", ci)} {rn.Y.ToString("F6", ci)} {rn.Z.ToString("F6", ci)}");
                             }
                         }
@@ -178,7 +197,7 @@ namespace ForzaTechStudio.Services
                 sb.AppendLine("Ka 0.000000 0.000000 0.000000");
                 sb.AppendLine($"Kd {color.X.ToString("F6", ci)} {color.Y.ToString("F6", ci)} {color.Z.ToString("F6", ci)}");
                 if (texturePaths != null && texturePaths.TryGetValue(name, out var texPath))
-                    sb.AppendLine($"map_Kd {texPath}");
+                    sb.AppendLine($"map_Kd {texPath.Replace('\\', '/')}");
                 sb.AppendLine("Ks 0.000000 0.000000 0.000000");
                 sb.AppendLine("illum 2");
                 sb.AppendLine();

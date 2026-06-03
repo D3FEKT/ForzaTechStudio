@@ -58,8 +58,9 @@ namespace ForzaTechStudio.Views
         private AmbientLight3D? _ambientLight;
         private DirectionalLight3D[]? _fullbrightLights;
         private MeshGeometryModel3D? _highlightModel;
+        private LineGeometryModel3D? _lightHighlightModel;
         private Dictionary<IViewerNode, GeometryModel3D> _renderMap = new();
-        private Dictionary<LightGroupNode, MeshGeometryModel3D> _lightDamageRenderMap = new();
+        private Dictionary<LightGroupNode, GeometryModel3D> _lightDamageRenderMap = new();
         private List<MeshNode> _currentHighlightTargets = new List<MeshNode>();
 
         // Multi-selection state (meshes)
@@ -95,6 +96,13 @@ namespace ForzaTechStudio.Views
             set => SetValue(LoadingStatusProperty, value);
         }
         public static readonly DependencyProperty LoadingStatusProperty = DependencyProperty.Register("LoadingStatus", typeof(string), typeof(ViewportPage), new PropertyMetadata(""));
+
+        public string LoadingDetail
+        {
+            get => (string)GetValue(LoadingDetailProperty);
+            set => SetValue(LoadingDetailProperty, value);
+        }
+        public static readonly DependencyProperty LoadingDetailProperty = DependencyProperty.Register("LoadingDetail", typeof(string), typeof(ViewportPage), new PropertyMetadata(""));
 
         public ViewportPage()
         {
@@ -179,6 +187,7 @@ namespace ForzaTechStudio.Views
 
             InitializeStatsOverlay();
             UpdateUndoRedoButtons();
+            _ = RefreshViewportGameTextureSourcesAsync();
 
             // Create initial tab on first load
             if (ViewModel.Tabs.Count == 0)
@@ -298,6 +307,14 @@ namespace ForzaTechStudio.Views
                 CullMode = SDX.Direct3D11.CullMode.None
             };
             _viewport.Items.Add(_highlightModel);
+
+            _lightHighlightModel = new LineGeometryModel3D
+            {
+                Color = Color.FromArgb(255, 255, 128, 0),
+                Thickness = 3.0,
+                Visibility = Visibility.Collapsed
+            };
+            _viewport.Items.Add(_lightHighlightModel);
 
             DispatcherQueue.TryEnqueue(Microsoft.UI.Dispatching.DispatcherQueuePriority.Normal, () =>
             {

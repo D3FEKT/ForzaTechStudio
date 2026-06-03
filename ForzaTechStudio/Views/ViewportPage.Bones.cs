@@ -106,8 +106,10 @@ namespace ForzaTechStudio.Views
             var meshes = ResolveScopeMeshes(modelBin, meshScope);
             if (meshes.Count == 0) return;
 
-            // Parse all 16 fields; bail if any are invalid
-            if (!TryParseBoneMatrixFields(out Matrix4x4 localMatrix)) return;
+            var currentMatrix = meshes[0].GeometryData?.SourceBone?.Matrix ?? Matrix4x4.Identity;
+
+            // Parse the visible TRS fields; bail if any are invalid.
+            if (!TryParseBoneMatrixFields(currentMatrix, out Matrix4x4 localMatrix)) return;
 
             var skel = modelBin.Bundle.Blobs.OfType<SkeletonBlob>().FirstOrDefault();
 
@@ -277,62 +279,50 @@ namespace ForzaTechStudio.Views
 
         private void PopulateBoneMatrixFields(Matrix4x4 m)
         {
-            BM11.Text = m.M11.ToString("G6");
-            BM12.Text = m.M12.ToString("G6");
-            BM13.Text = m.M13.ToString("G6");
-            BM14.Text = m.M14.ToString("G6");
-
-            BM21.Text = m.M21.ToString("G6");
-            BM22.Text = m.M22.ToString("G6");
-            BM23.Text = m.M23.ToString("G6");
-            BM24.Text = m.M24.ToString("G6");
-
-            BM31.Text = m.M31.ToString("G6");
-            BM32.Text = m.M32.ToString("G6");
-            BM33.Text = m.M33.ToString("G6");
-            BM34.Text = m.M34.ToString("G6");
-
-            BM41.Text = m.M41.ToString("G6");
-            BM42.Text = m.M42.ToString("G6");
-            BM43.Text = m.M43.ToString("G6");
-            BM44.Text = m.M44.ToString("G6");
+            PopulateTransformEditorFields(
+                BonePosX,
+                BonePosY,
+                BonePosZ,
+                BoneRotX,
+                BoneRotY,
+                BoneRotZ,
+                BoneScaleX,
+                BoneScaleY,
+                BoneScaleZ,
+                m);
         }
 
         private void ClearBoneMatrixFields()
         {
-            foreach (var tb in new[] { BM11, BM12, BM13, BM14,
-                                        BM21, BM22, BM23, BM24,
-                                        BM31, BM32, BM33, BM34,
-                                        BM41, BM42, BM43, BM44 })
+            foreach (var tb in new[] { BonePosX, BonePosY, BonePosZ,
+                                       BoneRotX, BoneRotY, BoneRotZ,
+                                       BoneScaleX, BoneScaleY, BoneScaleZ })
             {
                 tb.Text = string.Empty;
             }
         }
 
-        private bool TryParseBoneMatrixFields(out Matrix4x4 matrix)
+        private bool TryParseBoneMatrixFields(Matrix4x4 currentMatrix, out Matrix4x4 matrix)
         {
             matrix = Matrix4x4.Identity;
-            static bool P(string s, out float v) =>
-                float.TryParse(s, System.Globalization.NumberStyles.Float,
-                               System.Globalization.CultureInfo.InvariantCulture, out v);
+            static bool P(TextBox box, out float value) =>
+                float.TryParse(box.Text,
+                               System.Globalization.NumberStyles.Float,
+                               System.Globalization.CultureInfo.InvariantCulture,
+                               out value);
 
-            if (!P(BM11.Text, out float m11) || !P(BM12.Text, out float m12) ||
-                !P(BM13.Text, out float m13) || !P(BM14.Text, out float m14) ||
-                !P(BM21.Text, out float m21) || !P(BM22.Text, out float m22) ||
-                !P(BM23.Text, out float m23) || !P(BM24.Text, out float m24) ||
-                !P(BM31.Text, out float m31) || !P(BM32.Text, out float m32) ||
-                !P(BM33.Text, out float m33) || !P(BM34.Text, out float m34) ||
-                !P(BM41.Text, out float m41) || !P(BM42.Text, out float m42) ||
-                !P(BM43.Text, out float m43) || !P(BM44.Text, out float m44))
+            if (!P(BonePosX, out float posX) || !P(BonePosY, out float posY) || !P(BonePosZ, out float posZ) ||
+                !P(BoneRotX, out float rotX) || !P(BoneRotY, out float rotY) || !P(BoneRotZ, out float rotZ) ||
+                !P(BoneScaleX, out float scaleX) || !P(BoneScaleY, out float scaleY) || !P(BoneScaleZ, out float scaleZ))
             {
                 return false;
             }
 
-            matrix = new Matrix4x4(
-                m11, m12, m13, m14,
-                m21, m22, m23, m24,
-                m31, m32, m33, m34,
-                m41, m42, m43, m44);
+            matrix = ComposeTransformMatrix(
+                new Vector3(posX, posY, posZ),
+                new Vector3(rotX, rotY, rotZ),
+                new Vector3(scaleX, scaleY, scaleZ),
+                currentMatrix);
             return true;
         }
     }

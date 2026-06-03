@@ -45,6 +45,9 @@ namespace ForzaTechStudio.Models
         [JsonPropertyName("appVersion")]
         public string AppVersion { get; set; } = "";
 
+        [JsonPropertyName("defaultGameId")]
+        public string DefaultGameId { get; set; } = "";
+
         public SettingsConfig()
         {
             // Initialize with empty paths for all supported games

@@ -10,6 +10,7 @@ using Microsoft.UI.Xaml.Controls;
 using System;
 using System.Buffers.Binary;
 using System.Collections.Generic;
+using System.Globalization;
 using System.IO;
 using System.Linq;
 using System.Numerics;
@@ -1035,7 +1036,7 @@ namespace ForzaTechStudio.Views
              // Check if it's a LightsBinNode
              if (ModelBinSelector.SelectedItem is LightsBinNode lightsBin)
              {
-                 await SaveLightsBin(lightsBin);
+                 await SaveSelectedFileNodesAsync(new IViewerNode[] { lightsBin }, saveAsFolder: false);
                  return;
              }
              
@@ -1377,6 +1378,20 @@ namespace ForzaTechStudio.Views
             }
         }
 
+        private LightsBinNode? GetActiveLightsBinNode()
+        {
+            if (LightPartSelector.SelectedItem is LightGroupNode selectedGroup && selectedGroup.Parent is LightsBinNode selectedLightsBin)
+                return selectedLightsBin;
+
+            IViewerNode? current = ViewModel.SelectedNode;
+            while (current != null && current is not LightsBinNode)
+            {
+                current = current.Parent;
+            }
+
+            return current as LightsBinNode;
+        }
+
         private async Task ShowError(string msg)
         {
              var dialog = new ContentDialog
@@ -1392,14 +1407,160 @@ namespace ForzaTechStudio.Views
         private void ChangeValue(TextBox box, float delta)
         {
              box.IsEnabled = true;
-             if (float.TryParse(box.Text, out float val))
+             if (float.TryParse(box.Text,
+                                System.Globalization.NumberStyles.Float,
+                                System.Globalization.CultureInfo.InvariantCulture,
+                                out float val))
              {
-                 box.Text = (val + delta).ToString("F3");
+                 box.Text = (val + delta).ToString("F3", System.Globalization.CultureInfo.InvariantCulture);
              }
              else
              {
-                 box.Text = (delta > 0 ? 1.0f : 0.0f).ToString("F3");
+                 box.Text = (delta > 0 ? 1.0f : 0.0f).ToString("F3", System.Globalization.CultureInfo.InvariantCulture);
              }
+        }
+
+        private static void PopulateTransformEditorFields(
+            TextBox posX,
+            TextBox posY,
+            TextBox posZ,
+            TextBox rotX,
+            TextBox rotY,
+            TextBox rotZ,
+            TextBox scaleX,
+            TextBox scaleY,
+            TextBox scaleZ,
+            Matrix4x4 matrix)
+        {
+            DecomposeTransformMatrix(matrix, out var position, out var rotationDegrees, out var scale);
+
+            PopulateVector3Fields(posX, posY, posZ, position);
+            PopulateVector3Fields(rotX, rotY, rotZ, rotationDegrees);
+            PopulateVector3Fields(scaleX, scaleY, scaleZ, scale);
+        }
+
+        private static void DecomposeTransformMatrix(
+            Matrix4x4 matrix,
+            out Vector3 position,
+            out Vector3 rotationDegrees,
+            out Vector3 scale)
+        {
+            position = matrix.Translation;
+            rotationDegrees = Vector3.Zero;
+            scale = Vector3.One;
+
+            if (!Matrix4x4.Decompose(matrix, out var decomposedScale, out var rotation, out var decomposedPosition))
+                return;
+
+            position = decomposedPosition;
+            rotationDegrees = QuaternionToEulerDegrees(rotation);
+            scale = decomposedScale;
+        }
+
+        private static Matrix4x4 ComposeTransformMatrix(
+            Vector3 position,
+            Vector3 rotationDegrees,
+            Vector3 scale,
+            Matrix4x4 currentMatrix)
+        {
+            var rotation = Matrix4x4.CreateFromQuaternion(EulerDegreesToQuaternion(rotationDegrees));
+            var matrix = Matrix4x4.CreateScale(scale) * rotation * Matrix4x4.CreateTranslation(position);
+
+            matrix.M14 = currentMatrix.M14;
+            matrix.M24 = currentMatrix.M24;
+            matrix.M34 = currentMatrix.M34;
+            matrix.M44 = currentMatrix.M44;
+            return matrix;
+        }
+
+        private static Vector3 ReadVector3Fields(
+            TextBox xBox,
+            TextBox yBox,
+            TextBox zBox,
+            Vector3 fallback)
+        {
+            return new Vector3(
+                ParseTransformField(xBox, fallback.X),
+                ParseTransformField(yBox, fallback.Y),
+                ParseTransformField(zBox, fallback.Z));
+        }
+
+        private static float ParseTransformField(TextBox box, float fallback)
+        {
+            return float.TryParse(box.Text, NumberStyles.Float, CultureInfo.InvariantCulture, out float value)
+                ? value
+                : fallback;
+        }
+
+        private static void PopulateVector3Fields(TextBox xBox, TextBox yBox, TextBox zBox, Vector3 value)
+        {
+            xBox.Text = value.X.ToString("F3", CultureInfo.InvariantCulture);
+            yBox.Text = value.Y.ToString("F3", CultureInfo.InvariantCulture);
+            zBox.Text = value.Z.ToString("F3", CultureInfo.InvariantCulture);
+        }
+
+        private static Quaternion EulerDegreesToQuaternion(Vector3 degrees)
+        {
+            const float degreesToRadians = MathF.PI / 180f;
+            return Quaternion.Normalize(
+                Quaternion.CreateFromYawPitchRoll(
+                    degrees.Y * degreesToRadians,
+                    degrees.X * degreesToRadians,
+                    degrees.Z * degreesToRadians));
+        }
+
+        private static Vector3 QuaternionToEulerDegrees(Quaternion quaternion)
+        {
+            if (quaternion.LengthSquared() <= 1e-12f)
+                return Vector3.Zero;
+
+            quaternion = Quaternion.Normalize(quaternion);
+
+            // Match EulerDegreesToQuaternion/ComposeTransformMatrix, which uses
+            // CreateFromYawPitchRoll(y, x, z) == Rz * Rx * Ry in System.Numerics.
+            var matrix = Matrix4x4.CreateFromQuaternion(quaternion);
+
+            float x = MathF.Asin(Math.Clamp(-matrix.M32, -1f, 1f));
+            float cosX = MathF.Cos(x);
+
+            float y;
+            float z;
+            if (MathF.Abs(cosX) > 1e-5f)
+            {
+                y = MathF.Atan2(matrix.M31, matrix.M33);
+                z = MathF.Atan2(matrix.M12, matrix.M22);
+            }
+            else
+            {
+                // In gimbal lock, Y and Z are coupled. Pick a stable canonical form.
+                y = MathF.Atan2(-matrix.M13, matrix.M11);
+                z = 0f;
+            }
+
+            const float radiansToDegrees = 180f / MathF.PI;
+            return new Vector3(x * radiansToDegrees, y * radiansToDegrees, z * radiansToDegrees);
+        }
+
+        private void TransformSpinnerUp_Click(object sender, RoutedEventArgs e) => ChangeTaggedValue(sender, 1f);
+
+        private void TransformSpinnerDown_Click(object sender, RoutedEventArgs e) => ChangeTaggedValue(sender, -1f);
+
+        private void ChangeTaggedValue(object sender, float direction)
+        {
+            if (sender is not FrameworkElement element || element.Tag is not string tag)
+                return;
+
+            string[] parts = tag.Split('|', 2, StringSplitOptions.TrimEntries);
+            if (parts.Length != 2)
+                return;
+
+            if (FindName(parts[0]) is not TextBox box)
+                return;
+
+            if (!float.TryParse(parts[1], NumberStyles.Float, CultureInfo.InvariantCulture, out float step))
+                return;
+
+            ChangeValue(box, step * direction);
         }
 
         private void ScaleX_Up(object sender, RoutedEventArgs e) => ChangeValue(ScaleX, 0.001f);
@@ -1456,40 +1617,6 @@ namespace ForzaTechStudio.Views
         private void LtDmgRotZ_Down(object sender, RoutedEventArgs e) => ChangeValue(LtDmgRotZ, -0.001f);
         private void LtDmgRotW_Up(object sender, RoutedEventArgs e) => ChangeValue(LtDmgRotW, 0.001f);
         private void LtDmgRotW_Down(object sender, RoutedEventArgs e) => ChangeValue(LtDmgRotW, -0.001f);
-
-        //  Locator Matrix spinner handlers
-        private void M11_Up(object sender, RoutedEventArgs e) => ChangeValue(M11, 0.001f);
-        private void M11_Down(object sender, RoutedEventArgs e) => ChangeValue(M11, -0.001f);
-        private void M12_Up(object sender, RoutedEventArgs e) => ChangeValue(M12, 0.001f);
-        private void M12_Down(object sender, RoutedEventArgs e) => ChangeValue(M12, -0.001f);
-        private void M13_Up(object sender, RoutedEventArgs e) => ChangeValue(M13, 0.001f);
-        private void M13_Down(object sender, RoutedEventArgs e) => ChangeValue(M13, -0.001f);
-        private void M14_Up(object sender, RoutedEventArgs e) => ChangeValue(M14, 0.001f);
-        private void M14_Down(object sender, RoutedEventArgs e) => ChangeValue(M14, -0.001f);
-        private void M21_Up(object sender, RoutedEventArgs e) => ChangeValue(M21, 0.001f);
-        private void M21_Down(object sender, RoutedEventArgs e) => ChangeValue(M21, -0.001f);
-        private void M22_Up(object sender, RoutedEventArgs e) => ChangeValue(M22, 0.001f);
-        private void M22_Down(object sender, RoutedEventArgs e) => ChangeValue(M22, -0.001f);
-        private void M23_Up(object sender, RoutedEventArgs e) => ChangeValue(M23, 0.001f);
-        private void M23_Down(object sender, RoutedEventArgs e) => ChangeValue(M23, -0.001f);
-        private void M24_Up(object sender, RoutedEventArgs e) => ChangeValue(M24, 0.001f);
-        private void M24_Down(object sender, RoutedEventArgs e) => ChangeValue(M24, -0.001f);
-        private void M31_Up(object sender, RoutedEventArgs e) => ChangeValue(M31, 0.001f);
-        private void M31_Down(object sender, RoutedEventArgs e) => ChangeValue(M31, -0.001f);
-        private void M32_Up(object sender, RoutedEventArgs e) => ChangeValue(M32, 0.001f);
-        private void M32_Down(object sender, RoutedEventArgs e) => ChangeValue(M32, -0.001f);
-        private void M33_Up(object sender, RoutedEventArgs e) => ChangeValue(M33, 0.001f);
-        private void M33_Down(object sender, RoutedEventArgs e) => ChangeValue(M33, -0.001f);
-        private void M34_Up(object sender, RoutedEventArgs e) => ChangeValue(M34, 0.001f);
-        private void M34_Down(object sender, RoutedEventArgs e) => ChangeValue(M34, -0.001f);
-        private void M41_Up(object sender, RoutedEventArgs e) => ChangeValue(M41, 0.001f);
-        private void M41_Down(object sender, RoutedEventArgs e) => ChangeValue(M41, -0.001f);
-        private void M42_Up(object sender, RoutedEventArgs e) => ChangeValue(M42, 0.001f);
-        private void M42_Down(object sender, RoutedEventArgs e) => ChangeValue(M42, -0.001f);
-        private void M43_Up(object sender, RoutedEventArgs e) => ChangeValue(M43, 0.001f);
-        private void M43_Down(object sender, RoutedEventArgs e) => ChangeValue(M43, -0.001f);
-        private void M44_Up(object sender, RoutedEventArgs e) => ChangeValue(M44, 0.001f);
-        private void M44_Down(object sender, RoutedEventArgs e) => ChangeValue(M44, -0.001f);
 
         //  Bone Matrix spinner handlers 
         private void BM11_Up(object sender, RoutedEventArgs e) => ChangeValue(BM11, 0.001f);
@@ -1748,6 +1875,10 @@ namespace ForzaTechStudio.Views
                     }
                 }
 
+                UpdateModelBinDirtyState(meshAction.Entries
+                    .Where(entry => entry.Mesh != null)
+                    .Select(entry => entry.Mesh!));
+
                 UpdateTransformUI();
                 RefreshHighlight();
             }
@@ -1800,7 +1931,64 @@ namespace ForzaTechStudio.Views
             }
 
             if (anyChanged)
+            {
+                UpdateModelBinDirtyState(action.Entries
+                    .Where(entry => entry.Mesh != null)
+                    .Select(entry => entry.Mesh!));
                 PushUndo(action);
+            }
+        }
+
+        private void UpdateModelBinDirtyState(IEnumerable<MeshNode> meshes)
+        {
+            var touchedBins = new HashSet<ModelBinNode>();
+
+            foreach (var mesh in meshes)
+            {
+                var modelBin = mesh.ParentModelBin ?? FindAncestor<ModelBinNode>(mesh);
+                if (modelBin != null)
+                    touchedBins.Add(modelBin);
+            }
+
+            foreach (var modelBin in touchedBins)
+                modelBin.IsDirty = IsModelBinTransformDirty(modelBin);
+        }
+
+        private static bool IsModelBinTransformDirty(ModelBinNode modelBin)
+        {
+            foreach (var mesh in modelBin.Children.OfType<MeshNode>())
+            {
+                if (MeshTransformDiffersFromOriginal(mesh))
+                    return true;
+            }
+
+            return false;
+        }
+
+        private static bool MeshTransformDiffersFromOriginal(MeshNode mesh)
+        {
+            if (mesh.GeometryData?.SourceMesh == null)
+                return false;
+
+            var sourceMesh = mesh.GeometryData.SourceMesh;
+            return !NearlyEqual(sourceMesh.PositionScale, mesh.OriginalPositionScale)
+                || !NearlyEqual(sourceMesh.PositionTranslate, mesh.OriginalPositionTranslate)
+                || !NearlyEqual(mesh.GeometryData.RotationEulerDegrees, mesh.OriginalRotationEulerDegrees);
+        }
+
+        private static bool NearlyEqual(Vector4 left, Vector4 right, float epsilon = 0.0001f)
+        {
+            return MathF.Abs(left.X - right.X) <= epsilon
+                && MathF.Abs(left.Y - right.Y) <= epsilon
+                && MathF.Abs(left.Z - right.Z) <= epsilon
+                && MathF.Abs(left.W - right.W) <= epsilon;
+        }
+
+        private static bool NearlyEqual(Vector3 left, Vector3 right, float epsilon = 0.0001f)
+        {
+            return MathF.Abs(left.X - right.X) <= epsilon
+                && MathF.Abs(left.Y - right.Y) <= epsilon
+                && MathF.Abs(left.Z - right.Z) <= epsilon;
         }
     }
 

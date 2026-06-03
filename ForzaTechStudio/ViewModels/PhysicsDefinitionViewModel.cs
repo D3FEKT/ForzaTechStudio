@@ -17,6 +17,8 @@ namespace ForzaTechStudio.ViewModels
 {
     public partial class PhysicsDefinitionViewModel : ObservableObject
     {
+        private const float MinimumPhysicsValue = 0.001f;
+
         public enum GenerationMode
         {
             PointCloud,
@@ -171,8 +173,14 @@ namespace ForzaTechStudio.ViewModels
             }
 
             var center = (min + max) / 2.0f;
-            var halfExtents = (max - min) / 2.0f;
-            var boundingRadius = halfExtents.Length();
+            var halfExtents = ClampHalfExtents((max - min) / 2.0f);
+            var boundingRadius = MathF.Max(halfExtents.Length(), MinimumPhysicsValue);
+            const float generatedMass = 1500.0f;
+            var inertiaDiagonal = ComputeBoxInertiaDiagonal(generatedMass, halfExtents);
+            var inverseInertiaDiagonal = new Vector3(
+                SafeReciprocal(inertiaDiagonal.X),
+                SafeReciprocal(inertiaDiagonal.Y),
+                SafeReciprocal(inertiaDiagonal.Z));
 
             // Random sampling for point cloud
             var random = new Random();
@@ -185,22 +193,13 @@ namespace ForzaTechStudio.ViewModels
             {
                 Version = TargetVersion,
                 DefinitionType = _selectedType,
-                Mass = 1500.0f,
+                Mass = generatedMass,
                 HalfExtents = halfExtents,
                 BoundingRadius = boundingRadius,
                 AabbCentreOffset = center,
-                InertiaTensor = new PhysicsDefinitionParser.AABB
-                {
-                    Min = new Vector4(min, 1.0f),
-                    Max = new Vector4(max, 1.0f),
-                    Radius = boundingRadius
-                },
-                InverseInertiaTensor = new PhysicsDefinitionParser.AABB
-                {
-                    Min = new Vector4(1.0f / min.X, 1.0f / min.Y, 1.0f / min.Z, 1.0f),
-                    Max = new Vector4(1.0f / max.X, 1.0f / max.Y, 1.0f / max.Z, 1.0f),
-                    Radius = 1.0f / boundingRadius
-                }
+                GraphicsOffset = Vector3.Zero,
+                InertiaTensor = CreateTensorBlock(inertiaDiagonal, boundingRadius),
+                InverseInertiaTensor = CreateTensorBlock(inverseInertiaDiagonal, SafeReciprocal(boundingRadius))
             };
 
             def.Shapes.Clear();
@@ -245,6 +244,48 @@ namespace ForzaTechStudio.ViewModels
             };
 
             StatusMessage = "Generation complete.";
+        }
+
+
+        private static Vector3 ClampHalfExtents(Vector3 halfExtents)
+        {
+            return new Vector3(
+                MathF.Max(MathF.Abs(halfExtents.X), MinimumPhysicsValue),
+                MathF.Max(MathF.Abs(halfExtents.Y), MinimumPhysicsValue),
+                MathF.Max(MathF.Abs(halfExtents.Z), MinimumPhysicsValue));
+        }
+
+        private static Vector3 ComputeBoxInertiaDiagonal(float mass, Vector3 halfExtents)
+        {
+            float x2 = halfExtents.X * halfExtents.X;
+            float y2 = halfExtents.Y * halfExtents.Y;
+            float z2 = halfExtents.Z * halfExtents.Z;
+            float factor = mass / 3.0f;
+
+            return new Vector3(
+                factor * (y2 + z2),
+                factor * (x2 + z2),
+                factor * (x2 + y2));
+        }
+
+        private static PhysicsDefinitionParser.AABB CreateTensorBlock(Vector3 diagonal, float radius)
+        {
+            var safeDiagonal = new Vector3(
+                MathF.Max(MathF.Abs(diagonal.X), MinimumPhysicsValue),
+                MathF.Max(MathF.Abs(diagonal.Y), MinimumPhysicsValue),
+                MathF.Max(MathF.Abs(diagonal.Z), MinimumPhysicsValue));
+
+            return new PhysicsDefinitionParser.AABB
+            {
+                Min = new Vector4(safeDiagonal, 1.0f),
+                Max = new Vector4(safeDiagonal, 1.0f),
+                Radius = MathF.Max(radius, MinimumPhysicsValue)
+            };
+        }
+
+        private static float SafeReciprocal(float value)
+        {
+            return 1.0f / MathF.Max(MathF.Abs(value), MinimumPhysicsValue);
         }
 
         [RelayCommand]

@@ -18,74 +18,88 @@ namespace ForzaTechStudio.Views
             ViewModel.PropertyChanged += ViewModel_PropertyChanged;
         }
 
-        // ViewModel → TreeView sync
-
         private void ViewModel_PropertyChanged(object? sender, PropertyChangedEventArgs e)
         {
-            if (e.PropertyName == nameof(BXMLEditorViewModel.TreeRoot))
-                RebuildTreeView();
-
-            if (e.PropertyName is nameof(BXMLEditorViewModel.SelectedNode)
-                               or nameof(BXMLEditorViewModel.IsNodeSelected))
-                UpdateNodeDetailPanel();
+            if (e.PropertyName == nameof(BXMLEditorViewModel.BrowserTreeVersion))
+                RebuildEntryTree();
+            else if (e.PropertyName == nameof(BXMLEditorViewModel.ObjectModelTreeVersion))
+                RebuildObjectModelTree();
         }
 
-        private void RebuildTreeView()
+        private void RebuildEntryTree()
         {
-            BXMLTree.RootNodes.Clear();
+            EntryTree.RootNodes.Clear();
 
-            if (ViewModel.TreeRoot is { } root)
-            {
-                var node = BuildTreeNode(root, depth: 0);
-                BXMLTree.RootNodes.Add(node);
-            }
+            bool expandForSearch = !string.IsNullOrWhiteSpace(ViewModel.NodeSearchText);
+            foreach (var item in ViewModel.FilteredBrowserRoots)
+                EntryTree.RootNodes.Add(BuildEntryTreeNode(item, expandForSearch));
         }
 
-        private static TreeViewNode BuildTreeNode(BXMLNodeViewModel vm, int depth)
+        private static TreeViewNode BuildEntryTreeNode(BXMLBrowserItemViewModel item, bool expandForSearch)
         {
             var node = new TreeViewNode
             {
-                Content    = vm,
-                IsExpanded = depth < 2,
+                Content = item,
+                IsExpanded = expandForSearch || item.Depth < 2,
             };
-            foreach (var child in vm.Children)
-                node.Children.Add(BuildTreeNode(child, depth + 1));
+
+            foreach (var child in item.Children)
+                node.Children.Add(BuildEntryTreeNode(child, expandForSearch));
+
             return node;
         }
 
-        private void UpdateNodeDetailPanel()
+        private void EntryTree_ItemInvoked(TreeView sender, TreeViewItemInvokedEventArgs args)
         {
-            var node = ViewModel.SelectedNode;
-            if (node == null)
+            if (args.InvokedItem is TreeViewNode treeNode && treeNode.Content is BXMLBrowserItemViewModel item)
             {
-                // Hide the no-attrs placeholder and children info — the whole panel 
-                // is already hidden via IsNodeNotSelected Visibility binding.
+                ViewModel.SelectedBrowserItem = item;
                 return;
             }
 
-            // Update the children info text (ChildrenInfoText is a named TextBlock)
-            ChildrenInfoText.Text = node.Children.Count == 0
-                ? "This element has no child elements."
-                : node.Children.Count == 1
-                    ? $"1 child element"
-                    : $"{node.Children.Count} child elements";
-
-            // Toggle the no-attrs placeholder visibility
-            NoAttrsPlaceholder.Visibility = node.Attributes.Count == 0
-                ? Visibility.Visible
-                : Visibility.Collapsed;
+            if (args.InvokedItem is BXMLBrowserItemViewModel directItem)
+                ViewModel.SelectedBrowserItem = directItem;
         }
 
-        // TreeView item invoked
+        // ObjectModelGame navigator (groups / files) 
 
-        private void BXMLTree_ItemInvoked(TreeView sender, TreeViewItemInvokedEventArgs args)
+        private void RebuildObjectModelTree()
         {
-            if (args.InvokedItem is TreeViewNode tvn && tvn.Content is BXMLNodeViewModel vm)
-                ViewModel.SelectedNode = vm;
+            ObjectModelTree.RootNodes.Clear();
+
+            bool expandForSearch = !string.IsNullOrWhiteSpace(ViewModel.ObjectModelSearchText);
+            foreach (var root in ViewModel.FilteredObjectModelRoots)
+                ObjectModelTree.RootNodes.Add(BuildObjectModelTreeNode(root, expandForSearch));
+        }
+
+        private static TreeViewNode BuildObjectModelTreeNode(ObjectModelNavNodeViewModel item, bool expandForSearch)
+        {
+            var node = new TreeViewNode
+            {
+                Content = item,
+                IsExpanded = expandForSearch || (!item.IsFile && item.Depth < 2),
+            };
+
+            foreach (var child in item.Children)
+                node.Children.Add(BuildObjectModelTreeNode(child, expandForSearch));
+
+            return node;
+        }
+
+        private void ObjectModelTree_ItemInvoked(TreeView sender, TreeViewItemInvokedEventArgs args)
+        {
+            if (args.InvokedItem is TreeViewNode treeNode && treeNode.Content is ObjectModelNavNodeViewModel item)
+            {
+                ViewModel.SelectObjectModelNavNode(item);
+                return;
+            }
+
+            if (args.InvokedItem is ObjectModelNavNodeViewModel directItem)
+                ViewModel.SelectObjectModelNavNode(directItem);
         }
 
         // Attribute remove button (code-behind since template can't x:Bind
-        //    back to the page ViewModel for the remove command) ──────────────────
+        //    back to the page ViewModel for the remove command) 
 
         private void RemoveAttribute_Click(object sender, RoutedEventArgs e)
         {

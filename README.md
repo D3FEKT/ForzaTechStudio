@@ -51,7 +51,7 @@ Full page documentation at [docs/3d-viewer.md](docs/3d-viewer.md)
 | Tool | Description |
 |---|---|
 | **Modelbin Editor** | Edit meshes, LOD groups, materials, and bone hierarchies in `.modelbin` files. Full transform editing (position, scale, rotation) with undo/redo support. Also opens `locators.xml`, `physicsdefinition.bin`, and `lights.bin` for in-place transform editing. [Full documentation](docs/modelbin-editor.md) |
-| **Modelbin Creator** | **WIP, Not yet available** Step-by-step wizard to import OBJ/FBX assets and compile them into a Forza-compatible `.modelbin`, including material slot mapping and LOD configuration. |
+| **Modelbin Creator** | Step-by-step wizard to import OBJ/FBX assets and compile them into a Forza-compatible `.modelbin`, including material slot mapping and LOD configuration. Supports targeting Forza Horizon 6 (Modl 1.4 / Mesh 1.12) alongside FH5, FM2023, FH4 and earlier titles. |
 | **Conversion Tool** | Batch convert `.carbin`, `.modelbin`, `lights.bin`, and `.swatchbin` files across game versions (FH2/3/4/5, FM5/6/7/8). Supports bulk Xbox-swizzled swatchbin conversion. [Full documentation](docs/conversion-tool.md) |
 | **Physics Definition Creator** | Create and edit `.bin` physics collision models — bounding volumes, collision primitives, and material flags. [Full documentation](docs/physics-definition.md) |
 

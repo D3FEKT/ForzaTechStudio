@@ -107,15 +107,22 @@ namespace ForzaTechStudio.Views
             {
                  if (meshNode.IsChecked == true)
                  {
-                     RenderMesh(meshNode);
+                     if (_isBulkLoading)
+                         _pendingMeshRenders.Add(meshNode);
+                     else
+                         RenderMesh(meshNode);
                  }
                  else
                  {
                      HideMesh(meshNode);
                      RefreshHighlight();
                  }
-                 SyncViewDropdownItems();
-                 RefreshCarbinInstancesForModel(meshNode.ParentModelBin);
+
+                 if (!_isBulkLoading)
+                 {
+                     SyncViewDropdownItems();
+                     RefreshCarbinInstancesForModel(meshNode.ParentModelBin);
+                 }
             }
         }
 
@@ -205,7 +212,12 @@ namespace ForzaTechStudio.Views
             if (e.PropertyName == nameof(DamageMeshNode.IsChecked) && sender is DamageMeshNode dmgNode)
             {
                 if (dmgNode.IsChecked == true)
-                    RenderDamageMesh(dmgNode);
+                {
+                    if (_isBulkLoading)
+                        _pendingDamageMeshRenders.Add(dmgNode);
+                    else
+                        RenderDamageMesh(dmgNode);
+                }
                 else
                     HideDamageMesh(dmgNode);
             }
@@ -220,6 +232,7 @@ namespace ForzaTechStudio.Views
             }
 
             InvalidateViewportTextureLookup();
+            _viewportAssignedMaterialCache.Clear();
             DispatcherQueue.TryEnqueue(() =>
             {
                 RefreshManufacturerColorsFromLoadedRoots();
@@ -543,6 +556,9 @@ namespace ForzaTechStudio.Views
         private void UpdateHighlight(IEnumerable<MeshNode>? meshes)
         {
             if (_highlightModel == null) return;
+
+            if (_lightHighlightModel != null)
+                _lightHighlightModel.Visibility = Visibility.Collapsed;
             
             // Clear any active light-group highlight
             _currentLightHighlightTargets = new List<LightGroupNode>();
@@ -639,6 +655,8 @@ namespace ForzaTechStudio.Views
             if (_highlightModel == null) return;
             _currentHighlightTargets = new List<MeshNode>();
             _currentLightHighlightTargets = new List<LightGroupNode>();
+            if (_lightHighlightModel != null)
+                _lightHighlightModel.Visibility = Visibility.Collapsed;
 
             if (!_damageRenderMap.TryGetValue(node, out var model) ||
                 model.Visibility == Visibility.Collapsed ||
@@ -660,47 +678,47 @@ namespace ForzaTechStudio.Views
 
         private void UpdateHighlightForLightGroups(IEnumerable<LightGroupNode> groups)
         {
-            if (_highlightModel == null) return;
+            if (_lightHighlightModel == null) return;
 
             var groupList = groups?.ToList() ?? new List<LightGroupNode>();
             _currentLightHighlightTargets = groupList;
             _currentHighlightTargets = new List<MeshNode>();
+            if (_highlightModel != null)
+                _highlightModel.Visibility = Visibility.Collapsed;
 
             if (groupList.Count == 0)
             {
-                _highlightModel.Visibility = Visibility.Collapsed;
+                _lightHighlightModel.Visibility = Visibility.Collapsed;
                 return;
             }
 
-            var mergedGeo = new MeshGeometry3D();
-            var pos = new Vector3Collection();
-            var ind = new IntCollection();
-            int offset = 0;
+            var builder = new LineBuilder();
+            int coneCount = 0;
 
             foreach (var group in groupList)
             {
                 if (_renderMap.TryGetValue(group, out var model) && model.Visibility != Visibility.Collapsed)
                 {
-                    if (model.Geometry is MeshGeometry3D geo)
-                    {
-                        pos.AddRange(geo.Positions);
-                        foreach (var i in geo.TriangleIndices)
-                            ind.Add(i + offset);
-                        offset += geo.Positions.Count;
-                    }
+                    AppendLightConeWireframe(builder, group, damage: false, radius: 0.046f, height: 0.132f);
+                    coneCount++;
+                }
+
+                if (_lightDamageRenderMap.TryGetValue(group, out var damageModel) &&
+                    damageModel.Visibility != Visibility.Collapsed)
+                {
+                    AppendLightConeWireframe(builder, group, damage: true, radius: 0.046f, height: 0.132f);
+                    coneCount++;
                 }
             }
 
-            if (pos.Count > 0)
+            if (coneCount > 0)
             {
-                mergedGeo.Positions = pos;
-                mergedGeo.TriangleIndices = ind;
-                _highlightModel.Geometry = mergedGeo;
-                _highlightModel.Visibility = Visibility.Visible;
+                _lightHighlightModel.Geometry = builder.ToLineGeometry3D();
+                _lightHighlightModel.Visibility = Visibility.Visible;
             }
             else
             {
-                _highlightModel.Visibility = Visibility.Collapsed;
+                _lightHighlightModel.Visibility = Visibility.Collapsed;
             }
         }
 
@@ -710,6 +728,8 @@ namespace ForzaTechStudio.Views
 
             _currentHighlightTargets = new List<MeshNode>();
             _currentLightHighlightTargets = new List<LightGroupNode>();
+            if (_lightHighlightModel != null)
+                _lightHighlightModel.Visibility = Visibility.Collapsed;
 
             if (!_carbinRenderMap.TryGetValue(node, out var models) || models.Count == 0)
             {

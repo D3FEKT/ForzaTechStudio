@@ -163,6 +163,17 @@ namespace ForzaTechStudio.Services
             return await SaveAsync(_cachedSettings);
         }
 
+        public async Task<bool> SetDefaultGameIdAsync(string gameId)
+        {
+            if (_cachedSettings == null)
+            {
+                _cachedSettings = await LoadAsync();
+            }
+
+            _cachedSettings.DefaultGameId = gameId ?? string.Empty;
+            return await SaveAsync(_cachedSettings);
+        }
+
         public async Task MigrateFromUwpSettingsAsync(Windows.Storage.ApplicationDataContainer uwpSettings)
         {
             try

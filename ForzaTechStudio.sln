@@ -13,7 +13,16 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ForzaTechStudio", "ForzaTec
 EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Solution Items", "Solution Items", "{8EC462FD-D22E-90A8-E5CE-7E832BA40C5D}"
 	ProjectSection(SolutionItems) = preProject
+		RE\fbx\data_types.py = RE\fbx\data_types.py
+		RE\fbx\encode_bin.py = RE\fbx\encode_bin.py
+		RE\fbx\export_fbx_bin.py = RE\fbx\export_fbx_bin.py
+		RE\fbx\fbx2json.py = RE\fbx\fbx2json.py
+		RE\fbx\fbx_utils.py = RE\fbx\fbx_utils.py
+		RE\fbx\import_fbx.py = RE\fbx\import_fbx.py
+		RE\fbx\json2fbx.py = RE\fbx\json2fbx.py
 		RE\modelbin.md = RE\modelbin.md
+		RE\fbx\parse_fbx.py = RE\fbx\parse_fbx.py
+		RE\fbx\__init__.py = RE\fbx\__init__.py
 	EndProjectSection
 EndProject
 Global

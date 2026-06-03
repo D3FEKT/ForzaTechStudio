@@ -85,6 +85,29 @@
                 </Button>
             </Grid>
 
+            <!-- Default Game Section -->
+            <Border Style="{StaticResource GameCardStyle}">
+                <StackPanel Spacing="12">
+                    <StackPanel Spacing="4">
+                        <TextBlock Text="Default Game" Style="{StaticResource SubtitleTextBlockStyle}"/>
+                        <TextBlock Text="Auto-selected in all game dropdowns when opening files."
+                                   Style="{StaticResource BodyTextBlockStyle}"
+                                   Opacity="0.7"
+                                   TextWrapping="Wrap"/>
+                    </StackPanel>
+                    <ComboBox ItemsSource="{Binding Games}"
+                              SelectedItem="{Binding SelectedDefaultGame, Mode=TwoWay}"
+                              HorizontalAlignment="Stretch"
+                              PlaceholderText="None (use first configured game)">
+                        <ComboBox.ItemTemplate>
+                            <DataTemplate>
+                                <TextBlock Text="{Binding DisplayName}"/>
+                            </DataTemplate>
+                        </ComboBox.ItemTemplate>
+                    </ComboBox>
+                </StackPanel>
+            </Border>
+
             <ItemsControl ItemsSource="{Binding Games}">
                 <ItemsControl.ItemTemplate>
                     <DataTemplate>

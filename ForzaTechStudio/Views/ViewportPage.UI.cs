@@ -21,8 +21,35 @@ namespace ForzaTechStudio.Views
     public sealed partial class ViewportPage : Page
     {
         private bool _isUpdatingLocatorUi = false;
+        private int _locatorUiUpdateDepth = 0;
+        private int _locatorUiUpdateToken = 0;
         private SDX.Color4 _singleColor = new SDX.Color4(0.5f, 0.5f, 0.5f, 1.0f);
         private float _sceneOpacity = 1.0f;
+
+        private void BeginLocatorUiUpdate()
+        {
+            _locatorUiUpdateDepth++;
+            _isUpdatingLocatorUi = true;
+        }
+
+        private void EndLocatorUiUpdate()
+        {
+            if (_locatorUiUpdateDepth > 0)
+                _locatorUiUpdateDepth--;
+
+            if (_locatorUiUpdateDepth > 0)
+                return;
+
+            int token = ++_locatorUiUpdateToken;
+            if (!DispatcherQueue.TryEnqueue(() =>
+            {
+                if (_locatorUiUpdateDepth == 0 && _locatorUiUpdateToken == token)
+                    _isUpdatingLocatorUi = false;
+            }))
+            {
+                _isUpdatingLocatorUi = false;
+            }
+        }
 
         private void UpdateTransformUI()
         {
@@ -281,6 +308,12 @@ namespace ForzaTechStudio.Views
 
         private void ApplyLODFilterRecursive(IViewerNode node, bool l0, bool l1, bool l2, bool l3, bool l4, bool l5, bool shadows, bool showDamage = false)
         {
+            if (node is ModelBinNode modelBin && ShouldAutoHideProxyModelBin(modelBin))
+            {
+                modelBin.IsChecked = false;
+                return;
+            }
+
             if (node is MeshNode mesh)
             {
                 bool isVisible = false;
@@ -625,8 +658,19 @@ namespace ForzaTechStudio.Views
             {
                 // Only toggle shadow meshes; don't re-evaluate regular meshes.
                 bool shadows = ShadowsItem.IsChecked;
-                foreach (var root in ViewModel.Roots)
-                    ApplyShadowsOnlyRecursive(root, shadows);
+                ViewerNode.SuppressCheckCascade = true;
+                try
+                {
+                    foreach (var root in ViewModel.Roots)
+                        ApplyShadowsOnlyRecursive(root, shadows);
+                }
+                finally
+                {
+                    ViewerNode.SuppressCheckCascade = false;
+                }
+
+                foreach (var root in ViewModel.Roots.OfType<ViewerNode>())
+                    RefreshCheckStatesRecursive(root);
             }
             else
             {
@@ -642,6 +686,14 @@ namespace ForzaTechStudio.Views
                 dmg.IsChecked = shadows;
             foreach (var child in node.Children)
                 ApplyShadowsOnlyRecursive(child, shadows);
+        }
+
+        private static void RefreshCheckStatesRecursive(ViewerNode node)
+        {
+            foreach (var child in node.Children.OfType<ViewerNode>())
+                RefreshCheckStatesRecursive(child);
+
+            node.UpdateCheckStateFromChildren();
         }
 
         private void ViewType_Click(object sender, RoutedEventArgs e)
@@ -744,10 +796,16 @@ namespace ForzaTechStudio.Views
             var locatorsRoot = locNode.Parent as LocatorsXmlNode;
             if (locatorsRoot != null)
             {
-                _isUpdatingLocatorUi = true;
-                LocatorPartSelector.ItemsSource = locatorsRoot.Children.OfType<LocatorNode>().ToList();
-                LocatorPartSelector.SelectedItem = locNode;
-                _isUpdatingLocatorUi = false;
+                BeginLocatorUiUpdate();
+                try
+                {
+                    LocatorPartSelector.ItemsSource = locatorsRoot.Children.OfType<LocatorNode>().ToList();
+                    LocatorPartSelector.SelectedItem = locNode;
+                }
+                finally
+                {
+                    EndLocatorUiUpdate();
+                }
             }
 
             PopulateMatrixFields(locNode.LocatorEntry.SceneTransform);
@@ -780,10 +838,16 @@ namespace ForzaTechStudio.Views
                     LocatorPartSelector.Items.Count == 0)
                 {
                     var firstRoot = locatorsNodes.First();
-                    _isUpdatingLocatorUi = true;
-                    LocatorPartSelector.ItemsSource = firstRoot.Children.OfType<LocatorNode>().ToList();
-                    LocatorPartSelector.SelectedIndex = 0;
-                    _isUpdatingLocatorUi = false;
+                    BeginLocatorUiUpdate();
+                    try
+                    {
+                        LocatorPartSelector.ItemsSource = firstRoot.Children.OfType<LocatorNode>().ToList();
+                        LocatorPartSelector.SelectedIndex = 0;
+                    }
+                    finally
+                    {
+                        EndLocatorUiUpdate();
+                    }
 
                     if (LocatorPartSelector.SelectedItem is LocatorNode first)
                         PopulateMatrixFields(first.LocatorEntry.SceneTransform);
@@ -1020,17 +1084,25 @@ namespace ForzaTechStudio.Views
 
         private void PopulateMatrixFields(Matrix4x4 m)
         {
-            _isUpdatingLocatorUi = true;
-            var ci = System.Globalization.CultureInfo.InvariantCulture;
-            M11.Text = m.M11.ToString("F6", ci); M12.Text = m.M12.ToString("F6", ci);
-            M13.Text = m.M13.ToString("F6", ci); M14.Text = m.M14.ToString("F6", ci);
-            M21.Text = m.M21.ToString("F6", ci); M22.Text = m.M22.ToString("F6", ci);
-            M23.Text = m.M23.ToString("F6", ci); M24.Text = m.M24.ToString("F6", ci);
-            M31.Text = m.M31.ToString("F6", ci); M32.Text = m.M32.ToString("F6", ci);
-            M33.Text = m.M33.ToString("F6", ci); M34.Text = m.M34.ToString("F6", ci);
-            M41.Text = m.M41.ToString("F6", ci); M42.Text = m.M42.ToString("F6", ci);
-            M43.Text = m.M43.ToString("F6", ci); M44.Text = m.M44.ToString("F6", ci);
-            _isUpdatingLocatorUi = false;
+            BeginLocatorUiUpdate();
+            try
+            {
+                PopulateTransformEditorFields(
+                    LocatorPosX,
+                    LocatorPosY,
+                    LocatorPosZ,
+                    LocatorRotX,
+                    LocatorRotY,
+                    LocatorRotZ,
+                    LocatorScaleX,
+                    LocatorScaleY,
+                    LocatorScaleZ,
+                    m);
+            }
+            finally
+            {
+                EndLocatorUiUpdate();
+            }
         }
 
         private void LocatorPartSelector_SelectionChanged(object sender, SelectionChangedEventArgs e)
@@ -1060,19 +1132,14 @@ namespace ForzaTechStudio.Views
             // Capture old transform for undo
             var oldTransform = locNode.LocatorEntry.SceneTransform;
 
-            float Parse(TextBox box, float fallback) =>
-                float.TryParse(box.Text,
-                    System.Globalization.NumberStyles.Float,
-                    System.Globalization.CultureInfo.InvariantCulture,
-                    out float v) ? v : fallback;
-
             var cur = locNode.LocatorEntry.SceneTransform;
-            var updated = new Matrix4x4(
-                Parse(M11, cur.M11), Parse(M12, cur.M12), Parse(M13, cur.M13), Parse(M14, cur.M14),
-                Parse(M21, cur.M21), Parse(M22, cur.M22), Parse(M23, cur.M23), Parse(M24, cur.M24),
-                Parse(M31, cur.M31), Parse(M32, cur.M32), Parse(M33, cur.M33), Parse(M34, cur.M34),
-                Parse(M41, cur.M41), Parse(M42, cur.M42), Parse(M43, cur.M43), Parse(M44, cur.M44)
-            );
+            DecomposeTransformMatrix(cur, out var currentPosition, out var currentRotation, out var currentScale);
+
+            var updated = ComposeTransformMatrix(
+                ReadVector3Fields(LocatorPosX, LocatorPosY, LocatorPosZ, currentPosition),
+                ReadVector3Fields(LocatorRotX, LocatorRotY, LocatorRotZ, currentRotation),
+                ReadVector3Fields(LocatorScaleX, LocatorScaleY, LocatorScaleZ, currentScale),
+                cur);
 
             locNode.LocatorEntry.SceneTransform = updated;
 
@@ -1287,9 +1354,7 @@ namespace ForzaTechStudio.Views
 
         private async void LightsSave_Click(object sender, RoutedEventArgs e)
         {
-            LightsBinNode? lb = null;
-            if (LightPartSelector.SelectedItem is LightGroupNode group)
-                lb = group.Parent as LightsBinNode;
+            var lb = GetActiveLightsBinNode();
 
             if (lb == null)
             {
@@ -1297,7 +1362,7 @@ namespace ForzaTechStudio.Views
                 return;
             }
 
-            await SaveLightsBin(lb);
+            await SaveSelectedFileNodesAsync(new IViewerNode[] { lb }, saveAsFolder: false);
         }
 
         private void HideSelected()

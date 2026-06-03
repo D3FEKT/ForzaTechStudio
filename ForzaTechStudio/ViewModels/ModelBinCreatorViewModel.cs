@@ -191,6 +191,18 @@ namespace ForzaTechStudio.ViewModels
         [ObservableProperty]
         private bool _isSelected = true;
 
+        // Per-object bucket flags. Only Opaque + NotShadow are checked by default.
+        [ObservableProperty] private bool _isOpaque = true;
+        [ObservableProperty] private bool _isDecal;
+        [ObservableProperty] private bool _isTransparent;
+        [ObservableProperty] private bool _isShadow;
+        [ObservableProperty] private bool _isNotShadow = true;
+        [ObservableProperty] private bool _isAlphaToCoverage;
+        [ObservableProperty] private bool _isMorphDamage;
+
+        // True once SetBaseTransform has computed the geometry-derived base transform.
+        public bool HasBaseTransform { get; private set; }
+
         private string _currentMaterial;
         public string SelectedMaterial
         {
@@ -337,6 +349,7 @@ namespace ForzaTechStudio.ViewModels
             BaseTranslateX = translate.X;
             BaseTranslateY = translate.Y;
             BaseTranslateZ = translate.Z;
+            HasBaseTransform = true;
 
             // Initialize user-editable values to the calculated base
             _objScaleX = scale.X;
@@ -402,6 +415,8 @@ namespace ForzaTechStudio.ViewModels
         private bool _isManualOverride;
         private bool _suppressZipSelectionChange;
         private bool _hasInitializedZip;
+
+        private string _committedZipOption;
         private readonly Dictionary<string, string> _materialZipOptionPaths = new();
 
         // Abbreviation map used by fuzzy material auto-matching
@@ -436,9 +451,9 @@ namespace ForzaTechStudio.ViewModels
         [ObservableProperty] private string _statusMessage = "Select an OBJ or FBX file to begin.";
         [ObservableProperty] private string _mtlStatusMessage = "";
         [ObservableProperty] private string _inputFilePath;
-        [ObservableProperty][NotifyPropertyChangedFor(nameof(IsNotBusy))] private bool _isBusy;
+        [ObservableProperty][NotifyPropertyChangedFor(nameof(IsNotBusy))][NotifyPropertyChangedFor(nameof(IsReadyToExport))][NotifyPropertyChangedFor(nameof(ExportReadinessSeverity))][NotifyPropertyChangedFor(nameof(ExportReadinessMessage))] private bool _isBusy;
         public bool IsNotBusy => !IsBusy;
-        [ObservableProperty] private bool _isFileSelected;
+        [ObservableProperty][NotifyPropertyChangedFor(nameof(IsReadyToExport))][NotifyPropertyChangedFor(nameof(ExportReadinessSeverity))][NotifyPropertyChangedFor(nameof(ExportReadinessMessage))] private bool _isFileSelected;
 
         // Game Target Selection
         public ObservableCollection<string> GameTargetOptions { get; } =
@@ -474,10 +489,14 @@ namespace ForzaTechStudio.ViewModels
         // Human-readable description of the VLay layout that will be generated for the selected game.
         [ObservableProperty] private string _vlayLayoutDescription = "";
 
+        // Modelbin format versions (Bundle/Modl/Mesh/VLay) for the selected game target.
+        [ObservableProperty] private string _targetFormatSummary = "";
+
         partial void OnSelectedGameTargetChanged(string value)
         {
             OnPropertyChanged(nameof(CurrentGameTarget));
             UpdateVlayLayoutDescription();
+            NotifyExportReadiness();
             _isManualOverride = false; // Reset manual override so new game auto-loads its zip
             _hasInitializedZip = false; // Force zip reload for the newly selected game target
             _ = TryAutoLoadMaterialZipAsync();
@@ -487,16 +506,20 @@ namespace ForzaTechStudio.ViewModels
         private void UpdateVlayLayoutDescription()
         {
             var info = ModelBuilderService.GetGameLayoutInfo(CurrentGameTarget);
-            VlayLayoutDescription = $"Slot 1: {info.ElementCount} elements, stride={info.Stride}B ? " +
-                                    $"NORMAL({info.NormalFormat}), TANGENT({info.TangentFormat}), " +
+            VlayLayoutDescription = $"Slot 1: {info.ElementCount} elements, stride {info.Stride} B\n" +
+                                    $"NORMAL({info.NormalFormat}), TANGENT({info.TangentFormat})\n" +
                                     $"TEXCOORDs: {info.TexcoordCount}, TANGENTs: {info.TangentCount}" +
                                     (info.HasColor ? ", COLOR0" : "");
+
+            var v = ModelbinConversionService.GetModelbinTargetVersions(CurrentGameTarget);
+            TargetFormatSummary = $"Bundle {v.bundle.maj}.{v.bundle.min}  \u2022  Modl {v.modl.maj}.{v.modl.min}  \u2022  " +
+                                  $"Mesh {v.mesh.maj}.{v.mesh.min}  \u2022  VLay {v.vlay.maj}.{v.vlay.min}";
         }
 
         // Zip and Material Assignment Properties
         [ObservableProperty] private string _materialZipPath;
         [ObservableProperty] private bool _isZipLoading;
-        [ObservableProperty] private bool _isZipLoaded;
+        [ObservableProperty][NotifyPropertyChangedFor(nameof(IsReadyToExport))][NotifyPropertyChangedFor(nameof(ExportReadinessSeverity))][NotifyPropertyChangedFor(nameof(ExportReadinessMessage))] private bool _isZipLoaded;
         [ObservableProperty] private string _zipLoadProgress = "";
         [ObservableProperty] private string _materialZipSourceLabel = "No zip loaded — Browse or configure a game path";
         [ObservableProperty] private bool _isAdvancedVlayBlobPatchEnabled;
@@ -508,8 +531,29 @@ namespace ForzaTechStudio.ViewModels
         partial void OnSelectedMaterialZipOptionChanged(string value)
         {
             if (_suppressZipSelectionChange || string.IsNullOrEmpty(value) || _isManualOverride) return;
+            // Ignore re-selection of the already-loaded option 
+            if (string.Equals(value, _committedZipOption, StringComparison.Ordinal)) return;
             if (_materialZipOptionPaths.TryGetValue(value, out string fullPath))
+            {
+                _committedZipOption = value;
                 _ = LoadMaterialZipAsync(fullPath, isAutoLoad: true);
+            }
+        }
+
+
+        public void BeginZipSelectionRestore()
+        {
+            _suppressZipSelectionChange = true;
+        }
+
+
+        public void EndZipSelectionRestore()
+        {
+            if (!string.IsNullOrEmpty(_committedZipOption) && MaterialZipOptions.Contains(_committedZipOption))
+            {
+                SelectedMaterialZipOption = _committedZipOption;
+            }
+            _suppressZipSelectionChange = false;
         }
         [ObservableProperty] private int _availableMaterialCount;
         [ObservableProperty] private string _materialSearchText = "";
@@ -532,12 +576,25 @@ namespace ForzaTechStudio.ViewModels
         partial void OnSelectedGroupForMaterialAssignmentChanged(GroupViewModel value)
         {
             UpdateFilteredMaterialAssignments();
+            OnPropertyChanged(nameof(CanAssignLibraryMaterial));
         }
+
+
+        [ObservableProperty]
+        private GroupViewModel _selectedConfigObject;
 
         // NEW: Material Browser State
         [ObservableProperty] private bool _isMaterialBrowserOpen;
         [ObservableProperty] private string _browserSearchText = "";
+
+        [ObservableProperty] private string _browserSelectedItem;
+
+        partial void OnBrowserSelectedItemChanged(string value) => OnPropertyChanged(nameof(CanAssignLibraryMaterial));
+
+        public bool CanAssignLibraryMaterial => !string.IsNullOrEmpty(BrowserSelectedItem) && SelectedGroupForMaterialAssignment != null;
+
         private object _browserContext; // Can be MaterialAssignment or OriginalMaterialMapping
+        private bool _isPopulatingMaterialAssignments;
 
         // Library browser: game library source
         [ObservableProperty] private bool _isBrowserLibraryMode;
@@ -558,7 +615,6 @@ namespace ForzaTechStudio.ViewModels
 
         partial void OnIsBrowserLibraryModeChanged(bool value)
         {
-            if (!IsMaterialBrowserOpen) return;
             if (value)
                 _ = RefreshBrowserItemsAsync();
             else
@@ -567,7 +623,7 @@ namespace ForzaTechStudio.ViewModels
 
         partial void OnSelectedBrowserLibraryGameChanged(ForzaGameDefinition value)
         {
-            if (IsBrowserLibraryMode && IsMaterialBrowserOpen)
+            if (IsBrowserLibraryMode)
                 _ = RefreshBrowserItemsAsync();
         }
 
@@ -800,7 +856,44 @@ namespace ForzaTechStudio.ViewModels
         [ObservableProperty]
         private bool _canSortByMaterial;
 
-        public string SaveButtonText => BinConfigs.Count > 1 ? "Batch Save ModelBins" : "Save ModelBin";
+        public string SaveButtonText => BinConfigs.Count > 1 ? "Batch Save Modelbins" : "Save Modelbin";
+
+        // Wizard step navigation: "Import", "Materials", or "Config".
+        [ObservableProperty] private string _currentStep = "Import";
+
+        [RelayCommand]
+        private void GoToStep(string tag)
+        {
+            if (string.IsNullOrEmpty(tag)) return;
+            if ((tag == "Materials" || tag == "Config") && !IsZipLoaded)
+            {
+                StatusMessage = "Load a material library in step 1 before continuing.";
+                return;
+            }
+            CurrentStep = tag;
+        }
+
+        // Total objects assigned across all output bins; gates export readiness.
+        public int IncludedObjectCount => BinConfigs?.Sum(b => b.Groups.Count) ?? 0;
+
+        public bool IsReadyToExport => IsFileSelected && IsZipLoaded && IncludedObjectCount > 0 && !IsBusy;
+
+        public InfoBarSeverity ExportReadinessSeverity => IsReadyToExport ? InfoBarSeverity.Success : InfoBarSeverity.Informational;
+
+        public string ExportReadinessMessage =>
+            !IsFileSelected ? "Import a model in step 1 to begin."
+            : !IsZipLoaded ? "Load a material library in step 1."
+            : IncludedObjectCount == 0 ? "Include at least one object in step 3."
+            : $"Ready to export {BinConfigs.Count} modelbin{(BinConfigs.Count == 1 ? "" : "s")} " +
+              $"({IncludedObjectCount} object{(IncludedObjectCount == 1 ? "" : "s")}) for {SelectedGameTarget}.";
+
+        private void NotifyExportReadiness()
+        {
+            OnPropertyChanged(nameof(IncludedObjectCount));
+            OnPropertyChanged(nameof(IsReadyToExport));
+            OnPropertyChanged(nameof(ExportReadinessSeverity));
+            OnPropertyChanged(nameof(ExportReadinessMessage));
+        }
 
         public ModelBinCreatorViewModel()
         {
@@ -820,41 +913,18 @@ namespace ForzaTechStudio.ViewModels
         };
 
         // Change Handlers
-        partial void OnFlipVertexXChanged(bool value) => RebuildBundle();
-        partial void OnFlipVertexYChanged(bool value) => RebuildBundle();
-        partial void OnFlipVertexZChanged(bool value) => RebuildBundle();
-        partial void OnFlipNormalXChanged(bool value) => RebuildBundle();
-        partial void OnFlipNormalYChanged(bool value) => RebuildBundle();
-        partial void OnFlipNormalZChanged(bool value) => RebuildBundle();
-        partial void OnFlipFacesChanged(bool value) => RebuildBundle();
-        partial void OnIsMirrorEnabledChanged(bool value) => RebuildBundle();
-        partial void OnRecalculateNormalsChanged(bool value) => RebuildBundle();
-        
+
         partial void OnGlobalResizePercentageChanged(double value)
         {
             float factor = (float)(value / 100.0);
-            
-            // Set backing fields directly to avoid multiple triggers if possible, 
-            // but we need the properties to update for UI binding.
-            bool changed = false;
-            
-            if (_globalScaleX != factor) { _globalScaleX = factor; OnPropertyChanged(nameof(GlobalScaleX)); changed = true; }
-            if (_globalScaleY != factor) { _globalScaleY = factor; OnPropertyChanged(nameof(GlobalScaleY)); changed = true; }
-            if (_globalScaleZ != factor) { _globalScaleZ = factor; OnPropertyChanged(nameof(GlobalScaleZ)); changed = true; }
-            
-            if (changed)
-            {
-                ApplyGlobalTransforms();
-            }
+
+            // Keep the per-axis scale values in sync with the uniform resize slider for the UI.
+            if (_globalScaleX != factor) { _globalScaleX = factor; OnPropertyChanged(nameof(GlobalScaleX)); }
+            if (_globalScaleY != factor) { _globalScaleY = factor; OnPropertyChanged(nameof(GlobalScaleY)); }
+            if (_globalScaleZ != factor) { _globalScaleZ = factor; OnPropertyChanged(nameof(GlobalScaleZ)); }
         }
 
-        partial void OnGlobalScaleXChanged(float value) => ApplyGlobalTransforms();
-        partial void OnGlobalScaleYChanged(float value) => ApplyGlobalTransforms();
-        partial void OnGlobalScaleZChanged(float value) => ApplyGlobalTransforms();
-        partial void OnGlobalPosXChanged(float value) => ApplyGlobalTransforms();
-        partial void OnGlobalPosYChanged(float value) => ApplyGlobalTransforms();
-        partial void OnGlobalPosZChanged(float value) => ApplyGlobalTransforms();
-
+        // Applies the configured global transform to every included object
         private void ApplyGlobalTransforms()
         {
              foreach (var group in ModelGroups)
@@ -874,29 +944,6 @@ namespace ForzaTechStudio.ViewModels
                 OnPropertyChanged(nameof(TransformScaleX));
                 OnPropertyChanged(nameof(TransformScaleY));
                 OnPropertyChanged(nameof(TransformScaleZ));
-            }
-        }
-
-        partial void OnIsOpaqueChanged(bool value) => UpdateMeshFlags();
-        partial void OnIsDecalChanged(bool value) => UpdateMeshFlags();
-        partial void OnIsTransparentChanged(bool value) => UpdateMeshFlags();
-        partial void OnIsShadowChanged(bool value) => UpdateMeshFlags();
-        partial void OnIsNotShadowChanged(bool value) => UpdateMeshFlags();
-        partial void OnIsAlphaToCoverageChanged(bool value) => UpdateMeshFlags();
-        partial void OnIsMorphDamageChanged(bool value) => UpdateMeshFlags();
-
-        private void UpdateMeshFlags()
-        {
-            if (_activeBundle == null) return;
-            foreach (var mesh in _activeBundle.Blobs.OfType<MeshBlob>())
-            {
-                mesh.IsOpaque = IsOpaque;
-                mesh.IsDecal = IsDecal;
-                mesh.IsTransparent = IsTransparent;
-                mesh.IsShadow = IsShadow;
-                mesh.IsNotShadow = IsNotShadow;
-                mesh.IsAlphaToCoverage = IsAlphaToCoverage;
-                mesh.IsMorphDamage = IsMorphDamage;
             }
         }
 
@@ -958,6 +1005,32 @@ namespace ForzaTechStudio.ViewModels
             }
         }
 
+        private List<GroupViewModel> GetCanonicalBinGroups(ModelBinConfigViewModel targetBin)
+        {
+            if (targetBin == null)
+                return new List<GroupViewModel>();
+
+            var assignedGroups = ModelGroups
+                .Where(group => group.AssignedBin == targetBin)
+                .Distinct()
+                .ToList();
+
+            bool membershipChanged = targetBin.Groups.Count != assignedGroups.Count ||
+                                     targetBin.Groups.Except(assignedGroups).Any() ||
+                                     assignedGroups.Except(targetBin.Groups).Any();
+
+            if (membershipChanged)
+            {
+                targetBin.Groups.Clear();
+                foreach (var group in assignedGroups)
+                    targetBin.Groups.Add(group);
+
+                OnPropertyChanged(nameof(IncludedObjectCount));
+            }
+
+            return assignedGroups;
+        }
+
         private async Task BuildBinAsync(ModelBinConfigViewModel targetBin)
         {
             IsBusy = true;
@@ -968,8 +1041,10 @@ namespace ForzaTechStudio.ViewModels
                 // Capture the current game target on UI thread
                 var gameTarget = CurrentGameTarget;
 
+                var canonicalGroups = GetCanonicalBinGroups(targetBin);
+
                 // Capture enabled groups and their settings safely on UI thread
-                var groupsToProcess = targetBin.Groups
+                var groupsToProcess = canonicalGroups
                     .Select(g => new { 
                         Group = g.SourceGroup, 
                         MatName = g.SelectedMaterial,
@@ -1070,10 +1145,7 @@ namespace ForzaTechStudio.ViewModels
 
                         // Check if we need to initialize the base transform (first time processing)
                         var vm = item.ViewModel;
-                        bool isFirstTimeOrReset = (vm.BaseScaleX == 1f && vm.BaseScaleY == 1f && vm.BaseScaleZ == 1f &&
-                                                   vm.BaseTranslateX == 0f && vm.BaseTranslateY == 0f && vm.BaseTranslateZ == 0f &&
-                                                   vm.ObjScaleX == 1f && vm.ObjScaleY == 1f && vm.ObjScaleZ == 1f &&
-                                                   vm.ObjPosX == 0f && vm.ObjPosY == 0f && vm.ObjPosZ == 0f);
+                        bool isFirstTimeOrReset = !vm.HasBaseTransform;
 
                         if (isFirstTimeOrReset)
                         {
@@ -1102,7 +1174,14 @@ namespace ForzaTechStudio.ViewModels
                             MaterialName = item.MatName,
                             MaterialBlob = materialBlob,
                             ObjectName = group.Name,
-                            MaterialRelativePath = materialRelPath
+                            MaterialRelativePath = materialRelPath,
+                            IsOpaque = item.ViewModel.IsOpaque,
+                            IsDecal = item.ViewModel.IsDecal,
+                            IsTransparent = item.ViewModel.IsTransparent,
+                            IsShadow = item.ViewModel.IsShadow,
+                            IsNotShadow = item.ViewModel.IsNotShadow,
+                            IsAlphaToCoverage = item.ViewModel.IsAlphaToCoverage,
+                            IsMorphDamage = item.ViewModel.IsMorphDamage
                         });
                     }
 
@@ -1134,7 +1213,6 @@ namespace ForzaTechStudio.ViewModels
 
                 if (_activeBundle != null)
                 {
-                    UpdateMeshFlags();
                     StatusMessage = "Geometry updated.";
                 }
             }
@@ -1153,13 +1231,12 @@ namespace ForzaTechStudio.ViewModels
             if (_activeBundle == null) return;
 
             // Build a map of object name -> transform from GroupViewModels
-            var transformMap = ModelGroups
-                .Where(g => g.IsSelected)
-                .ToDictionary(g => g.Name, g => new
-                {
-                    Scale = new Vector4(g.ObjScaleX, g.ObjScaleY, g.ObjScaleZ, 1),
-                    Translate = new Vector4(g.ObjPosX, g.ObjPosY, g.ObjPosZ, 0)
-                });
+            var transformMap = BuildLatestValueMap(
+                ModelGroups.Where(g => g.IsSelected),
+                g => g.Name,
+                g => (
+                    Scale: new Vector4(g.ObjScaleX, g.ObjScaleY, g.ObjScaleZ, 1),
+                    Translate: new Vector4(g.ObjPosX, g.ObjPosY, g.ObjPosZ, 0)));
 
             // Update each mesh's transform based on its name
             foreach (var mesh in _activeBundle.Blobs.OfType<MeshBlob>())
@@ -1171,6 +1248,25 @@ namespace ForzaTechStudio.ViewModels
                     mesh.PositionTranslate = transform.Translate;
                 }
             }
+        }
+
+        private static Dictionary<string, TValue> BuildLatestValueMap<TSource, TValue>(
+            IEnumerable<TSource> source,
+            Func<TSource, string> keySelector,
+            Func<TSource, TValue> valueSelector)
+        {
+            var map = new Dictionary<string, TValue>(StringComparer.OrdinalIgnoreCase);
+
+            foreach (var item in source)
+            {
+                var key = keySelector(item);
+                if (string.IsNullOrWhiteSpace(key))
+                    continue;
+
+                map[key] = valueSelector(item);
+            }
+
+            return map;
         }
 
         private void UpdateTransformableGroups()
@@ -1400,17 +1496,18 @@ namespace ForzaTechStudio.ViewModels
                             }
 
                             var newGroup = new GroupViewModel(g, tex, Materials, HandleGroupSelectionChanged);
-                            newGroup.AssignedBin = defaultBin;
                             
                             // Only select the first model for better performance
                             if (isFirst)
                             {
+                                newGroup.AssignedBin = defaultBin;
                                 newGroup.IsSelected = true;
                                 defaultBin.Groups.Add(newGroup);
                                 isFirst = false;
                             }
                             else
                             {
+                                newGroup.AssignedBin = null;
                                 newGroup.IsSelected = false;
                             }
                             
@@ -1440,6 +1537,7 @@ namespace ForzaTechStudio.ViewModels
 
                 IsFileSelected = true;
                 StatusMessage = "Ready.";
+                NotifyExportReadiness();
             }
             catch (Exception ex)
             {
@@ -1458,6 +1556,7 @@ namespace ForzaTechStudio.ViewModels
 
         private void HandleGroupSelectionChanged(GroupViewModel g)
         {
+            if (_isPopulatingMaterialAssignments) return;
             if (_isUpdatingSelection) return;
             
             // Handle bin assignment changes
@@ -1489,6 +1588,7 @@ namespace ForzaTechStudio.ViewModels
 
             RebuildBundle();
             UpdateSelectAllButtonText();
+            NotifyExportReadiness();
         }
 
         partial void OnSelectedBinConfigChanged(ModelBinConfigViewModel value)
@@ -1516,7 +1616,6 @@ namespace ForzaTechStudio.ViewModels
             if (SelectedBinConfig.ActiveBundle != null)
             {
                 _activeBundle = SelectedBinConfig.ActiveBundle;
-                UpdateMeshFlags(); 
             }
             else
             {
@@ -1534,6 +1633,7 @@ namespace ForzaTechStudio.ViewModels
             BinConfigs.Add(newBin);
             SelectedBinConfig = newBin;
             OnPropertyChanged(nameof(SaveButtonText));
+            NotifyExportReadiness();
         }
 
         [RelayCommand]
@@ -1553,6 +1653,7 @@ namespace ForzaTechStudio.ViewModels
                 SelectedBinConfig = BinConfigs.FirstOrDefault();
             }
             OnPropertyChanged(nameof(SaveButtonText));
+            NotifyExportReadiness();
         }
 
         private Vector3[] RecalculateMeshNormals(Vector3[] positions, int[] indices)
@@ -1642,6 +1743,12 @@ namespace ForzaTechStudio.ViewModels
                 return;
             }
 
+            if (IncludedObjectCount == 0)
+            {
+                StatusMessage = "Include at least one object before exporting.";
+                return;
+            }
+
             var window = App.MainWindow;
             var hWnd = WinRT.Interop.WindowNative.GetWindowHandle(window);
 
@@ -1652,7 +1759,7 @@ namespace ForzaTechStudio.ViewModels
                 WinRT.Interop.InitializeWithWindow.Initialize(savePicker, hWnd);
                 savePicker.SuggestedStartLocation = PickerLocationId.Desktop;
                 savePicker.SuggestedFileName = bin.OutputName + ".modelbin";
-                savePicker.FileTypeChoices.Add("Forza ModelBin", new[] { ".modelbin" });
+                savePicker.FileTypeChoices.Add("Forza Modelbin", new[] { ".modelbin" });
 
                 var outputFile = await savePicker.PickSaveFileAsync();
                 if (outputFile == null) return;
@@ -1661,8 +1768,11 @@ namespace ForzaTechStudio.ViewModels
                 StatusMessage = "Saving...";
                 try 
                 {
-                    // Ensure fresh build
-                    UpdateTransformInMemory(); 
+                    // First build computes each included object's geometry-derived base transform.
+                    await BuildBinAsync(bin);
+                    // Apply the configured global transform to every included object, then rebuild
+                    // so transforms, per-object bucket flags and shadow meshes are all baked in.
+                    ApplyGlobalTransforms();
                     await BuildBinAsync(bin);
                     
                     if (bin.ActiveBundle != null)
@@ -1699,7 +1809,9 @@ namespace ForzaTechStudio.ViewModels
                 {
                     if (bin.Groups.Count == 0) continue;
 
-                    // Build
+                    // Build once to compute base transforms, apply global transform, then rebuild.
+                    await BuildBinAsync(bin);
+                    ApplyGlobalTransforms();
                     await BuildBinAsync(bin);
                     
                     if (bin.ActiveBundle != null)
@@ -1774,6 +1886,10 @@ namespace ForzaTechStudio.ViewModels
             IsZipLoaded = false;
             ZipLoadProgress = "Scanning material zip for .materialbin files...";
             StatusMessage = "Loading material library...";
+            AvailableMaterials.Clear();
+            FilteredAvailableMaterials.Clear();
+            BrowserActiveItems.Clear();
+            Materials.Clear();
             
             try
             {
@@ -1923,89 +2039,108 @@ namespace ForzaTechStudio.ViewModels
         {
             // Snapshot existing user assignments BEFORE clearing
             // This ensures assignments survive any reload (e.g. same zip re-checked on page Loaded).
-            var meshSnapshot = MaterialAssignments
-                .Where(a => !string.IsNullOrEmpty(a.SelectedMaterial))
-                .ToDictionary(a => a.MeshName, a => a.SelectedMaterial, StringComparer.OrdinalIgnoreCase);
-            var mappingSnapshot = OriginalMaterialMappings
-                .Where(m => !string.IsNullOrEmpty(m.SelectedMaterial))
-                .ToDictionary(m => m.OriginalName, m => m.SelectedMaterial, StringComparer.OrdinalIgnoreCase);
+            var meshSnapshot = BuildLatestValueMap(
+                MaterialAssignments.Where(a => !string.IsNullOrEmpty(a.SelectedMaterial)),
+                a => a.MeshName,
+                a => a.SelectedMaterial);
+            var mappingSnapshot = BuildLatestValueMap(
+                OriginalMaterialMappings.Where(m => !string.IsNullOrEmpty(m.SelectedMaterial)),
+                m => m.OriginalName,
+                m => m.SelectedMaterial);
 
-            MaterialAssignments.Clear();
-            OriginalMaterialMappings.Clear();
+            _isPopulatingMaterialAssignments = true;
 
-            // Populate unique original materials
-            var uniqueOriginals = ModelGroups.Select(g => g.OriginalMaterial).Distinct().OrderBy(n => n);
-            foreach (var origMat in uniqueOriginals)
+            try
             {
-                var mapping = new OriginalMaterialMapping(
-                    origMat, 
-                    AvailableMaterials, 
-                    (m, newMat) => UpdateAssignmentsForOriginalMaterial(m, newMat),
-                    OpenBrowserForMapping
-                );
+                MaterialAssignments.Clear();
+                OriginalMaterialMappings.Clear();
 
-                // Priority: 1) explicit snapshot (user assigned), 2) group.SelectedMaterial,
-                // 3) fuzzy auto-match for fresh assignments.
-                if (mappingSnapshot.TryGetValue(origMat, out var snapshotMat)
-                    && (AvailableMaterials.Contains(snapshotMat) || _materialLibrary.ContainsKey(snapshotMat)))
+                // Populate unique original materials
+                var uniqueOriginals = ModelGroups
+                    .Select(g => g.OriginalMaterial)
+                    .Where(n => !string.IsNullOrWhiteSpace(n))
+                    .Distinct(StringComparer.OrdinalIgnoreCase)
+                    .OrderBy(n => n, StringComparer.OrdinalIgnoreCase);
+                foreach (var origMat in uniqueOriginals)
                 {
-                    mapping.SelectedMaterial = snapshotMat;
-                }
-                else
-                {
-                    var groupsForMat = ModelGroups.Where(g => g.OriginalMaterial == origMat).ToList();
-                    var existingSelections = groupsForMat
-                        .Select(g => g.SelectedMaterial)
-                        .Where(s => !string.IsNullOrEmpty(s))
-                        .Distinct(StringComparer.OrdinalIgnoreCase)
-                        .ToList();
+                    var mapping = new OriginalMaterialMapping(
+                        origMat,
+                        AvailableMaterials,
+                        (m, newMat) => UpdateAssignmentsForOriginalMaterial(m, newMat),
+                        OpenBrowserForMapping
+                    );
 
-                    if (existingSelections.Count == 1
-                        && (AvailableMaterials.Contains(existingSelections[0]) || _materialLibrary.ContainsKey(existingSelections[0])))
+                    // Priority: 1) explicit snapshot (user assigned), 2) group.SelectedMaterial,
+                    // 3) fuzzy auto-match for fresh assignments.
+                    if (mappingSnapshot.TryGetValue(origMat, out var snapshotMat)
+                        && (AvailableMaterials.Contains(snapshotMat) || _materialLibrary.ContainsKey(snapshotMat)))
                     {
-                        mapping.SelectedMaterial = existingSelections[0];
+                        mapping.SelectedMaterial = snapshotMat;
                     }
                     else
                     {
-                        var autoMatch = FindBestMaterialMatch(origMat, AvailableMaterials);
-                        if (autoMatch != null)
-                            mapping.SelectedMaterial = autoMatch;
+                        var groupsForMat = ModelGroups
+                            .Where(g => string.Equals(g.OriginalMaterial, origMat, StringComparison.OrdinalIgnoreCase))
+                            .ToList();
+                        var existingSelections = groupsForMat
+                            .Select(g => g.SelectedMaterial)
+                            .Where(s => !string.IsNullOrEmpty(s))
+                            .Distinct(StringComparer.OrdinalIgnoreCase)
+                            .ToList();
+
+                        if (existingSelections.Count == 1
+                            && (AvailableMaterials.Contains(existingSelections[0]) || _materialLibrary.ContainsKey(existingSelections[0])))
+                        {
+                            mapping.SelectedMaterial = existingSelections[0];
+                        }
+                        else
+                        {
+                            var autoMatch = FindBestMaterialMatch(origMat, AvailableMaterials);
+                            if (autoMatch != null)
+                                mapping.SelectedMaterial = autoMatch;
+                        }
                     }
+
+                    OriginalMaterialMappings.Add(mapping);
                 }
 
-                OriginalMaterialMappings.Add(mapping);
-            }
-
-            foreach (var group in ModelGroups)
-            {
-                var assignment = new MaterialAssignment(
-                    group.Name,
-                    group.OriginalMaterial,
-                    AvailableMaterials,
-                    HandleMaterialAssignmentChanged,
-                    OpenBrowserForAssignment,
-                    _materialLibrary
-                );
-
-                // Priority: 1) explicit mesh snapshot, 2) group.SelectedMaterial
-                string matToAssign = null;
-                if (meshSnapshot.TryGetValue(group.Name, out var snapMat)
-                    && (AvailableMaterials.Contains(snapMat) || _materialLibrary.ContainsKey(snapMat)))
+                foreach (var group in ModelGroups)
                 {
-                    matToAssign = snapMat;
-                }
-                else if (!string.IsNullOrEmpty(group.SelectedMaterial))
-                {
-                    matToAssign = group.SelectedMaterial;
-                }
+                    var assignment = new MaterialAssignment(
+                        group.Name,
+                        group.OriginalMaterial,
+                        AvailableMaterials,
+                        HandleMaterialAssignmentChanged,
+                        OpenBrowserForAssignment,
+                        _materialLibrary
+                    );
 
-                if (matToAssign != null)
-                    assignment.SelectedMaterial = matToAssign;
+                    // Priority: 1) explicit mesh snapshot, 2) group.SelectedMaterial
+                    string matToAssign = null;
+                    if (meshSnapshot.TryGetValue(group.Name, out var snapMat)
+                        && (AvailableMaterials.Contains(snapMat) || _materialLibrary.ContainsKey(snapMat)))
+                    {
+                        matToAssign = snapMat;
+                    }
+                    else if (!string.IsNullOrEmpty(group.SelectedMaterial))
+                    {
+                        matToAssign = group.SelectedMaterial;
+                    }
 
-                MaterialAssignments.Add(assignment);
-            }
+                    if (matToAssign != null)
+                        assignment.SelectedMaterial = matToAssign;
+
+                    MaterialAssignments.Add(assignment);
+                }
             
-            UpdateFilteredMaterialAssignments();
+                UpdateFilteredMaterialAssignments();
+            }
+            finally
+            {
+                _isPopulatingMaterialAssignments = false;
+            }
+
+            RebuildBundle();
         }
 
         private void UpdateFilteredMaterialAssignments()
@@ -2026,22 +2161,42 @@ namespace ForzaTechStudio.ViewModels
         private void UpdateAssignmentsForOriginalMaterial(string originalMatName, string newForzaMat)
         {
             // Propagate to all individual assignments
-            foreach (var assignment in MaterialAssignments.Where(a => a.SourceMaterialName == originalMatName))
+            foreach (var assignment in MaterialAssignments.Where(a => string.Equals(a.SourceMaterialName, originalMatName, StringComparison.OrdinalIgnoreCase)))
             {
                 assignment.SelectedMaterial = newForzaMat;
             }
             
             // Also update the groups directly to trigger rebuild if needed
             // (The assignment change handler usually does this, but we update ViewModel directly)
-            foreach (var group in ModelGroups.Where(g => g.OriginalMaterial == originalMatName))
+            foreach (var group in ModelGroups.Where(g => string.Equals(g.OriginalMaterial, originalMatName, StringComparison.OrdinalIgnoreCase)))
             {
                 group.SelectedMaterial = newForzaMat;
             }
+
+            if (_isPopulatingMaterialAssignments) return;
             
             RebuildBundle();
         }
 
-        // NEW: Relay Command wrapper for AutoMatch
+        [RelayCommand]
+        private async Task AssignSelectedLibraryMaterial()
+        {
+            if (string.IsNullOrEmpty(BrowserSelectedItem) || SelectedGroupForMaterialAssignment == null) return;
+
+            string selectedMaterial = BrowserSelectedItem;
+
+            if (IsBrowserLibraryMode && _currentLibraryEntries.TryGetValue(selectedMaterial, out var libEntry))
+                await ImportLibraryMaterialAsync(selectedMaterial, libEntry);
+            else if (!string.IsNullOrEmpty(MaterialZipPath) && _materialLibrary.TryGetValue(selectedMaterial, out var cached))
+                await TrySwapBlobFromZipAsync(cached);
+
+            var assignment = MaterialAssignments.FirstOrDefault(a => a.MeshName == SelectedGroupForMaterialAssignment.Name);
+            if (assignment != null)
+                assignment.SelectedMaterial = selectedMaterial;
+
+            StatusMessage = $"Assigned '{selectedMaterial}' to '{SelectedGroupForMaterialAssignment.Name}'";
+        }
+
         [RelayCommand]
         private void RunAutoMatchWrapper()
         {
@@ -2052,6 +2207,7 @@ namespace ForzaTechStudio.ViewModels
         private void OpenBrowserForMapping(OriginalMaterialMapping mapping)
         {
             _browserContext = mapping;
+            BrowserSelectedItem = mapping?.SelectedMaterial;
             // Initialise browser items for whichever source is currently active
             if (IsBrowserLibraryMode)
                 _ = RefreshBrowserItemsAsync();
@@ -2063,6 +2219,7 @@ namespace ForzaTechStudio.ViewModels
         private void OpenBrowserForAssignment(MaterialAssignment assignment)
         {
             _browserContext = assignment;
+            BrowserSelectedItem = assignment?.SelectedMaterial;
             if (IsBrowserLibraryMode)
                 _ = RefreshBrowserItemsAsync();
             else
@@ -2179,10 +2336,8 @@ namespace ForzaTechStudio.ViewModels
         [RelayCommand]
         private async Task ApplyBrowserSelection(string selection)
         {
-            var selectedMaterial = selection;
-            
-            if (string.IsNullOrEmpty(selectedMaterial))
-                selectedMaterial = BrowserActiveItems.FirstOrDefault();
+
+            var selectedMaterial = !string.IsNullOrEmpty(BrowserSelectedItem) ? BrowserSelectedItem : selection;
             
             if (string.IsNullOrEmpty(selectedMaterial))
             {
@@ -2353,6 +2508,7 @@ namespace ForzaTechStudio.ViewModels
             // Select first without triggering a redundant load via the property-changed handler
             _suppressZipSelectionChange = true;
             SelectedMaterialZipOption = MaterialZipOptions[0];
+            _committedZipOption = MaterialZipOptions[0];
             _suppressZipSelectionChange = false;
 
             await LoadMaterialZipAsync(allPaths[0], isAutoLoad: true);
@@ -2728,18 +2884,15 @@ namespace ForzaTechStudio.ViewModels
             
             try
             {
-                // Attempt to find the RootFrame from MainWindow structure
                 Frame rootFrame = null;
                 
-                // MainWindow content is likely a Grid (or Panel) containing the Frame
+
                 if (App.MainWindow?.Content is Panel rootPanel)
                 {
-                    // Try to find the frame by checking children
                     rootFrame = rootPanel.Children.OfType<Frame>().FirstOrDefault();
                 }
                 else if (App.MainWindow?.Content is Frame frame)
                 {
-                    // Direct frame content (fallback)
                     rootFrame = frame;
                 }
 
@@ -2765,7 +2918,7 @@ namespace ForzaTechStudio.ViewModels
                 
                 System.Diagnostics.Debug.WriteLine($"[EditParameters] ShellPage found successfully");
                 
-                // Use the public NavigateToPage method
+
                 bool navigated = shellPage.NavigateToPage(typeof(MaterialShaderParametersPage), vm);
                 System.Diagnostics.Debug.WriteLine($"[EditParameters] Navigation result: {navigated}");
                 
@@ -2787,7 +2940,7 @@ namespace ForzaTechStudio.ViewModels
         }
     }
 
-    // NEW: Class for mapping original MTL materials to Forza materials globally
+    // Class for mapping original MTL materials to Forza materials globally
     public partial class OriginalMaterialMapping : ObservableObject
     {
         public string OriginalName { get; }

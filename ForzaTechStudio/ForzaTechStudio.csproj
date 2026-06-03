@@ -258,8 +258,8 @@
     <AssemblyName>ForzaTech Studio</AssemblyName>
     <Description>Forza Resource Tools</Description>
     <Copyright>D3FEKT</Copyright>
-    <AssemblyVersion>0.9.1.7</AssemblyVersion>
-    <FileVersion>0.9.1.7</FileVersion>
+    <AssemblyVersion>0.9.1.9</AssemblyVersion>
+    <FileVersion>0.9.1.9</FileVersion>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x86'">
     <DebugType>none</DebugType>

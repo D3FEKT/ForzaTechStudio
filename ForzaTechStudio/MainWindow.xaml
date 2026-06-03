@@ -20,6 +20,17 @@
 
         <!-- App content -->
         <Frame x:Name="RootFrame" Grid.Row="1"/>
+
+        <!-- Invisible focus sink used to end text-entry mode when the user clicks on non-focusable UI. -->
+        <Button x:Name="FocusParkingElement"
+            Grid.Row="1"
+            Width="1"
+            Height="1"
+            HorizontalAlignment="Left"
+            VerticalAlignment="Top"
+            Opacity="0"
+            IsHitTestVisible="False"
+            UseSystemFocusVisuals="False"/>
     </Grid>
     
 </Window>

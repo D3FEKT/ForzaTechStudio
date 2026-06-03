@@ -341,6 +341,9 @@ namespace ForzaTechStudio.Views
         {
             switch (node)
             {
+                case ModelBinNode modelBin:
+                    MarkModelBinSaved(modelBin);
+                    break;
                 case LightsBinNode lightsBin:
                     lightsBin.IsDirty = false;
                     break;
@@ -353,6 +356,68 @@ namespace ForzaTechStudio.Views
                 case CarbinFileNode carbin:
                     carbin.IsDirty = false;
                     break;
+            }
+        }
+
+        private static void MarkModelBinSaved(ModelBinNode modelBin)
+        {
+            foreach (var mesh in modelBin.Children.OfType<MeshNode>())
+            {
+                if (mesh.GeometryData?.SourceMesh == null)
+                    continue;
+
+                mesh.OriginalPositionScale = mesh.GeometryData.SourceMesh.PositionScale;
+                mesh.OriginalPositionTranslate = mesh.GeometryData.SourceMesh.PositionTranslate;
+                mesh.OriginalRotationEulerDegrees = mesh.GeometryData.RotationEulerDegrees;
+            }
+
+            modelBin.IsDirty = false;
+        }
+
+        private async void SaveAllModified_Click(object sender, Microsoft.UI.Xaml.RoutedEventArgs e)
+        {
+            var dirty = CollectDirtySaveFileNodes();
+            if (dirty.Count == 0)
+            {
+                await ShowSaveSummary("Save All", "No modified files to save.");
+                return;
+            }
+
+            await SaveSelectedFileNodesAsync(dirty, saveAsFolder: false);
+        }
+
+        private List<IViewerNode> CollectDirtySaveFileNodes()
+        {
+            var result = new List<IViewerNode>();
+            var seen = new HashSet<IViewerNode>();
+
+            foreach (var node in EnumerateAllViewerNodes(ViewModel.Roots))
+            {
+                if (!IsSaveNodeDirty(node) || !seen.Add(node))
+                    continue;
+                result.Add(node);
+            }
+
+            return result;
+        }
+
+        private static bool IsSaveNodeDirty(IViewerNode node) => node switch
+        {
+            ModelBinNode modelBin => modelBin.IsDirty,
+            LightsBinNode lightsBin => lightsBin.IsDirty,
+            LocatorsXmlNode locatorsXml => locatorsXml.IsDirty,
+            AvPinsFileNode avPins => avPins.IsDirty,
+            CarbinFileNode carbin => carbin.IsDirty,
+            _ => false
+        };
+
+        private static IEnumerable<IViewerNode> EnumerateAllViewerNodes(IEnumerable<IViewerNode> roots)
+        {
+            foreach (var root in roots)
+            {
+                yield return root;
+                foreach (var child in EnumerateAllViewerNodes(root.Children))
+                    yield return child;
             }
         }
 

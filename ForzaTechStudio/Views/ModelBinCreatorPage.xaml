@@ -29,7 +29,7 @@
     </Page.Resources>
 
     <Grid>
-        <Grid Padding="32">
+        <Grid Padding="32" MaxWidth="1680" HorizontalAlignment="Center">
             <Grid.RowDefinitions>
                 <RowDefinition Height="Auto"/>
                 <RowDefinition Height="Auto"/>
@@ -48,27 +48,34 @@
                      Message="{x:Bind ViewModel.StatusMessage, Mode=OneWay}" Margin="0,0,0,24"/>
 
             <!-- Custom Stepper -->
-            <Grid Grid.Row="2" Margin="0,0,0,32">
-                <Grid.ColumnDefinitions>
-                    <ColumnDefinition Width="Auto"/>
-                    <ColumnDefinition Width="*"/>
-                    <ColumnDefinition Width="Auto"/>
-                    <ColumnDefinition Width="*"/>
-                    <ColumnDefinition Width="Auto"/>
-                </Grid.ColumnDefinitions>
+            <ScrollViewer Grid.Row="2"
+                          Margin="0,0,0,24"
+                          HorizontalScrollBarVisibility="Auto"
+                          HorizontalScrollMode="Enabled"
+                          VerticalScrollBarVisibility="Disabled"
+                          VerticalScrollMode="Disabled">
+                <Grid MinWidth="980" Margin="0,0,0,8">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="Auto"/>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="Auto"/>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="Auto"/>
+                    </Grid.ColumnDefinitions>
 
-                <Button x:Name="Step1Btn" Style="{StaticResource StepperButtonActiveStyle}" Content="1. Import &amp; Sources" Tag="Import" Click="Step_Click"/>
-                <Rectangle Grid.Column="1" Height="2" Fill="{ThemeResource SurfaceStrokeColorDefaultBrush}" VerticalAlignment="Center" Margin="16,0"/>
-                <Button x:Name="Step2Btn" Grid.Column="2" Style="{StaticResource StepperButtonStyle}" Content="2. Material Assignment" Tag="Materials" Click="Step_Click" IsEnabled="{x:Bind ViewModel.IsZipLoaded, Mode=OneWay}"/>
-                <Rectangle Grid.Column="3" Height="2" Fill="{ThemeResource SurfaceStrokeColorDefaultBrush}" VerticalAlignment="Center" Margin="16,0"/>
-                <Button x:Name="Step3Btn" Grid.Column="4" Style="{StaticResource StepperButtonStyle}" Content="3. Configuration &amp; Export" Tag="Config" Click="Step_Click" IsEnabled="{x:Bind ViewModel.IsZipLoaded, Mode=OneWay}"/>
-            </Grid>
+                    <Button x:Name="Step1Btn" Style="{StaticResource StepperButtonActiveStyle}" Content="1. Import &amp; Sources" Command="{x:Bind ViewModel.GoToStepCommand}" CommandParameter="Import"/>
+                    <Rectangle Grid.Column="1" Height="2" Fill="{ThemeResource SurfaceStrokeColorDefaultBrush}" VerticalAlignment="Center" Margin="16,0"/>
+                    <Button x:Name="Step2Btn" Grid.Column="2" Style="{StaticResource StepperButtonStyle}" Content="2. Material Assignment" Command="{x:Bind ViewModel.GoToStepCommand}" CommandParameter="Materials" IsEnabled="{x:Bind ViewModel.IsZipLoaded, Mode=OneWay}"/>
+                    <Rectangle Grid.Column="3" Height="2" Fill="{ThemeResource SurfaceStrokeColorDefaultBrush}" VerticalAlignment="Center" Margin="16,0"/>
+                    <Button x:Name="Step3Btn" Grid.Column="4" Style="{StaticResource StepperButtonStyle}" Content="3. Configuration &amp; Export" Command="{x:Bind ViewModel.GoToStepCommand}" CommandParameter="Config" IsEnabled="{x:Bind ViewModel.IsZipLoaded, Mode=OneWay}"/>
+                </Grid>
+            </ScrollViewer>
 
             <!-- Content Area -->
             <Grid Grid.Row="3">
                 <!-- Import Content -->
-                <ScrollViewer x:Name="ImportContent" Visibility="Visible" VerticalScrollBarVisibility="Auto" Padding="0,0,16,0">
-                    <StackPanel Spacing="24" MaxWidth="800" HorizontalAlignment="Left">
+                <ScrollViewer x:Name="ImportContent" Visibility="Visible" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" Padding="0,0,16,24">
+                    <StackPanel Spacing="24" MaxWidth="1120" HorizontalAlignment="Center">
                         <!-- Target Game -->
                         <Border Background="{ThemeResource CardBackgroundFillColorDefaultBrush}" BorderBrush="{ThemeResource SurfaceStrokeColorDefaultBrush}" BorderThickness="1" CornerRadius="8" Padding="24">
                             <StackPanel Spacing="16">
@@ -76,7 +83,10 @@
                                 <TextBlock Text="Select the destination Forza game. This determines the vertex layout and data encoding." Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
                                 <ComboBox ItemsSource="{x:Bind ViewModel.GameTargetOptions}" SelectedItem="{x:Bind ViewModel.SelectedGameTarget, Mode=TwoWay}" HorizontalAlignment="Stretch"/>
                                 <Border Background="{ThemeResource LayerFillColorDefaultBrush}" CornerRadius="6" Padding="16" Margin="0,8,0,0">
-                                    <TextBlock Text="{x:Bind ViewModel.VlayLayoutDescription, Mode=OneWay}" FontFamily="Consolas" FontSize="13" Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
+                                    <StackPanel Spacing="8">
+                                        <TextBlock Text="{x:Bind ViewModel.VlayLayoutDescription, Mode=OneWay}" FontFamily="Consolas" FontSize="13" Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
+                                        <TextBlock Text="{x:Bind ViewModel.TargetFormatSummary, Mode=OneWay}" FontFamily="Consolas" FontSize="12" Foreground="{ThemeResource TextFillColorTertiaryBrush}"/>
+                                    </StackPanel>
                                 </Border>
                             </StackPanel>
                         </Border>
@@ -132,69 +142,95 @@
                             </StackPanel>
                         </Border>
                         
-                        <Button Content="Next: Material Assignment" Style="{StaticResource AccentButtonStyle}" HorizontalAlignment="Right" Click="NextToMaterials_Click" IsEnabled="{x:Bind ViewModel.IsZipLoaded, Mode=OneWay}" Padding="24,12"/>
+                        <Button Content="Next: Material Assignment" Style="{StaticResource AccentButtonStyle}" HorizontalAlignment="Right" Command="{x:Bind ViewModel.GoToStepCommand}" CommandParameter="Materials" IsEnabled="{x:Bind ViewModel.IsZipLoaded, Mode=OneWay}" Padding="24,12"/>
                     </StackPanel>
                 </ScrollViewer>
 
                 <!-- Materials Content -->
-                <Grid x:Name="MaterialsContent" Visibility="Collapsed" ColumnSpacing="32">
-                    <Grid.ColumnDefinitions>
-                        <ColumnDefinition Width="*"/>
-                        <ColumnDefinition Width="*"/>
-                    </Grid.ColumnDefinitions>
-                    <Grid.RowDefinitions>
-                        <RowDefinition Height="*"/>
-                        <RowDefinition Height="Auto"/>
-                    </Grid.RowDefinitions>
+                <ScrollViewer x:Name="MaterialsContent"
+                              Visibility="Collapsed"
+                              VerticalScrollBarVisibility="Auto"
+                              HorizontalScrollBarVisibility="Auto"
+                              Padding="0,0,16,24">
+                    <Grid MinWidth="1120" MaxWidth="1600" ColumnSpacing="32" HorizontalAlignment="Center">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="*"/>
+                        </Grid.ColumnDefinitions>
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto"/> 
+                            <RowDefinition Height="Auto"/> 
+                            <RowDefinition Height="*"/>    
+                        </Grid.RowDefinitions>
 
-                    <!-- Left: Global Mappings -->
-                    <Grid Grid.Row="0" Grid.Column="0" RowDefinitions="Auto, *">
-                        <StackPanel Spacing="8" Margin="0,0,0,24">
-                            <Grid ColumnDefinitions="*, Auto">
-                                <TextBlock Text="Global Material Mapping" Style="{StaticResource SubtitleTextBlockStyle}" VerticalAlignment="Center"/>
+
+                        <StackPanel Grid.Row="0" Grid.Column="0" Spacing="12" Margin="0,0,0,12">
+                            <Grid ColumnDefinitions="*, Auto, Auto" ColumnSpacing="8">
+                                <TextBlock Text="Material Library" Style="{StaticResource SubtitleTextBlockStyle}" VerticalAlignment="Center"/>
                                 <Button Grid.Column="1" Command="{x:Bind ViewModel.RunAutoMatchWrapperCommand}" Content="Auto Match" Style="{StaticResource AccentButtonStyle}"/>
+                                <Button Grid.Column="2" Command="{x:Bind ViewModel.AssignSelectedLibraryMaterialCommand}" Content="Assign"
+                                        IsEnabled="{x:Bind ViewModel.CanAssignLibraryMaterial, Mode=OneWay}"/>
                             </Grid>
-                            <TextBlock Text="Map imported materials to Forza materials. This applies to all objects using these materials." Foreground="{ThemeResource TextFillColorSecondaryBrush}" TextWrapping="Wrap"/>
+                            <TextBlock Text="Select a material, then select an object on the right and click Assign." Foreground="{ThemeResource TextFillColorSecondaryBrush}" TextWrapping="Wrap" FontSize="12"/>
+                            <ToggleSwitch OffContent="Zip Materials" OnContent="Game Library"
+                                          IsOn="{x:Bind ViewModel.IsBrowserLibraryMode, Mode=TwoWay}"/>
+                            <ComboBox ItemsSource="{x:Bind ViewModel.BrowserLibraryGames}"
+                                      SelectedItem="{x:Bind ViewModel.SelectedBrowserLibraryGame, Mode=TwoWay}"
+                                      DisplayMemberPath="DisplayName"
+                                      HorizontalAlignment="Stretch"
+                                      Header="Game Library"
+                                      Visibility="{x:Bind ViewModel.IsBrowserLibraryMode, Mode=OneWay, Converter={StaticResource BoolToVis}}"/>
                         </StackPanel>
 
-                        <ListView Grid.Row="1" ItemsSource="{x:Bind ViewModel.OriginalMaterialMappings, Mode=OneWay}" SelectionMode="None"
-                                  Background="{ThemeResource CardBackgroundFillColorDefaultBrush}" BorderBrush="{ThemeResource SurfaceStrokeColorDefaultBrush}" BorderThickness="1" CornerRadius="8">
-                            <ListView.ItemTemplate>
-                                <DataTemplate x:DataType="viewmodels:OriginalMaterialMapping">
-                                    <Grid Padding="20,16" ColumnDefinitions="*, 1.5*" ColumnSpacing="24" BorderBrush="{ThemeResource SurfaceStrokeColorDefaultBrush}" BorderThickness="0,0,0,1">
-                                        <TextBlock Text="{x:Bind OriginalName}" VerticalAlignment="Center" FontWeight="SemiBold" TextTrimming="CharacterEllipsis"/>
-                                        <Grid Grid.Column="1" ColumnDefinitions="*, Auto" ColumnSpacing="12">
-                                            <ComboBox ItemsSource="{x:Bind AvailableMaterials}" SelectedItem="{x:Bind SelectedMaterial, Mode=TwoWay}" HorizontalAlignment="Stretch" PlaceholderText="Select material..."/>
-                                            <Button Grid.Column="1" Command="{x:Bind BrowseCommand}">
-                                                <FontIcon Glyph="&#xE721;" FontSize="14"/>
-                                            </Button>
-                                        </Grid>
-                                    </Grid>
-                                </DataTemplate>
-                            </ListView.ItemTemplate>
-                        </ListView>
-                    </Grid>
 
-                    <!-- Right: Object Overrides -->
-                    <Grid Grid.Row="0" Grid.Column="1" RowDefinitions="Auto, Auto, *">
-                        <StackPanel Spacing="8" Margin="0,0,0,24">
-                            <TextBlock Text="Object-Specific Assignment" Style="{StaticResource SubtitleTextBlockStyle}"/>
-                            <TextBlock Text="Select an object to override its material assignment." Foreground="{ThemeResource TextFillColorSecondaryBrush}" TextWrapping="Wrap"/>
-                        </StackPanel>
+                        <Grid Grid.Row="0" Grid.Column="1" RowDefinitions="Auto, Auto" Margin="0,0,0,12">
+                            <Button Grid.Row="0" Content="Next: Configuration &amp; Export →"
+                                    Style="{StaticResource AccentButtonStyle}"
+                                    HorizontalAlignment="Right" Padding="24,12" Margin="0,0,0,12"
+                                    Command="{x:Bind ViewModel.GoToStepCommand}" CommandParameter="Config"/>
+                            <StackPanel Grid.Row="1" Spacing="8">
+                                <TextBlock Text="Object-Specific Assignment" Style="{StaticResource SubtitleTextBlockStyle}"/>
+                                <TextBlock Text="Select an object to override its material assignment." Foreground="{ThemeResource TextFillColorSecondaryBrush}" TextWrapping="Wrap"/>
+                            </StackPanel>
+                        </Grid>
 
-                        <TextBox Grid.Row="1" PlaceholderText="Search objects..." Text="{x:Bind ViewModel.GroupSearchText, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" Margin="0,0,0,16">
+
+                        <TextBox Grid.Row="1" Grid.Column="0"
+                                 PlaceholderText="Search materials..."
+                                 Text="{x:Bind ViewModel.BrowserSearchText, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                                 Margin="0,0,0,12">
                             <TextBox.Header>
-                                <FontIcon Glyph="&#xE721;" FontSize="12" Margin="0,0,8,0"/>
+                                <FontIcon Glyph="&#xE721;" FontSize="12"/>
+                            </TextBox.Header>
+                        </TextBox>
+                        <TextBox Grid.Row="1" Grid.Column="1"
+                                 PlaceholderText="Search objects..."
+                                 Text="{x:Bind ViewModel.GroupSearchText, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                                 Margin="0,0,0,12">
+                            <TextBox.Header>
+                                <FontIcon Glyph="&#xE721;" FontSize="12"/>
                             </TextBox.Header>
                         </TextBox>
 
-                        <Grid Grid.Row="2" ColumnSpacing="24">
+
+                        <ListView Grid.Row="2" Grid.Column="0"
+                                  ItemsSource="{x:Bind ViewModel.BrowserActiveItems, Mode=OneWay}"
+                                  SelectionMode="Single"
+                                  SelectedItem="{x:Bind ViewModel.BrowserSelectedItem, Mode=TwoWay}"
+                                  MaxHeight="560"
+                                  Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
+                                  BorderBrush="{ThemeResource SurfaceStrokeColorDefaultBrush}"
+                                  BorderThickness="1" CornerRadius="8"/>
+
+
+                        <Grid Grid.Row="2" Grid.Column="1" ColumnSpacing="24">
                             <Grid.ColumnDefinitions>
                                 <ColumnDefinition Width="*"/>
                                 <ColumnDefinition Width="1.5*"/>
                             </Grid.ColumnDefinitions>
 
                             <ListView Grid.Column="0" ItemsSource="{x:Bind ViewModel.FilteredModelGroups, Mode=OneWay}" SelectedItem="{x:Bind ViewModel.SelectedGroupForMaterialAssignment, Mode=TwoWay}"
+                                      MaxHeight="560"
                                       Background="{ThemeResource CardBackgroundFillColorDefaultBrush}" BorderBrush="{ThemeResource SurfaceStrokeColorDefaultBrush}" BorderThickness="1" CornerRadius="8">
                                 <ListView.ItemTemplate>
                                     <DataTemplate x:DataType="viewmodels:GroupViewModel">
@@ -206,94 +242,97 @@
                                 </ListView.ItemTemplate>
                             </ListView>
 
-                            <Border Grid.Column="1" Background="{ThemeResource CardBackgroundFillColorDefaultBrush}" BorderBrush="{ThemeResource SurfaceStrokeColorDefaultBrush}" BorderThickness="1" CornerRadius="8" Padding="24">
+                            <Border Grid.Column="1" MaxHeight="560" Background="{ThemeResource CardBackgroundFillColorDefaultBrush}" BorderBrush="{ThemeResource SurfaceStrokeColorDefaultBrush}" BorderThickness="1" CornerRadius="8" Padding="24">
                                 <Grid>
-                                    <TextBlock Text="Select an object to view its material" Foreground="{ThemeResource TextFillColorSecondaryBrush}" HorizontalAlignment="Center" VerticalAlignment="Center"
+                                    <TextBlock Text="Select an object to view its material" Foreground="{ThemeResource TextFillColorSecondaryBrush}" HorizontalAlignment="Center" VerticalAlignment="Center" TextWrapping="WrapWholeWords"
                                                Visibility="{x:Bind ViewModel.SelectedGroupForMaterialAssignment, Mode=OneWay, Converter={StaticResource NullToVis}, ConverterParameter='Invert'}"/>
-                                    
-                                    <ListView ItemsSource="{x:Bind ViewModel.FilteredMaterialAssignments, Mode=OneWay}" SelectionMode="None"
-                                              Visibility="{x:Bind ViewModel.SelectedGroupForMaterialAssignment, Mode=OneWay, Converter={StaticResource NullToVis}}">
-                                        <ListView.ItemTemplate>
-                                            <DataTemplate x:DataType="viewmodels:MaterialAssignment">
-                                                <StackPanel Spacing="20">
-                                                    <TextBlock Text="{x:Bind MeshName, Mode=OneWay}" Style="{StaticResource SubtitleTextBlockStyle}"/>
-                                                    <TextBlock Foreground="{ThemeResource TextFillColorSecondaryBrush}">
-                                                        <Run Text="Source Material: "/>
-                                                        <Run Text="{x:Bind SourceMaterialName, Mode=OneWay}" FontWeight="SemiBold"/>
-                                                    </TextBlock>
-                                                    <ComboBox ItemsSource="{x:Bind AvailableMaterials, Mode=OneWay}" SelectedItem="{x:Bind SelectedMaterial, Mode=TwoWay}" HorizontalAlignment="Stretch" PlaceholderText="Override material..."/>
-                                                    <StackPanel Orientation="Horizontal" Spacing="12">
-                                                        <Button Command="{x:Bind BrowseCommand}" Content="Browse Library"/>
-                                                        <Button Command="{x:Bind EditParametersCommand}" Content="Edit Parameters"/>
-                                                        <Button Command="{x:Bind ImportJsonCommand}" Content="Import JSON"/>
+
+                                    <ScrollViewer VerticalScrollBarVisibility="Auto"
+                                                  Visibility="{x:Bind ViewModel.SelectedGroupForMaterialAssignment, Mode=OneWay, Converter={StaticResource NullToVis}}">
+                                        <ListView ItemsSource="{x:Bind ViewModel.FilteredMaterialAssignments, Mode=OneWay}" SelectionMode="None">
+                                            <ListView.ItemTemplate>
+                                                <DataTemplate x:DataType="viewmodels:MaterialAssignment">
+                                                    <StackPanel Spacing="20">
+                                                        <TextBlock Text="{x:Bind MeshName, Mode=OneWay}" Style="{StaticResource SubtitleTextBlockStyle}" TextWrapping="WrapWholeWords"/>
+                                                        <TextBlock Foreground="{ThemeResource TextFillColorSecondaryBrush}" TextWrapping="WrapWholeWords">
+                                                            <Run Text="Source Material: "/>
+                                                            <Run Text="{x:Bind SourceMaterialName, Mode=OneWay}" FontWeight="SemiBold"/>
+                                                        </TextBlock>
+                                                        <ComboBox ItemsSource="{x:Bind AvailableMaterials, Mode=OneWay}" SelectedItem="{x:Bind SelectedMaterial, Mode=TwoWay}" HorizontalAlignment="Stretch" PlaceholderText="Override material..."/>
+                                                        <StackPanel Spacing="12">
+                                                            <Button Command="{x:Bind EditParametersCommand}" Content="Edit Parameters"/>
+                                                            <Button Command="{x:Bind ImportJsonCommand}" Content="Import JSON"/>
+                                                        </StackPanel>
                                                     </StackPanel>
-                                                </StackPanel>
-                                            </DataTemplate>
-                                        </ListView.ItemTemplate>
-                                    </ListView>
+                                                </DataTemplate>
+                                            </ListView.ItemTemplate>
+                                        </ListView>
+                                    </ScrollViewer>
                                 </Grid>
                             </Border>
                         </Grid>
                     </Grid>
+                </ScrollViewer>
 
-                    <!-- Step 2 footer: advance to Configuration & Export -->
-                    <Button Grid.Row="1" Grid.Column="0" Grid.ColumnSpan="2"
-                            Content="Next: Configuration &amp; Export →"
-                            Style="{StaticResource AccentButtonStyle}"
-                            HorizontalAlignment="Right" Padding="24,12" Margin="0,16,0,0"
-                            Click="NextToConfig_Click"/>
-                </Grid>
+                <ScrollViewer x:Name="ConfigContent"
+                              Visibility="Collapsed"
+                              VerticalScrollBarVisibility="Auto"
+                              HorizontalScrollBarVisibility="Auto"
+                              Padding="0,0,16,24">
+                    <Grid MinWidth="1240" MaxWidth="1700" ColumnSpacing="32" HorizontalAlignment="Center">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="300"/>
+                            <ColumnDefinition Width="350"/>
+                            <ColumnDefinition Width="*"/>
+                        </Grid.ColumnDefinitions>
 
-                <Grid x:Name="ConfigContent" Visibility="Collapsed" ColumnSpacing="32">
-                    <Grid.ColumnDefinitions>
-                        <ColumnDefinition Width="300"/>
-                        <ColumnDefinition Width="350"/>
-                        <ColumnDefinition Width="*"/>
-                    </Grid.ColumnDefinitions>
+                        <!-- Left: Bin Manager -->
+                        <Grid Grid.Column="0" RowDefinitions="Auto, *, Auto">
+                            <TextBlock Text="Output modelbins" Style="{StaticResource SubtitleTextBlockStyle}" Margin="0,0,0,24"/>
+                            <ListView Grid.Row="1" ItemsSource="{x:Bind ViewModel.BinConfigs, Mode=OneWay}" SelectedItem="{x:Bind ViewModel.SelectedBinConfig, Mode=TwoWay}"
+                                      MinHeight="520"
+                                      Background="{ThemeResource CardBackgroundFillColorDefaultBrush}" BorderBrush="{ThemeResource SurfaceStrokeColorDefaultBrush}" BorderThickness="1" CornerRadius="8" Margin="0,0,0,24">
+                                <ListView.ItemTemplate>
+                                    <DataTemplate x:DataType="viewmodels:ModelBinConfigViewModel">
+                                        <TextBlock Text="{x:Bind OutputName}" Padding="16,12" VerticalAlignment="Center"/>
+                                    </DataTemplate>
+                                </ListView.ItemTemplate>
+                            </ListView>
+                            <StackPanel Grid.Row="2" Spacing="12">
+                                <Button Command="{x:Bind ViewModel.AddBinCommand}" Content="Add New modelbin" HorizontalAlignment="Stretch"/>
+                                <Button Command="{x:Bind ViewModel.RemoveBinCommand}" CommandParameter="{x:Bind ViewModel.SelectedBinConfig, Mode=OneWay}" Content="Remove Selected" HorizontalAlignment="Stretch" Foreground="{ThemeResource SystemFillColorCriticalBrush}"/>
+                            </StackPanel>
+                        </Grid>
 
-                    <!-- Left: Bin Manager -->
-                    <Grid Grid.Column="0" RowDefinitions="Auto, *, Auto">
-                        <TextBlock Text="Output Bins" Style="{StaticResource SubtitleTextBlockStyle}" Margin="0,0,0,24"/>
-                        <ListView Grid.Row="1" ItemsSource="{x:Bind ViewModel.BinConfigs, Mode=OneWay}" SelectedItem="{x:Bind ViewModel.SelectedBinConfig, Mode=TwoWay}"
-                                  Background="{ThemeResource CardBackgroundFillColorDefaultBrush}" BorderBrush="{ThemeResource SurfaceStrokeColorDefaultBrush}" BorderThickness="1" CornerRadius="8" Margin="0,0,0,24">
-                            <ListView.ItemTemplate>
-                                <DataTemplate x:DataType="viewmodels:ModelBinConfigViewModel">
-                                    <TextBlock Text="{x:Bind OutputName}" Padding="16,12" VerticalAlignment="Center"/>
-                                </DataTemplate>
-                            </ListView.ItemTemplate>
-                        </ListView>
-                        <StackPanel Grid.Row="2" Spacing="12">
-                            <Button Command="{x:Bind ViewModel.AddBinCommand}" Content="Add New Bin" HorizontalAlignment="Stretch"/>
-                            <Button Command="{x:Bind ViewModel.RemoveBinCommand}" CommandParameter="{x:Bind ViewModel.SelectedBinConfig, Mode=OneWay}" Content="Remove Selected" HorizontalAlignment="Stretch" Foreground="{ThemeResource SystemFillColorCriticalBrush}"/>
-                        </StackPanel>
-                    </Grid>
+                        <!-- Middle: Object Inclusion -->
+                        <Grid Grid.Column="1" RowDefinitions="Auto, Auto, *">
+                            <TextBlock Text="Included Objects" Style="{StaticResource SubtitleTextBlockStyle}" Margin="0,0,0,24"/>
+                            <StackPanel Grid.Row="1" Orientation="Horizontal" Spacing="12" Margin="0,0,0,16">
+                                <Button Content="Select All" Command="{x:Bind ViewModel.SelectAllInConfigCommand}"/>
+                                <Button Content="Clear All" Command="{x:Bind ViewModel.DeselectAllInConfigCommand}"/>
+                            </StackPanel>
+                            <ListView Grid.Row="2" ItemsSource="{x:Bind ViewModel.FilteredModelGroups, Mode=OneWay}"
+                                      SelectionMode="Single"
+                                      SelectedItem="{x:Bind ViewModel.SelectedConfigObject, Mode=TwoWay}"
+                                      MinHeight="520"
+                                      Background="{ThemeResource CardBackgroundFillColorDefaultBrush}" BorderBrush="{ThemeResource SurfaceStrokeColorDefaultBrush}" BorderThickness="1" CornerRadius="8">
+                                <ListView.ItemTemplate>
+                                    <DataTemplate x:DataType="viewmodels:GroupViewModel">
+                                        <CheckBox IsChecked="{x:Bind IsSelected, Mode=TwoWay}" Content="{x:Bind Name}" Margin="16,8"/>
+                                    </DataTemplate>
+                                </ListView.ItemTemplate>
+                            </ListView>
+                        </Grid>
 
-                    <!-- Middle: Object Inclusion -->
-                    <Grid Grid.Column="1" RowDefinitions="Auto, Auto, *">
-                        <TextBlock Text="Included Objects" Style="{StaticResource SubtitleTextBlockStyle}" Margin="0,0,0,24"/>
-                        <StackPanel Grid.Row="1" Orientation="Horizontal" Spacing="12" Margin="0,0,0,16">
-                            <Button Content="Select All" Command="{x:Bind ViewModel.SelectAllInConfigCommand}"/>
-                            <Button Content="Clear All" Command="{x:Bind ViewModel.DeselectAllInConfigCommand}"/>
-                        </StackPanel>
-                        <ListView Grid.Row="2" ItemsSource="{x:Bind ViewModel.FilteredModelGroups, Mode=OneWay}" SelectionMode="None"
-                                  Background="{ThemeResource CardBackgroundFillColorDefaultBrush}" BorderBrush="{ThemeResource SurfaceStrokeColorDefaultBrush}" BorderThickness="1" CornerRadius="8">
-                            <ListView.ItemTemplate>
-                                <DataTemplate x:DataType="viewmodels:GroupViewModel">
-                                    <CheckBox IsChecked="{x:Bind IsSelected, Mode=TwoWay}" Content="{x:Bind Name}" Margin="16,8"/>
-                                </DataTemplate>
-                            </ListView.ItemTemplate>
-                        </ListView>
-                    </Grid>
+                        <!-- Right: Bin Settings -->
+                        <Grid Grid.Column="2" RowDefinitions="Auto, *, Auto">
+                            <StackPanel Grid.Row="0" Spacing="12" Margin="0,0,0,24" DataContext="{x:Bind ViewModel.SelectedBinConfig, Mode=OneWay}">
+                                <TextBlock Text="Modelbin Configuration" Style="{StaticResource SubtitleTextBlockStyle}"/>
+                                <TextBox Header="Internal Name" Text="{Binding OutputName, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"/>
+                            </StackPanel>
 
-                    <!-- Right: Bin Settings -->
-                    <Grid Grid.Column="2" RowDefinitions="Auto, *, Auto">
-                        <StackPanel Grid.Row="0" Spacing="12" Margin="0,0,0,24" DataContext="{x:Bind ViewModel.SelectedBinConfig, Mode=OneWay}">
-                            <TextBlock Text="Bin Configuration" Style="{StaticResource SubtitleTextBlockStyle}"/>
-                            <TextBox Header="Internal Name" Text="{Binding OutputName, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"/>
-                        </StackPanel>
-
-                        <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto" Padding="0,0,24,0">
-                            <StackPanel Spacing="32">
+                            <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" Padding="0,0,24,0">
+                                <StackPanel Spacing="32">
                                 <!-- Global Transform -->
                                 <Border Background="{ThemeResource CardBackgroundFillColorDefaultBrush}" BorderBrush="{ThemeResource SurfaceStrokeColorDefaultBrush}" BorderThickness="1" CornerRadius="8" Padding="24">
                                     <StackPanel Spacing="20">
@@ -321,22 +360,28 @@
                                 <Border Background="{ThemeResource CardBackgroundFillColorDefaultBrush}" BorderBrush="{ThemeResource SurfaceStrokeColorDefaultBrush}" BorderThickness="1" CornerRadius="8" Padding="24">
                                     <StackPanel Spacing="20">
                                         <TextBlock Text="Mesh Options" FontWeight="SemiBold"/>
-                                        
+
                                         <TextBlock Text="Bucket Flags" FontSize="13" Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
-                                        <Grid ColumnDefinitions="*, *" ColumnSpacing="16" RowSpacing="10">
+                                        <TextBlock Text="Select an object on the left to edit its bucket flags."
+                                                   FontSize="12" TextWrapping="Wrap"
+                                                   Foreground="{ThemeResource TextFillColorTertiaryBrush}"
+                                                   Visibility="{x:Bind ViewModel.SelectedConfigObject, Mode=OneWay, Converter={StaticResource NullToVis}, ConverterParameter=Invert}"/>
+                                        <Grid ColumnDefinitions="*, *" ColumnSpacing="16" RowSpacing="10"
+                                              DataContext="{x:Bind ViewModel.SelectedConfigObject, Mode=OneWay}"
+                                              Visibility="{x:Bind ViewModel.SelectedConfigObject, Mode=OneWay, Converter={StaticResource NullToVis}}">
                                             <Grid.RowDefinitions>
                                                 <RowDefinition Height="Auto"/>
                                                 <RowDefinition Height="Auto"/>
                                                 <RowDefinition Height="Auto"/>
                                                 <RowDefinition Height="Auto"/>
                                             </Grid.RowDefinitions>
-                                            <CheckBox Grid.Row="0" Grid.Column="0" Content="Opaque" IsChecked="{x:Bind ViewModel.IsOpaque, Mode=TwoWay}"/>
-                                            <CheckBox Grid.Row="0" Grid.Column="1" Content="Decal" IsChecked="{x:Bind ViewModel.IsDecal, Mode=TwoWay}"/>
-                                            <CheckBox Grid.Row="1" Grid.Column="0" Content="Transparent" IsChecked="{x:Bind ViewModel.IsTransparent, Mode=TwoWay}"/>
-                                            <CheckBox Grid.Row="1" Grid.Column="1" Content="Shadow" IsChecked="{x:Bind ViewModel.IsShadow, Mode=TwoWay}"/>
-                                            <CheckBox Grid.Row="2" Grid.Column="0" Content="No Shadow" IsChecked="{x:Bind ViewModel.IsNotShadow, Mode=TwoWay}"/>
-                                            <CheckBox Grid.Row="2" Grid.Column="1" Content="Alpha Coverage" IsChecked="{x:Bind ViewModel.IsAlphaToCoverage, Mode=TwoWay}"/>
-                                            <CheckBox Grid.Row="3" Grid.Column="0" Content="Morph Damage" IsChecked="{x:Bind ViewModel.IsMorphDamage, Mode=TwoWay}"/>
+                                            <CheckBox Grid.Row="0" Grid.Column="0" Content="Opaque" IsChecked="{Binding IsOpaque, Mode=TwoWay}"/>
+                                            <CheckBox Grid.Row="0" Grid.Column="1" Content="Decal" IsChecked="{Binding IsDecal, Mode=TwoWay}"/>
+                                            <CheckBox Grid.Row="1" Grid.Column="0" Content="Transparent" IsChecked="{Binding IsTransparent, Mode=TwoWay}"/>
+                                            <CheckBox Grid.Row="1" Grid.Column="1" Content="Shadow" IsChecked="{Binding IsShadow, Mode=TwoWay}"/>
+                                            <CheckBox Grid.Row="2" Grid.Column="0" Content="No Shadow" IsChecked="{Binding IsNotShadow, Mode=TwoWay}"/>
+                                            <CheckBox Grid.Row="2" Grid.Column="1" Content="Alpha Coverage" IsChecked="{Binding IsAlphaToCoverage, Mode=TwoWay}"/>
+                                            <CheckBox Grid.Row="3" Grid.Column="0" Content="Morph Damage" IsChecked="{Binding IsMorphDamage, Mode=TwoWay}"/>
                                         </Grid>
 
                                         <TextBlock Text="Modifiers" FontSize="13" Foreground="{ThemeResource TextFillColorSecondaryBrush}" Margin="0,12,0,0"/>
@@ -366,57 +411,26 @@
                                                   ToolTipService.ToolTip="Resolves required vertex elements from the target game's materialbins and shaderbins. Slower; requires a configured game path in Setup."/>
                                     </StackPanel>
                                 </Border>
-                            </StackPanel>
-                        </ScrollViewer>
+                                </StackPanel>
+                            </ScrollViewer>
 
-                        <Button Grid.Row="2" Command="{x:Bind ViewModel.ConvertModelCommand}" IsEnabled="{x:Bind ViewModel.IsNotBusy, Mode=OneWay}" Style="{StaticResource AccentButtonStyle}" HorizontalAlignment="Stretch" Height="56" Margin="0,24,0,0">
-                            <StackPanel Orientation="Horizontal" Spacing="16">
-                                <ProgressRing IsActive="{x:Bind ViewModel.IsBusy, Mode=OneWay}" Width="24" Height="24" Foreground="{ThemeResource TextOnAccentFillColorPrimaryBrush}"/>
-                                <TextBlock Text="Export Modelbin" FontSize="18" FontWeight="SemiBold"/>
+                            <StackPanel Grid.Row="2" Spacing="12" Margin="0,24,0,0">
+                                <InfoBar IsOpen="True" IsClosable="False"
+                                         Severity="{x:Bind ViewModel.ExportReadinessSeverity, Mode=OneWay}"
+                                         Message="{x:Bind ViewModel.ExportReadinessMessage, Mode=OneWay}"/>
+                                <Button Command="{x:Bind ViewModel.ConvertModelCommand}" IsEnabled="{x:Bind ViewModel.IsReadyToExport, Mode=OneWay}" Style="{StaticResource AccentButtonStyle}" HorizontalAlignment="Stretch" Height="56">
+                                    <StackPanel Orientation="Horizontal" Spacing="16">
+                                        <ProgressRing IsActive="{x:Bind ViewModel.IsBusy, Mode=OneWay}" Width="24" Height="24" Foreground="{ThemeResource TextOnAccentFillColorPrimaryBrush}"/>
+                                        <TextBlock Text="{x:Bind ViewModel.SaveButtonText, Mode=OneWay}" FontSize="18" FontWeight="SemiBold"/>
+                                    </StackPanel>
+                                </Button>
                             </StackPanel>
-                        </Button>
+                        </Grid>
                     </Grid>
-                </Grid>
+                </ScrollViewer>
             </Grid>
         </Grid>
 
-        <!-- Material Browser Overlay -->
-        <Grid Background="{ThemeResource ApplicationPageBackgroundThemeBrush}" Visibility="{x:Bind ViewModel.IsMaterialBrowserOpen, Mode=OneWay, Converter={StaticResource BoolToVis}}" Canvas.ZIndex="100">
-            <Grid.RowDefinitions>
-                <RowDefinition Height="Auto"/>
-                <RowDefinition Height="*"/>
-            </Grid.RowDefinitions>
-            
-            <StackPanel Spacing="12" Margin="32">
-                <Grid ColumnDefinitions="*, Auto, Auto" ColumnSpacing="12">
-                    <TextBlock Text="Select Material" Style="{StaticResource TitleTextBlockStyle}" VerticalAlignment="Center"/>
-                    <Button Grid.Column="1" Command="{x:Bind ViewModel.ApplyBrowserSelectionCommand}" CommandParameter="{x:Bind MaterialBrowserList.SelectedItem, Mode=OneWay}" Content="Confirm Selection" Style="{StaticResource AccentButtonStyle}"/>
-                    <Button Grid.Column="2" Command="{x:Bind ViewModel.CloseMaterialBrowserCommand}" Content="Cancel" Style="{StaticResource DefaultButtonStyle}"/>
-                </Grid>
-
-                <!-- Source toggle: Zip vs Game Library -->
-                <ToggleSwitch OffContent="Materials Zip" OnContent="Game Library"
-                              IsOn="{x:Bind ViewModel.IsBrowserLibraryMode, Mode=TwoWay}"
-                              Margin="0,4,0,0"/>
-
-                <!-- Game selector — only visible in Library mode -->
-                <ComboBox Header="Game Library"
-                          ItemsSource="{x:Bind ViewModel.BrowserLibraryGames}"
-                          SelectedItem="{x:Bind ViewModel.SelectedBrowserLibraryGame, Mode=TwoWay}"
-                          DisplayMemberPath="DisplayName"
-                          HorizontalAlignment="Left"
-                          MinWidth="300"
-                          Visibility="{x:Bind ViewModel.IsBrowserLibraryMode, Mode=OneWay, Converter={StaticResource BoolToVis}}"/>
-
-                <TextBox PlaceholderText="Search library..." Text="{x:Bind ViewModel.BrowserSearchText, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}">
-                    <TextBox.Header>
-                        <FontIcon Glyph="&#xE721;" FontSize="12" Margin="0,0,8,0"/>
-                    </TextBox.Header>
-                </TextBox>
-            </StackPanel>
-            
-            <ListView Grid.Row="1" ItemsSource="{x:Bind ViewModel.BrowserActiveItems, Mode=OneWay}" SelectionMode="Single" x:Name="MaterialBrowserList" Margin="32,0,32,32" Background="{ThemeResource CardBackgroundFillColorDefaultBrush}" BorderBrush="{ThemeResource SurfaceStrokeColorDefaultBrush}" BorderThickness="1" CornerRadius="8"/>
-        </Grid>
     </Grid>
 </Page>
 

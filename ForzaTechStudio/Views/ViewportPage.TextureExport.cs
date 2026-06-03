@@ -1,3 +1,4 @@
+using ForzaTechStudio.Models;
 using ForzaTechStudio.Services;
 using ForzaTechStudio.ViewModels.ThreeDViewer;
 using Microsoft.UI.Xaml.Controls;
@@ -18,7 +19,8 @@ namespace ForzaTechStudio.Views
         // or null if no zip sources were found or no swatchbins existed.
         private async Task<string?> ExportZipTextures(
             IEnumerable<string> zipPaths,
-            string outputDirectory)
+            string outputDirectory,
+            ExportTextureFormat format)
         {
             var distinct = zipPaths
                 .Where(p => !string.IsNullOrEmpty(p) && File.Exists(p))
@@ -28,6 +30,7 @@ namespace ForzaTechStudio.Views
             if (distinct.Count == 0)
                 return null;
 
+            string ext = TextureImageExporter.Extension(format);
             var service = new SwatchbinService();
             var folderSummaries = new List<string>();
 
@@ -39,7 +42,7 @@ namespace ForzaTechStudio.Views
                 int written = 0;
                 int failed  = 0;
 
-                await Task.Run(() =>
+                await Task.Run(async () =>
                 {
                     List<CustomZipFile.ZipEntryInfo> swatchEntries;
                     using (var zip = new CustomZipFile(zipPath))
@@ -65,7 +68,14 @@ namespace ForzaTechStudio.Views
                             using var ms  = new MemoryStream(bytes);
                             var info = service.LoadSwatchbin(ms);
 
-                            if (info?.DdsData == null || info.DdsData.Length == 0)
+                            if (info == null)
+                            {
+                                failed++;
+                                continue;
+                            }
+
+                            byte[]? outBytes = await TextureImageExporter.ConvertAsync(info, format);
+                            if (outBytes == null || outBytes.Length == 0)
                             {
                                 failed++;
                                 continue;
@@ -73,8 +83,8 @@ namespace ForzaTechStudio.Views
 
                             string baseName = Path.GetFileNameWithoutExtension(
                                 Path.GetFileName(entry.Name));
-                            string ddsPath = Path.Combine(texFolderPath, baseName + ".dds");
-                            File.WriteAllBytes(ddsPath, info.DdsData);
+                            string outPath = Path.Combine(texFolderPath, baseName + ext);
+                            File.WriteAllBytes(outPath, outBytes);
                             written++;
                         }
                         catch
@@ -97,9 +107,11 @@ namespace ForzaTechStudio.Views
         // e.g. "BODYWORK" - "NIS_SilviaK_92 Textures\BODYWORK.dds"
 
         private static Dictionary<string, string> BuildTexturePathMap(
-            IEnumerable<string> zipPaths)
+            IEnumerable<string> zipPaths,
+            ExportTextureFormat format)
         {
             var map = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+            string ext = TextureImageExporter.Extension(format);
 
             foreach (var zipPath in zipPaths
                 .Where(p => !string.IsNullOrEmpty(p) && File.Exists(p))
@@ -119,7 +131,7 @@ namespace ForzaTechStudio.Views
                             Path.GetFileName(entry.Name));
 
                         if (!string.IsNullOrEmpty(baseName) && !map.ContainsKey(baseName))
-                            map[baseName] = Path.Combine(texFolderName, baseName + ".dds");
+                            map[baseName] = Path.Combine(texFolderName, baseName + ext);
                     }
                 }
                 catch { }

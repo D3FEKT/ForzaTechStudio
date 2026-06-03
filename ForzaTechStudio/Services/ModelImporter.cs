@@ -20,6 +20,7 @@ namespace ForzaTechStudio.Services
         public Vector3[] Positions;
         public Vector3[] Normals;
         public Vector2[] UVs;
+        public Vector4[] Colors;
         public int[] Indices;
 
         // PRE-CALCULATED FOR RENDERING SPEED
@@ -28,6 +29,7 @@ namespace ForzaTechStudio.Services
         // EDITING SUPPORT
         public MeshBlob SourceMesh;
         public Vector3[] RawPositions; // Normalized -1..1 values (before Scale/Translate)
+        public int MinVertexIndex; // lowest source vertex id; needed to write edits back
         public Matrix4x4 BoneTransform;
         
         // BONE TRACKING (for inverse transform calculations)
@@ -268,6 +270,8 @@ namespace ForzaTechStudio.Services
             var posW = new Vector4[vertexCount];
             var normals = new Vector3[vertexCount];
             var uvs = new Vector2[vertexCount];
+            var colors = new Vector4[vertexCount];
+            bool hasColors = false;
 
             var elementsToRead = new List<ElementInfo>();
             var slotOffsets = new Dictionary<int, int>();
@@ -305,6 +309,11 @@ namespace ForzaTechStudio.Services
                         normals[i] = ReadNormal(span, (int)item.Desc.Format, posW[i].W);
                     else if (semantic == "TEXCOORD" && item.Desc.SemanticIndex == 0)
                         uvs[i] = ReadUV(span, (int)item.Desc.Format);
+                    else if (semantic == "COLOR" && item.Desc.SemanticIndex == 0)
+                    {
+                        colors[i] = ReadColor(span, (int)item.Desc.Format);
+                        hasColors = true;
+                    }
                 });
             }
 
@@ -335,9 +344,11 @@ namespace ForzaTechStudio.Services
                 Positions = null, // Not pre-computed; renderer uses RawPositions path
                 Normals = normals,
                 UVs = uvs,
+                Colors = hasColors ? colors : null,
                 Indices = finalIndices,
                 SourceMesh = mesh,
                 RawPositions = rawPos,
+                MinVertexIndex = minIndex,
                 BoneTransform = transform,
                 BoneIndex = mesh.RigidBoneIndex,
                 BoneName = boneName,
@@ -576,6 +587,22 @@ namespace ForzaTechStudio.Services
                 );
             }
             return Vector2.Zero;
+        }
+
+        // Reads a vertex color. Handles R8G8B8A8_UNORM (4 bytes) and R32G32B32A32_FLOAT (16 bytes).
+        private static Vector4 ReadColor(ReadOnlySpan<byte> span, int format)
+        {
+            if (format == 2 && span.Length >= 16)
+            {
+                return new Vector4(
+                    BitConverter.ToSingle(span),
+                    BitConverter.ToSingle(span.Slice(4)),
+                    BitConverter.ToSingle(span.Slice(8)),
+                    BitConverter.ToSingle(span.Slice(12)));
+            }
+            if (span.Length >= 4)
+                return new Vector4(span[0] / 255f, span[1] / 255f, span[2] / 255f, span[3] / 255f);
+            return Vector4.One;
         }
     }
 }

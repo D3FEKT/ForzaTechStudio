@@ -17,7 +17,7 @@ namespace ForzaTechStudio.Views
         private ListView? _upgradableModelsList;
         // Tracks the model entry that was right-clicked for the context flyout.
         // MenuFlyout is a static resource so its items don't inherit DataContext from the
-        // ListViewItem � we capture it in the Opening event instead.
+        // ListViewItem we capture it in the Opening event instead.
         private ViewModels.CarbinModelEntry? _contextMenuTarget;
 
         private FileChangeWatcher? _fileWatcher;
@@ -179,6 +179,14 @@ namespace ForzaTechStudio.Views
                 _contextMenuTarget = element.DataContext as ViewModels.CarbinModelEntry;
         }
 
+        private async void ReplaceModelFile_Click(object sender, RoutedEventArgs e)
+        {
+            var model = _contextMenuTarget;
+            if (model == null) return;
+
+            await ViewModel.ReplaceModelFileAsync(model);
+        }
+
         private async void EditModelPath_Click(object sender, RoutedEventArgs e)
         {
             var model = _contextMenuTarget;
@@ -204,9 +212,7 @@ namespace ForzaTechStudio.Views
 
             if (result == ContentDialogResult.Primary)
             {
-                string newPath = inputTextBox.Text;
-                model.ModelGamePath = newPath;
-                model.ModelFileName = System.IO.Path.GetFileName(newPath.Replace("game:\\", "").Replace("game:/", "").Replace("\\", "/"));
+                ViewModel.UpdateModelPath(model, inputTextBox.Text);
             }
         }
 

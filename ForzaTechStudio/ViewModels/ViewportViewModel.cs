@@ -206,7 +206,8 @@ namespace ForzaTechStudio.ViewModels.ThreeDViewer
         public ForzaTools.Bundles.Bundle Bundle { get; set; }
         public string? SourceZipPath { get; set; }
         public string? ZipEntryName { get; set; }
-        
+        public bool IsDirty { get; set; }
+
         public string BoneStatusText
         {
             get

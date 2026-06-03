@@ -238,7 +238,7 @@ namespace ForzaTechStudio.ViewModels
                 await Task.Run(() =>
                 {
                     using var stream = File.Open(filePath, FileMode.Create, FileAccess.Write);
-                    bundleToSave.Serialize(stream);
+                    bundleToSave.SerializeConverted(stream);
                 });
 
                 FileSaved?.Invoke(filePath);
@@ -277,7 +277,7 @@ namespace ForzaTechStudio.ViewModels
                 {
                     using var stream = await file.OpenStreamForWriteAsync();
                     stream.SetLength(0);
-                    bundleToSave.Serialize(stream);
+                    bundleToSave.SerializeConverted(stream);
 
                     App.ShowInfoDialog($"File saved successfully to:\n{file.Path}", "Save Complete");
                 }
@@ -436,50 +436,7 @@ namespace ForzaTechStudio.ViewModels
                         }
 
                         byte[] blobData = HexStringToByteArray(entry.MaterialBlob);
-                        
-                        materialBlob.CustomBlobData = blobData;
-                        materialBlob.UncompressedSize = (uint)blobData.Length;
-                        materialBlob.CompressedSize = (uint)blobData.Length;
-
-                        string newName = selectedMaterial;
-
-                        var nameMeta = materialBlob.Metadatas.OfType<NameMetadata>().FirstOrDefault();
-                        if (nameMeta != null)
-                        {
-                            nameMeta.Name = newName;
-                        }
-                        else
-                        {
-                            materialBlob.Metadatas.Add(new NameMetadata 
-                            { 
-                                Tag = BundleMetadata.TAG_METADATA_Name, 
-                                Name = newName 
-                            });
-                        }
-
-                        if (blobData.Length > 0)
-                        {
-                            try
-                            {
-                                using var ms = new MemoryStream(blobData);
-                                if (blobData.Length >= 4)
-                                {
-                                    uint magic = BitConverter.ToUInt32(blobData, 0);
-                                    if (magic == Bundle.BundleTag)
-                                    {
-                                        var newBundle = new Bundle();
-                                        newBundle.Load(ms);
-                                        materialBlob.Bundle = newBundle;
-                                        materialBlob.CustomBlobData = null;
-                                    }
-                                }
-                            }
-                            catch (Exception innerEx)
-                            {
-                                System.Diagnostics.Debug.WriteLine($"Warning: Could not parse inner bundle: {innerEx.Message}");
-                                // Keep CustomBlobData as fallback since Bundle parsing failed
-                            }
-                        }
+                        ApplyMaterialBlobReplacement(materialBlob, blobData, selectedMaterial);
 
                         // Refresh UI if tree node
                         if (parameter is ObjectNode nodeObj)
@@ -661,49 +618,7 @@ namespace ForzaTechStudio.ViewModels
                     }
 
                     byte[] blobData = HexStringToByteArray(entry.MaterialBlob);
-                    
-                    materialBlob.CustomBlobData = blobData;
-                    materialBlob.UncompressedSize = (uint)blobData.Length;
-                    materialBlob.CompressedSize = (uint)blobData.Length;
-
-                    string newName = selectedMaterial;
-
-                    var nameMeta = materialBlob.Metadatas.OfType<NameMetadata>().FirstOrDefault();
-                    if (nameMeta != null)
-                    {
-                        nameMeta.Name = newName;
-                    }
-                    else
-                    {
-                        materialBlob.Metadatas.Add(new NameMetadata 
-                        { 
-                            Tag = BundleMetadata.TAG_METADATA_Name, 
-                            Name = newName 
-                        });
-                    }
-
-                    if (blobData.Length > 0)
-                    {
-                        try
-                        {
-                            using var ms = new MemoryStream(blobData);
-                            if (blobData.Length >= 4)
-                            {
-                                uint magic = BitConverter.ToUInt32(blobData, 0);
-                                if (magic == Bundle.BundleTag)
-                                {
-                                    var newBundle = new Bundle();
-                                    newBundle.Load(ms);
-                                    materialBlob.Bundle = newBundle;
-                                    materialBlob.CustomBlobData = null;
-                                }
-                            }
-                        }
-                        catch (Exception innerEx)
-                        {
-                            System.Diagnostics.Debug.WriteLine($"Warning: Could not parse inner bundle: {innerEx.Message}");
-                        }
-                    }
+                    ApplyMaterialBlobReplacement(materialBlob, blobData, selectedMaterial);
 
                     // Refresh UI if tree node
                     if (parameter is ObjectNode nodeObj)
@@ -1080,6 +995,50 @@ namespace ForzaTechStudio.ViewModels
             if (node == null) return;
             node.Refresh();
             await Task.Delay(50);
+        }
+
+        private static void ApplyMaterialBlobReplacement(MaterialBlob materialBlob, byte[] blobData, string newName)
+        {
+            // Reset the parsed bundle first so stale MATI/path data can't override newly injected bytes.
+            materialBlob.Bundle = null;
+            materialBlob.CustomBlobData = blobData;
+            materialBlob.UncompressedSize = (uint)blobData.Length;
+            materialBlob.CompressedSize = (uint)blobData.Length;
+
+            var nameMeta = materialBlob.Metadatas.OfType<NameMetadata>().FirstOrDefault();
+            if (nameMeta != null)
+            {
+                nameMeta.Name = newName;
+            }
+            else
+            {
+                materialBlob.Metadatas.Add(new NameMetadata
+                {
+                    Tag = BundleMetadata.TAG_METADATA_Name,
+                    Name = newName
+                });
+            }
+
+            if (blobData.Length < 4)
+                return;
+
+            try
+            {
+                using var ms = new MemoryStream(blobData);
+                uint magic = BitConverter.ToUInt32(blobData, 0);
+                if (magic == Bundle.BundleTag)
+                {
+                    var newBundle = new Bundle();
+                    newBundle.Load(ms);
+                    materialBlob.Bundle = newBundle;
+                    materialBlob.CustomBlobData = null;
+                }
+            }
+            catch (Exception innerEx)
+            {
+                System.Diagnostics.Debug.WriteLine($"Warning: Could not parse replacement material bundle: {innerEx.Message}");
+                materialBlob.Bundle = null;
+            }
         }
 
         private string CreateFormattedMetadataHex(string materialName)

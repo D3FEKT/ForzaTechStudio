@@ -1,20 +1,41 @@
-﻿# Version 0.9.1.8 - Change Log
+﻿# Version 0.9.1.9 - Change Log
 
 
 ## General
 - More bug fixes related to fh6
 
 ## 3d viewer
-- Support added to save multiple at once 
-- Initial carbin support for transform values
-- Fixed an issue with saving back to opened zip
+- UI improvements
+- Added UV map display window with live editing
+- Initial carbin support for transform values (would need DB access to get correct scaling)
+- Fixed an issue with saving back to opened zip, now rebuilds it fully
+- Started support of swatchbin support on models and basic material parameters displaying (RGB, glass)
+- Manufacturer colours RGB support onto modelbins
+- Multi file save support
+- Improved loading speed
+- Added export options and general export improvements
+- Changed to pyrimids instead of cones on points in the viewport for cleaner look
+
+## Modelbin Creator
+- Initial support, bugs still expected
+- OBJ and FBX supported for import
+- Load game specific materials from material.zip's or use internal created material library for assignment of mats
+- Supports all LOD's and shadows
+- Single modelbin building with multiple meshes and multi modelbin output
+
 
 ## Carbin editor
 - Fixed small bug with saving back to file changing parts not touched
+- Support for FH6 material index hash ID's
+- General UI improvements
 
 ## Manufacturer colors
 - Added support for FH6 version of the format
 
+## BXML editor
+- General UI improvements
+- FH6 manifest support
+- Fixed an issue with converting from xml to bxml
 
 
 

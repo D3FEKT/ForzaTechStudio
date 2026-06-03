@@ -18,9 +18,16 @@ namespace ForzaTechStudio.Services
         public MaterialBlob MaterialBlob { get; set; }
         public string ObjectName { get; set; }
         public string MaterialRelativePath { get; set; }
+
+        public bool IsOpaque { get; set; } = true;
+        public bool IsDecal { get; set; }
+        public bool IsTransparent { get; set; }
+        public bool IsShadow { get; set; }
+        public bool IsNotShadow { get; set; } = true;
+        public bool IsAlphaToCoverage { get; set; }
+        public bool IsMorphDamage { get; set; } = true;
     }
 
-    // Describes the VLay layout for a specific game target, used for UI display.
     public class GameLayoutInfo
     {
         public int ElementCount { get; set; }
@@ -41,13 +48,13 @@ namespace ForzaTechStudio.Services
             _geometryService = new GeometryProcessingService();
         }
 
-        // 1. Process Geometry
+
         public ProcessedGeometry ProcessGeometry(GeometryInput input, ForzaGameTarget target = ForzaGameTarget.FH5)
         {
             return _geometryService.ProcessGeometry(input, target);
         }
 
-        // 2. Create Bundle In Memory
+
         public Bundle CreateBundleInMemory(ProcessedGeometry processed, string materialName)
         {
             return CreateBundleFromObjects(new List<ObjectBuildData> 
@@ -83,15 +90,15 @@ namespace ForzaTechStudio.Services
             
             int nextVBNormID = 2; 
 
-            // 0. Skeleton
+
             var skeletonBlob = new SkeletonBlob { Tag = Bundle.TAG_BLOB_Skeleton, VersionMajor = 1, VersionMinor = 0 };
             skeletonBlob.Bones.Add(new Bone { Name = "root", ParentId = -1, Matrix = Matrix4x4.Identity });
             bundle.Blobs.Add(skeletonBlob);
 
-            // 1. Morph
+
             bundle.Blobs.Add(new MorphBlob { Tag = Bundle.TAG_BLOB_Morph, VersionMajor = 0, VersionMinor = 0 });
 
-            // Prepare Materials
+
             var materialIndexMap = new Dictionary<string, short>();
             var materialsToAdd = new List<MaterialBlob>();
             
@@ -165,51 +172,54 @@ namespace ForzaTechStudio.Services
                 
                 perObjectNormVBs.Add(vbNorm);
 
-                // 2. Rebase indices
-                byte[][] rebasedIndexData = new byte[geo.IndexData.Length][];
-                for (int idx = 0; idx < geo.IndexData.Length; idx++)
-                {
-                    int originalIndex = BitConverter.ToInt32(geo.IndexData[idx], 0);
-                    int rebasedIndex = originalIndex + runningVertexCount;
-                    rebasedIndexData[idx] = BitConverter.GetBytes(rebasedIndex);
-                }
 
-                globalIndices.AddRange(rebasedIndexData);
+                globalIndices.AddRange(geo.IndexData);
                 globalPosData.AddRange(geo.PositionData);
+
+                uint positionVertexBufferOffset = checked((uint)(runningVertexCount * 8));
 
                 string matName = obj.MaterialName ?? "Default";
                 short materialId = materialIndexMap[matName];
 
-                // Create 6 MeshBlobs per object (LOD0-5)
-                for (int lod = 0; lod < 6; lod++)
+
+                MeshBlob BuildMeshBlob(int lod, bool isShadow)
                 {
+                    short meshMaterialId = isShadow ? (short)-1 : materialId;
+
                     var meshBlob = new MeshBlob
                     {
                         Tag = Bundle.TAG_BLOB_Mesh,
                         VersionMajor = targetMeshVer.maj,
                         VersionMinor = targetMeshVer.min,
                         IndexBufferIndex = idLink_IB,
-                        VertexLayoutIndex = idLink_LayoutFull,
-                        
+                        VertexLayoutIndex = isShadow ? idLink_LayoutPos : idLink_LayoutFull,
+
                         IndexCount = geo.IndexData.Length,
                         PrimCount = geo.IndexData.Length / 3,
-                        
+
                         IndexBufferOffset = 0,
                         IndexBufferDrawOffset = runningIndexCount,
                         IndexedVertexOffset = 0,
-                        
+
                         ReferencedVertexCount = (uint)geo.PositionData.Length,
-                        
-                        IsOpaque = true,
-                        IsNotShadow = true,
+
+                        // Bucket flags: shadow meshes are always Opaque + Shadow; regular meshes use per-object flags.
+                        IsOpaque = isShadow ? true : obj.IsOpaque,
+                        IsDecal = isShadow ? false : obj.IsDecal,
+                        IsTransparent = isShadow ? false : obj.IsTransparent,
+                        IsShadow = isShadow ? true : obj.IsShadow,
+                        IsNotShadow = isShadow ? false : obj.IsNotShadow,
+                        IsAlphaToCoverage = isShadow ? false : obj.IsAlphaToCoverage,
+                        IsMorphDamage = obj.IsMorphDamage,
+
                         Is32BitIndices = true,
                         Topology = 4,
 
-                        MaterialId = materialId,
-                        
+                        MaterialId = meshMaterialId,
+
                         PositionScale = geo.PositionScale,
                         PositionTranslate = geo.PositionTranslate,
-                        
+
                         NameSuffix = lod.ToString()
                     };
 
@@ -229,17 +239,20 @@ namespace ForzaTechStudio.Services
                         Index = idLink_VB_Pos,
                         InputSlot = 0,
                         Stride = 8,
-                        Offset = 0
+                        Offset = positionVertexBufferOffset
                     });
-                    
-                    // Normal/UV buffer
-                    meshBlob.VertexBuffers.Add(new MeshBlob.VertexBufferUsage
+
+                    if (!isShadow)
                     {
-                        Index = perObjectVBNormID,
-                        InputSlot = 1,
-                        Stride = (uint)slot1Stride,
-                        Offset = 0
-                    });
+                        // Full meshes use the per-object slot 1 stream for normals/UVs/tangents.
+                        meshBlob.VertexBuffers.Add(new MeshBlob.VertexBufferUsage
+                        {
+                            Index = perObjectVBNormID,
+                            InputSlot = 1,
+                            Stride = (uint)slot1Stride,
+                            Offset = 0
+                        });
+                    }
 
                     // Set version-dependent defaults
                     if (meshBlob.IsAtLeastVersion(1, 5))
@@ -258,14 +271,24 @@ namespace ForzaTechStudio.Services
                     // Set v1.9 material IDs array
                     if (meshBlob.IsAtLeastVersion(1, 9))
                     {
-                        meshBlob.MaterialIds = new short[] { -1, materialId, -1, -1 };
+                        meshBlob.MaterialIds = new short[] { -1, meshMaterialId, -1, -1 };
                     }
 
-                    string meshName = $"{obj.ObjectName}_LOD{lod}";
+                    string meshName = isShadow ? "Shadow" : $"{obj.ObjectName}_LOD{lod}";
                     meshBlob.Metadatas.Add(new NameMetadata { Tag = BundleMetadata.TAG_METADATA_Name, Name = meshName });
                     meshBlob.Metadatas.Add(new BoundaryBoxMetadata { Tag = BundleMetadata.TAG_METADATA_BBox, Min = geo.BoundingBoxMin, Max = geo.BoundingBoxMax });
 
-                    bundle.Blobs.Add(meshBlob);
+                    return meshBlob;
+                }
+
+                // Create 6 MeshBlobs per object (LOD0-5). For each valid mesh blob, also create a
+                // shadow-only counterpart.
+                for (int lod = 0; lod < 6; lod++)
+                {
+                    bundle.Blobs.Add(BuildMeshBlob(lod, isShadow: false));
+                    meshCount++;
+
+                    bundle.Blobs.Add(BuildMeshBlob(lod, isShadow: true));
                     meshCount++;
                 }
 
@@ -324,7 +347,7 @@ namespace ForzaTechStudio.Services
                 bundle.Blobs.Add(vb);
             }
 
-            // Model Blob
+
             var modelBlob = new ModelBlob
             {
                 Tag = Bundle.TAG_BLOB_Model,
@@ -341,7 +364,6 @@ namespace ForzaTechStudio.Services
                 DecompressFlags = targetModlVer.min >= 2 ? (byte)0x01 : (byte)0x00
             };
 
-            // Compute Global BBox
             Vector3 min = new Vector3(float.MaxValue);
             Vector3 max = new Vector3(float.MinValue);
             foreach (var o in objects)
@@ -355,7 +377,6 @@ namespace ForzaTechStudio.Services
             return bundle;
         }
 
-        // 3. Save Bundle
         public void SaveBundle(Bundle bundle, string outputPath)
         {
             using (var fs = new FileStream(outputPath, FileMode.Create))
@@ -364,7 +385,6 @@ namespace ForzaTechStudio.Services
             }
         }
 
-        // Wrapper for backward compatibility
         public void BuildCompatibleModelBin(string outputPath, GeometryInput input, string materialName)
         {
             var processed = ProcessGeometry(input);
@@ -372,8 +392,6 @@ namespace ForzaTechStudio.Services
             SaveBundle(bundle, outputPath);
         }
 
-        // Returns a human-readable description of the VLay layout for a given game target.
-        // Used by the ViewModel to show the user what layout will be generated.
         public static GameLayoutInfo GetGameLayoutInfo(ForzaGameTarget target)
         {
             var info = GetGameLayoutInfoInternal(target);
@@ -413,12 +431,11 @@ namespace ForzaTechStudio.Services
             // First element format for the VerB header
             public DXGI_FORMAT FirstElementFormat;
 
-            // VLay Flags (m_MaterialSystemUsage)
+            // VLay Flags 
             public uint VlayFlags;
         }
 
-        // Returns the full internal layout info for a game target, based on
-        // the documented format evolution from modelbin.md section 12.
+        // Returns the full internal layout info for a game target
         internal static InternalLayoutInfo GetGameLayoutInfoInternal(ForzaGameTarget target)
         {
             return target switch
@@ -527,7 +544,7 @@ namespace ForzaTechStudio.Services
                 VersionMinor = vlayVer.min
             };
 
-            // Build semantic names list � order matters for index references
+            // Build semantic names list, order matters for index references
             var semanticNames = new List<string> { "POSITION", "NORMAL", "TEXCOORD", "TANGENT" };
             if (layout.HasColor)
                 semanticNames.Add("COLOR");
@@ -561,7 +578,7 @@ namespace ForzaTechStudio.Services
                 blob.PackedFormats.Add(layout.TangentPackedFormat);
             }
 
-            // COLOR (Slot 1) � only if the game supports it
+            // COLOR (Slot 1) only if the game supports it
             if (layout.HasColor)
             {
                 blob.Elements.Add(CreateElement(colIdx, 0, 1, 0, (int)DXGI_FORMAT.DXGI_FORMAT_R8G8B8A8_UNORM));
@@ -604,7 +621,7 @@ namespace ForzaTechStudio.Services
             };
         }
 
-        // Creates a default MaterialBlob with a nested bundle containing MATI blob and MaterialShaderParameterBlob
+
         private MaterialBlob CreateDefaultMaterialBlob(string materialName, string? relativePath = null)
         {
             var materialBlob = new MaterialBlob
@@ -614,7 +631,7 @@ namespace ForzaTechStudio.Services
                 VersionMinor = 0
             };
             
-            // Create nested bundle structure (version 1.1)
+            // Create nested bundle structure 
             var nestedBundle = new Bundle
             {
                 VersionMajor = 1,
@@ -633,12 +650,11 @@ namespace ForzaTechStudio.Services
             string materialPath;
             if (!string.IsNullOrEmpty(relativePath))
             {
-                // Use the relative path structure from the zip
                 materialPath = $"Game:\\Media\\cars\\_library\\materials\\{relativePath}";
             }
             else
             {
-                // Fallback to simple path
+                // Fallback 
                 materialPath = $"Game:\\Media\\cars\\_library\\materials\\{materialName ?? "error"}.materialbin";
             }
             
@@ -651,7 +667,6 @@ namespace ForzaTechStudio.Services
                 Name = materialName ?? "Default" 
             });
             
-            // Add Atlas metadata (version 2, both bools false)
             matiBlob.Metadatas.Add(new AtlasMetadata
             {
                 Tag = BundleMetadata.TAG_METADATA_Atlas,
@@ -673,10 +688,8 @@ namespace ForzaTechStudio.Services
             
             nestedBundle.Blobs.Add(shaderParamBlob);
             
-            // Assign the nested bundle to the MaterialBlob
             materialBlob.Bundle = nestedBundle;
             
-            // Add Name metadata to the outer MaterialBlob
             materialBlob.Metadatas.Add(new NameMetadata 
             { 
                 Tag = BundleMetadata.TAG_METADATA_Name, 
@@ -686,7 +699,6 @@ namespace ForzaTechStudio.Services
             return materialBlob;
         }
 
-        // Clones a MaterialBlob to avoid modifying the cached version
         private MaterialBlob CloneMaterialBlob(MaterialBlob source)
         {
             var clone = new MaterialBlob
@@ -696,14 +708,12 @@ namespace ForzaTechStudio.Services
                 VersionMinor = source.VersionMinor
             };
             
-            // Copy CustomBlobData if present
             if (source.CustomBlobData != null && source.CustomBlobData.Length > 0)
             {
                 clone.CustomBlobData = new byte[source.CustomBlobData.Length];
                 Array.Copy(source.CustomBlobData, clone.CustomBlobData, source.CustomBlobData.Length);
             }
             
-            // Deep clone the nested Bundle
             if (source.Bundle != null)
             {
                 using (var ms = new MemoryStream())
@@ -715,7 +725,6 @@ namespace ForzaTechStudio.Services
                 }
             }
             
-            // Clone metadata
             foreach (var meta in source.Metadatas)
             {
                 if (meta is NameMetadata nameMeta)

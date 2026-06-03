@@ -153,7 +153,33 @@ namespace ForzaTechStudio.Views
         {
             if (NavView.SettingsItem is NavigationViewItem settingsItem)
             {
-                settingsItem.Content = $"Settings v{GetApplicationVersionText()}";
+                var settingsLabel = new TextBlock
+                {
+                    Text = "Settings",
+                    VerticalAlignment = VerticalAlignment.Center
+                };
+
+                var settingsVersion = new TextBlock
+                {
+                    Text = $"v{GetApplicationVersionText()}",
+                    VerticalAlignment = VerticalAlignment.Center,
+                    HorizontalAlignment = HorizontalAlignment.Right,
+                    Opacity = 0.7,
+                    FontSize = settingsLabel.FontSize > 0 ? settingsLabel.FontSize * 0.7 : 10
+                };
+
+                var contentGrid = new Grid();
+                contentGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+                contentGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+
+                Grid.SetColumn(settingsVersion, 1);
+
+                contentGrid.Children.Add(settingsLabel);
+                contentGrid.Children.Add(settingsVersion);
+
+                settingsItem.Content = contentGrid;
+
+                settingsItem.HorizontalContentAlignment = HorizontalAlignment.Stretch;
             }
         }
 

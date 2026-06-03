@@ -9,6 +9,7 @@
     xmlns:controls="using:ForzaTechStudio.Views.Controls"
     mc:Ignorable="d"
     AllowDrop="True"
+    KeyboardAcceleratorPlacementMode="Hidden"
     DragOver="Page_DragOver"
     DragLeave="Page_DragLeave"
     Drop="Page_Drop">
@@ -531,10 +532,83 @@
                                                   Click="UseBoneTransforms_Click"/>
 
                                         <!-- Bone matrix label -->
-                                        <TextBlock Text="Bone Matrix (local)"
+                                        <TextBlock Text="Bone Transform (local)"
                                                    FontWeight="SemiBold"
                                                    FontSize="11"
                                                    Margin="0,2,0,0"/>
+
+                                        <StackPanel Spacing="6">
+                                            <StackPanel Spacing="2">
+                                                <TextBlock Text="Position" FontWeight="SemiBold" FontSize="11"/>
+                                                <Grid ColumnSpacing="4">
+                                                    <Grid.ColumnDefinitions>
+                                                        <ColumnDefinition Width="*"/>
+                                                        <ColumnDefinition Width="*"/>
+                                                        <ColumnDefinition Width="*"/>
+                                                    </Grid.ColumnDefinitions>
+                                                    <StackPanel Grid.Column="0" Spacing="2">
+                                                        <TextBlock Text="X" FontSize="9" Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
+                                                        <Grid ColumnSpacing="2"><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions><TextBox x:Name="BonePosX" TextChanged="BoneMatrix_TextChanged" FontSize="10" MinHeight="22" Padding="3,1"/><StackPanel Grid.Column="1" Spacing="1"><RepeatButton Click="TransformSpinnerUp_Click" Tag="BonePosX|0.001" Height="12" Width="16" Padding="0" CornerRadius="2"><FontIcon Glyph="&#xE70E;" FontSize="8"/></RepeatButton><RepeatButton Click="TransformSpinnerDown_Click" Tag="BonePosX|0.001" Height="12" Width="16" Padding="0" CornerRadius="2"><FontIcon Glyph="&#xE70D;" FontSize="8"/></RepeatButton></StackPanel></Grid>
+                                                    </StackPanel>
+                                                    <StackPanel Grid.Column="1" Spacing="2">
+                                                        <TextBlock Text="Y" FontSize="9" Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
+                                                        <Grid ColumnSpacing="2"><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions><TextBox x:Name="BonePosY" TextChanged="BoneMatrix_TextChanged" FontSize="10" MinHeight="22" Padding="3,1"/><StackPanel Grid.Column="1" Spacing="1"><RepeatButton Click="TransformSpinnerUp_Click" Tag="BonePosY|0.001" Height="12" Width="16" Padding="0" CornerRadius="2"><FontIcon Glyph="&#xE70E;" FontSize="8"/></RepeatButton><RepeatButton Click="TransformSpinnerDown_Click" Tag="BonePosY|0.001" Height="12" Width="16" Padding="0" CornerRadius="2"><FontIcon Glyph="&#xE70D;" FontSize="8"/></RepeatButton></StackPanel></Grid>
+                                                    </StackPanel>
+                                                    <StackPanel Grid.Column="2" Spacing="2">
+                                                        <TextBlock Text="Z" FontSize="9" Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
+                                                        <Grid ColumnSpacing="2"><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions><TextBox x:Name="BonePosZ" TextChanged="BoneMatrix_TextChanged" FontSize="10" MinHeight="22" Padding="3,1"/><StackPanel Grid.Column="1" Spacing="1"><RepeatButton Click="TransformSpinnerUp_Click" Tag="BonePosZ|0.001" Height="12" Width="16" Padding="0" CornerRadius="2"><FontIcon Glyph="&#xE70E;" FontSize="8"/></RepeatButton><RepeatButton Click="TransformSpinnerDown_Click" Tag="BonePosZ|0.001" Height="12" Width="16" Padding="0" CornerRadius="2"><FontIcon Glyph="&#xE70D;" FontSize="8"/></RepeatButton></StackPanel></Grid>
+                                                    </StackPanel>
+                                                </Grid>
+                                            </StackPanel>
+
+                                            <StackPanel Spacing="2">
+                                                <TextBlock Text="Rotation" FontWeight="SemiBold" FontSize="11"/>
+                                                <Grid ColumnSpacing="4">
+                                                    <Grid.ColumnDefinitions>
+                                                        <ColumnDefinition Width="*"/>
+                                                        <ColumnDefinition Width="*"/>
+                                                        <ColumnDefinition Width="*"/>
+                                                    </Grid.ColumnDefinitions>
+                                                    <StackPanel Grid.Column="0" Spacing="2">
+                                                        <TextBlock Text="X" FontSize="9" Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
+                                                        <Grid ColumnSpacing="2"><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions><TextBox x:Name="BoneRotX" TextChanged="BoneMatrix_TextChanged" FontSize="10" MinHeight="22" Padding="3,1"/><StackPanel Grid.Column="1" Spacing="1"><RepeatButton Click="TransformSpinnerUp_Click" Tag="BoneRotX|1" Height="12" Width="16" Padding="0" CornerRadius="2"><FontIcon Glyph="&#xE70E;" FontSize="8"/></RepeatButton><RepeatButton Click="TransformSpinnerDown_Click" Tag="BoneRotX|1" Height="12" Width="16" Padding="0" CornerRadius="2"><FontIcon Glyph="&#xE70D;" FontSize="8"/></RepeatButton></StackPanel></Grid>
+                                                    </StackPanel>
+                                                    <StackPanel Grid.Column="1" Spacing="2">
+                                                        <TextBlock Text="Y" FontSize="9" Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
+                                                        <Grid ColumnSpacing="2"><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions><TextBox x:Name="BoneRotY" TextChanged="BoneMatrix_TextChanged" FontSize="10" MinHeight="22" Padding="3,1"/><StackPanel Grid.Column="1" Spacing="1"><RepeatButton Click="TransformSpinnerUp_Click" Tag="BoneRotY|1" Height="12" Width="16" Padding="0" CornerRadius="2"><FontIcon Glyph="&#xE70E;" FontSize="8"/></RepeatButton><RepeatButton Click="TransformSpinnerDown_Click" Tag="BoneRotY|1" Height="12" Width="16" Padding="0" CornerRadius="2"><FontIcon Glyph="&#xE70D;" FontSize="8"/></RepeatButton></StackPanel></Grid>
+                                                    </StackPanel>
+                                                    <StackPanel Grid.Column="2" Spacing="2">
+                                                        <TextBlock Text="Z" FontSize="9" Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
+                                                        <Grid ColumnSpacing="2"><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions><TextBox x:Name="BoneRotZ" TextChanged="BoneMatrix_TextChanged" FontSize="10" MinHeight="22" Padding="3,1"/><StackPanel Grid.Column="1" Spacing="1"><RepeatButton Click="TransformSpinnerUp_Click" Tag="BoneRotZ|1" Height="12" Width="16" Padding="0" CornerRadius="2"><FontIcon Glyph="&#xE70E;" FontSize="8"/></RepeatButton><RepeatButton Click="TransformSpinnerDown_Click" Tag="BoneRotZ|1" Height="12" Width="16" Padding="0" CornerRadius="2"><FontIcon Glyph="&#xE70D;" FontSize="8"/></RepeatButton></StackPanel></Grid>
+                                                    </StackPanel>
+                                                </Grid>
+                                            </StackPanel>
+
+                                            <StackPanel Spacing="2">
+                                                <TextBlock Text="Scale" FontWeight="SemiBold" FontSize="11"/>
+                                                <Grid ColumnSpacing="4">
+                                                    <Grid.ColumnDefinitions>
+                                                        <ColumnDefinition Width="*"/>
+                                                        <ColumnDefinition Width="*"/>
+                                                        <ColumnDefinition Width="*"/>
+                                                    </Grid.ColumnDefinitions>
+                                                    <StackPanel Grid.Column="0" Spacing="2">
+                                                        <TextBlock Text="X" FontSize="9" Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
+                                                        <Grid ColumnSpacing="2"><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions><TextBox x:Name="BoneScaleX" TextChanged="BoneMatrix_TextChanged" FontSize="10" MinHeight="22" Padding="3,1"/><StackPanel Grid.Column="1" Spacing="1"><RepeatButton Click="TransformSpinnerUp_Click" Tag="BoneScaleX|0.001" Height="12" Width="16" Padding="0" CornerRadius="2"><FontIcon Glyph="&#xE70E;" FontSize="8"/></RepeatButton><RepeatButton Click="TransformSpinnerDown_Click" Tag="BoneScaleX|0.001" Height="12" Width="16" Padding="0" CornerRadius="2"><FontIcon Glyph="&#xE70D;" FontSize="8"/></RepeatButton></StackPanel></Grid>
+                                                    </StackPanel>
+                                                    <StackPanel Grid.Column="1" Spacing="2">
+                                                        <TextBlock Text="Y" FontSize="9" Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
+                                                        <Grid ColumnSpacing="2"><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions><TextBox x:Name="BoneScaleY" TextChanged="BoneMatrix_TextChanged" FontSize="10" MinHeight="22" Padding="3,1"/><StackPanel Grid.Column="1" Spacing="1"><RepeatButton Click="TransformSpinnerUp_Click" Tag="BoneScaleY|0.001" Height="12" Width="16" Padding="0" CornerRadius="2"><FontIcon Glyph="&#xE70E;" FontSize="8"/></RepeatButton><RepeatButton Click="TransformSpinnerDown_Click" Tag="BoneScaleY|0.001" Height="12" Width="16" Padding="0" CornerRadius="2"><FontIcon Glyph="&#xE70D;" FontSize="8"/></RepeatButton></StackPanel></Grid>
+                                                    </StackPanel>
+                                                    <StackPanel Grid.Column="2" Spacing="2">
+                                                        <TextBlock Text="Z" FontSize="9" Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
+                                                        <Grid ColumnSpacing="2"><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions><TextBox x:Name="BoneScaleZ" TextChanged="BoneMatrix_TextChanged" FontSize="10" MinHeight="22" Padding="3,1"/><StackPanel Grid.Column="1" Spacing="1"><RepeatButton Click="TransformSpinnerUp_Click" Tag="BoneScaleZ|0.001" Height="12" Width="16" Padding="0" CornerRadius="2"><FontIcon Glyph="&#xE70E;" FontSize="8"/></RepeatButton><RepeatButton Click="TransformSpinnerDown_Click" Tag="BoneScaleZ|0.001" Height="12" Width="16" Padding="0" CornerRadius="2"><FontIcon Glyph="&#xE70D;" FontSize="8"/></RepeatButton></StackPanel></Grid>
+                                                    </StackPanel>
+                                                </Grid>
+                                            </StackPanel>
+                                        </StackPanel>
+
+                                        <StackPanel Visibility="Collapsed">
 
                                         <!-- Row 1 -->
                                         <StackPanel Spacing="2">
@@ -646,6 +720,7 @@
                                                 <Grid Grid.Column="2" ColumnSpacing="2"><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions><TextBox x:Name="BM43" PlaceholderText="_43" TextChanged="BoneMatrix_TextChanged" FontSize="10" MinHeight="22" Padding="3,1"/><StackPanel Grid.Column="1" Spacing="1"><RepeatButton Click="BM43_Up" Height="12" Width="16" Padding="0" CornerRadius="2"><FontIcon Glyph="&#xE70E;" FontSize="8"/></RepeatButton><RepeatButton Click="BM43_Down" Height="12" Width="16" Padding="0" CornerRadius="2"><FontIcon Glyph="&#xE70D;" FontSize="8"/></RepeatButton></StackPanel></Grid>
                                                 <Grid Grid.Column="3" ColumnSpacing="2"><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions><TextBox x:Name="BM44" PlaceholderText="_44" TextChanged="BoneMatrix_TextChanged" FontSize="10" MinHeight="22" Padding="3,1"/><StackPanel Grid.Column="1" Spacing="1"><RepeatButton Click="BM44_Up" Height="12" Width="16" Padding="0" CornerRadius="2"><FontIcon Glyph="&#xE70E;" FontSize="8"/></RepeatButton><RepeatButton Click="BM44_Down" Height="12" Width="16" Padding="0" CornerRadius="2"><FontIcon Glyph="&#xE70D;" FontSize="8"/></RepeatButton></StackPanel></Grid>
                                             </Grid>
+                                        </StackPanel>
                                         </StackPanel>
                                     </StackPanel>
                                 </Expander>
@@ -789,6 +864,7 @@
 
                                             <!-- Parameters -->
                                             <controls:MaterialParameterEditorView x:Name="MeshMaterialParamEditor"
+                                                                                  ParameterValueChanged="MeshMaterialParamEditor_ParameterValueChanged"
                                                                                   RemoveParameterCommand="{x:Bind RemoveMeshMaterialParameterCommand}"/>
                                         </StackPanel>
 
@@ -963,71 +1039,72 @@
                                     </ComboBox.ItemTemplate>
                                 </ComboBox>
 
-                                <!-- Row 1 -->
                                 <StackPanel Spacing="2">
-                                    <TextBlock Text="Row 1 (_11 _12 _13 _14)" FontSize="10" Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
+                                    <TextBlock Text="Position" FontWeight="SemiBold" FontSize="12"/>
                                     <Grid ColumnSpacing="4">
                                         <Grid.ColumnDefinitions>
                                             <ColumnDefinition Width="*"/>
                                             <ColumnDefinition Width="*"/>
                                             <ColumnDefinition Width="*"/>
-                                            <ColumnDefinition Width="*"/>
                                         </Grid.ColumnDefinitions>
-                                        <Grid Grid.Column="0" ColumnSpacing="2"><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions><TextBox x:Name="M11" PlaceholderText="_11" TextChanged="LocatorMatrix_TextChanged" FontSize="11" MinHeight="24" Padding="4,2"/><StackPanel Grid.Column="1" Spacing="1"><RepeatButton Click="M11_Up" Height="12" Width="16" Padding="0" CornerRadius="2"><FontIcon Glyph="&#xE70E;" FontSize="8"/></RepeatButton><RepeatButton Click="M11_Down" Height="12" Width="16" Padding="0" CornerRadius="2"><FontIcon Glyph="&#xE70D;" FontSize="8"/></RepeatButton></StackPanel></Grid>
-                                        <Grid Grid.Column="1" ColumnSpacing="2"><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions><TextBox x:Name="M12" PlaceholderText="_12" TextChanged="LocatorMatrix_TextChanged" FontSize="11" MinHeight="24" Padding="4,2"/><StackPanel Grid.Column="1" Spacing="1"><RepeatButton Click="M12_Up" Height="12" Width="16" Padding="0" CornerRadius="2"><FontIcon Glyph="&#xE70E;" FontSize="8"/></RepeatButton><RepeatButton Click="M12_Down" Height="12" Width="16" Padding="0" CornerRadius="2"><FontIcon Glyph="&#xE70D;" FontSize="8"/></RepeatButton></StackPanel></Grid>
-                                        <Grid Grid.Column="2" ColumnSpacing="2"><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions><TextBox x:Name="M13" PlaceholderText="_13" TextChanged="LocatorMatrix_TextChanged" FontSize="11" MinHeight="24" Padding="4,2"/><StackPanel Grid.Column="1" Spacing="1"><RepeatButton Click="M13_Up" Height="12" Width="16" Padding="0" CornerRadius="2"><FontIcon Glyph="&#xE70E;" FontSize="8"/></RepeatButton><RepeatButton Click="M13_Down" Height="12" Width="16" Padding="0" CornerRadius="2"><FontIcon Glyph="&#xE70D;" FontSize="8"/></RepeatButton></StackPanel></Grid>
-                                        <Grid Grid.Column="3" ColumnSpacing="2"><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions><TextBox x:Name="M14" PlaceholderText="_14" TextChanged="LocatorMatrix_TextChanged" FontSize="11" MinHeight="24" Padding="4,2"/><StackPanel Grid.Column="1" Spacing="1"><RepeatButton Click="M14_Up" Height="12" Width="16" Padding="0" CornerRadius="2"><FontIcon Glyph="&#xE70E;" FontSize="8"/></RepeatButton><RepeatButton Click="M14_Down" Height="12" Width="16" Padding="0" CornerRadius="2"><FontIcon Glyph="&#xE70D;" FontSize="8"/></RepeatButton></StackPanel></Grid>
+                                        <StackPanel Grid.Column="0" Spacing="2">
+                                            <TextBlock Text="X" FontSize="10" Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
+                                            <Grid ColumnSpacing="2"><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions><TextBox x:Name="LocatorPosX" Text="0.000" TextChanged="LocatorMatrix_TextChanged" FontSize="11" MinHeight="24" Padding="4,2"/><StackPanel Grid.Column="1" Spacing="1"><RepeatButton Click="TransformSpinnerUp_Click" Tag="LocatorPosX|0.001" Height="12" Width="16" Padding="0" CornerRadius="2"><FontIcon Glyph="&#xE70E;" FontSize="8"/></RepeatButton><RepeatButton Click="TransformSpinnerDown_Click" Tag="LocatorPosX|0.001" Height="12" Width="16" Padding="0" CornerRadius="2"><FontIcon Glyph="&#xE70D;" FontSize="8"/></RepeatButton></StackPanel></Grid>
+                                        </StackPanel>
+                                        <StackPanel Grid.Column="1" Spacing="2">
+                                            <TextBlock Text="Y" FontSize="10" Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
+                                            <Grid ColumnSpacing="2"><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions><TextBox x:Name="LocatorPosY" Text="0.000" TextChanged="LocatorMatrix_TextChanged" FontSize="11" MinHeight="24" Padding="4,2"/><StackPanel Grid.Column="1" Spacing="1"><RepeatButton Click="TransformSpinnerUp_Click" Tag="LocatorPosY|0.001" Height="12" Width="16" Padding="0" CornerRadius="2"><FontIcon Glyph="&#xE70E;" FontSize="8"/></RepeatButton><RepeatButton Click="TransformSpinnerDown_Click" Tag="LocatorPosY|0.001" Height="12" Width="16" Padding="0" CornerRadius="2"><FontIcon Glyph="&#xE70D;" FontSize="8"/></RepeatButton></StackPanel></Grid>
+                                        </StackPanel>
+                                        <StackPanel Grid.Column="2" Spacing="2">
+                                            <TextBlock Text="Z" FontSize="10" Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
+                                            <Grid ColumnSpacing="2"><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions><TextBox x:Name="LocatorPosZ" Text="0.000" TextChanged="LocatorMatrix_TextChanged" FontSize="11" MinHeight="24" Padding="4,2"/><StackPanel Grid.Column="1" Spacing="1"><RepeatButton Click="TransformSpinnerUp_Click" Tag="LocatorPosZ|0.001" Height="12" Width="16" Padding="0" CornerRadius="2"><FontIcon Glyph="&#xE70E;" FontSize="8"/></RepeatButton><RepeatButton Click="TransformSpinnerDown_Click" Tag="LocatorPosZ|0.001" Height="12" Width="16" Padding="0" CornerRadius="2"><FontIcon Glyph="&#xE70D;" FontSize="8"/></RepeatButton></StackPanel></Grid>
+                                        </StackPanel>
                                     </Grid>
                                 </StackPanel>
 
-                                <!-- Row 2 -->
                                 <StackPanel Spacing="2">
-                                    <TextBlock Text="Row 2 (_21 _22 _23 _24)" FontSize="10" Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
+                                    <TextBlock Text="Rotation" FontWeight="SemiBold" FontSize="12"/>
                                     <Grid ColumnSpacing="4">
                                         <Grid.ColumnDefinitions>
                                             <ColumnDefinition Width="*"/>
                                             <ColumnDefinition Width="*"/>
                                             <ColumnDefinition Width="*"/>
-                                            <ColumnDefinition Width="*"/>
                                         </Grid.ColumnDefinitions>
-                                        <Grid Grid.Column="0" ColumnSpacing="2"><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions><TextBox x:Name="M21" PlaceholderText="_21" TextChanged="LocatorMatrix_TextChanged" FontSize="11" MinHeight="24" Padding="4,2"/><StackPanel Grid.Column="1" Spacing="1"><RepeatButton Click="M21_Up" Height="12" Width="16" Padding="0" CornerRadius="2"><FontIcon Glyph="&#xE70E;" FontSize="8"/></RepeatButton><RepeatButton Click="M21_Down" Height="12" Width="16" Padding="0" CornerRadius="2"><FontIcon Glyph="&#xE70D;" FontSize="8"/></RepeatButton></StackPanel></Grid>
-                                        <Grid Grid.Column="1" ColumnSpacing="2"><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions><TextBox x:Name="M22" PlaceholderText="_22" TextChanged="LocatorMatrix_TextChanged" FontSize="11" MinHeight="24" Padding="4,2"/><StackPanel Grid.Column="1" Spacing="1"><RepeatButton Click="M22_Up" Height="12" Width="16" Padding="0" CornerRadius="2"><FontIcon Glyph="&#xE70E;" FontSize="8"/></RepeatButton><RepeatButton Click="M22_Down" Height="12" Width="16" Padding="0" CornerRadius="2"><FontIcon Glyph="&#xE70D;" FontSize="8"/></RepeatButton></StackPanel></Grid>
-                                        <Grid Grid.Column="2" ColumnSpacing="2"><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions><TextBox x:Name="M23" PlaceholderText="_23" TextChanged="LocatorMatrix_TextChanged" FontSize="11" MinHeight="24" Padding="4,2"/><StackPanel Grid.Column="1" Spacing="1"><RepeatButton Click="M23_Up" Height="12" Width="16" Padding="0" CornerRadius="2"><FontIcon Glyph="&#xE70E;" FontSize="8"/></RepeatButton><RepeatButton Click="M23_Down" Height="12" Width="16" Padding="0" CornerRadius="2"><FontIcon Glyph="&#xE70D;" FontSize="8"/></RepeatButton></StackPanel></Grid>
-                                        <Grid Grid.Column="3" ColumnSpacing="2"><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions><TextBox x:Name="M24" PlaceholderText="_24" TextChanged="LocatorMatrix_TextChanged" FontSize="11" MinHeight="24" Padding="4,2"/><StackPanel Grid.Column="1" Spacing="1"><RepeatButton Click="M24_Up" Height="12" Width="16" Padding="0" CornerRadius="2"><FontIcon Glyph="&#xE70E;" FontSize="8"/></RepeatButton><RepeatButton Click="M24_Down" Height="12" Width="16" Padding="0" CornerRadius="2"><FontIcon Glyph="&#xE70D;" FontSize="8"/></RepeatButton></StackPanel></Grid>
+                                        <StackPanel Grid.Column="0" Spacing="2">
+                                            <TextBlock Text="X" FontSize="10" Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
+                                            <Grid ColumnSpacing="2"><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions><TextBox x:Name="LocatorRotX" Text="0.000" TextChanged="LocatorMatrix_TextChanged" FontSize="11" MinHeight="24" Padding="4,2"/><StackPanel Grid.Column="1" Spacing="1"><RepeatButton Click="TransformSpinnerUp_Click" Tag="LocatorRotX|1" Height="12" Width="16" Padding="0" CornerRadius="2"><FontIcon Glyph="&#xE70E;" FontSize="8"/></RepeatButton><RepeatButton Click="TransformSpinnerDown_Click" Tag="LocatorRotX|1" Height="12" Width="16" Padding="0" CornerRadius="2"><FontIcon Glyph="&#xE70D;" FontSize="8"/></RepeatButton></StackPanel></Grid>
+                                        </StackPanel>
+                                        <StackPanel Grid.Column="1" Spacing="2">
+                                            <TextBlock Text="Y" FontSize="10" Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
+                                            <Grid ColumnSpacing="2"><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions><TextBox x:Name="LocatorRotY" Text="0.000" TextChanged="LocatorMatrix_TextChanged" FontSize="11" MinHeight="24" Padding="4,2"/><StackPanel Grid.Column="1" Spacing="1"><RepeatButton Click="TransformSpinnerUp_Click" Tag="LocatorRotY|1" Height="12" Width="16" Padding="0" CornerRadius="2"><FontIcon Glyph="&#xE70E;" FontSize="8"/></RepeatButton><RepeatButton Click="TransformSpinnerDown_Click" Tag="LocatorRotY|1" Height="12" Width="16" Padding="0" CornerRadius="2"><FontIcon Glyph="&#xE70D;" FontSize="8"/></RepeatButton></StackPanel></Grid>
+                                        </StackPanel>
+                                        <StackPanel Grid.Column="2" Spacing="2">
+                                            <TextBlock Text="Z" FontSize="10" Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
+                                            <Grid ColumnSpacing="2"><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions><TextBox x:Name="LocatorRotZ" Text="0.000" TextChanged="LocatorMatrix_TextChanged" FontSize="11" MinHeight="24" Padding="4,2"/><StackPanel Grid.Column="1" Spacing="1"><RepeatButton Click="TransformSpinnerUp_Click" Tag="LocatorRotZ|1" Height="12" Width="16" Padding="0" CornerRadius="2"><FontIcon Glyph="&#xE70E;" FontSize="8"/></RepeatButton><RepeatButton Click="TransformSpinnerDown_Click" Tag="LocatorRotZ|1" Height="12" Width="16" Padding="0" CornerRadius="2"><FontIcon Glyph="&#xE70D;" FontSize="8"/></RepeatButton></StackPanel></Grid>
+                                        </StackPanel>
                                     </Grid>
                                 </StackPanel>
 
-                                <!-- Row 3 -->
                                 <StackPanel Spacing="2">
-                                    <TextBlock Text="Row 3 (_31 _32 _33 _34)" FontSize="10" Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
+                                    <TextBlock Text="Scale" FontWeight="SemiBold" FontSize="12"/>
                                     <Grid ColumnSpacing="4">
                                         <Grid.ColumnDefinitions>
                                             <ColumnDefinition Width="*"/>
                                             <ColumnDefinition Width="*"/>
                                             <ColumnDefinition Width="*"/>
-                                            <ColumnDefinition Width="*"/>
                                         </Grid.ColumnDefinitions>
-                                        <Grid Grid.Column="0" ColumnSpacing="2"><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions><TextBox x:Name="M31" PlaceholderText="_31" TextChanged="LocatorMatrix_TextChanged" FontSize="11" MinHeight="24" Padding="4,2"/><StackPanel Grid.Column="1" Spacing="1"><RepeatButton Click="M31_Up" Height="12" Width="16" Padding="0" CornerRadius="2"><FontIcon Glyph="&#xE70E;" FontSize="8"/></RepeatButton><RepeatButton Click="M31_Down" Height="12" Width="16" Padding="0" CornerRadius="2"><FontIcon Glyph="&#xE70D;" FontSize="8"/></RepeatButton></StackPanel></Grid>
-                                        <Grid Grid.Column="1" ColumnSpacing="2"><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions><TextBox x:Name="M32" PlaceholderText="_32" TextChanged="LocatorMatrix_TextChanged" FontSize="11" MinHeight="24" Padding="4,2"/><StackPanel Grid.Column="1" Spacing="1"><RepeatButton Click="M32_Up" Height="12" Width="16" Padding="0" CornerRadius="2"><FontIcon Glyph="&#xE70E;" FontSize="8"/></RepeatButton><RepeatButton Click="M32_Down" Height="12" Width="16" Padding="0" CornerRadius="2"><FontIcon Glyph="&#xE70D;" FontSize="8"/></RepeatButton></StackPanel></Grid>
-                                        <Grid Grid.Column="2" ColumnSpacing="2"><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions><TextBox x:Name="M33" PlaceholderText="_33" TextChanged="LocatorMatrix_TextChanged" FontSize="11" MinHeight="24" Padding="4,2"/><StackPanel Grid.Column="1" Spacing="1"><RepeatButton Click="M33_Up" Height="12" Width="16" Padding="0" CornerRadius="2"><FontIcon Glyph="&#xE70E;" FontSize="8"/></RepeatButton><RepeatButton Click="M33_Down" Height="12" Width="16" Padding="0" CornerRadius="2"><FontIcon Glyph="&#xE70D;" FontSize="8"/></RepeatButton></StackPanel></Grid>
-                                        <Grid Grid.Column="3" ColumnSpacing="2"><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions><TextBox x:Name="M34" PlaceholderText="_34" TextChanged="LocatorMatrix_TextChanged" FontSize="11" MinHeight="24" Padding="4,2"/><StackPanel Grid.Column="1" Spacing="1"><RepeatButton Click="M34_Up" Height="12" Width="16" Padding="0" CornerRadius="2"><FontIcon Glyph="&#xE70E;" FontSize="8"/></RepeatButton><RepeatButton Click="M34_Down" Height="12" Width="16" Padding="0" CornerRadius="2"><FontIcon Glyph="&#xE70D;" FontSize="8"/></RepeatButton></StackPanel></Grid>
-                                    </Grid>
-                                </StackPanel>
-
-                                <!-- Row 4 (Translation) -->
-                                <StackPanel Spacing="2">
-                                    <TextBlock Text="Row 4 / Translation (_41 _42 _43 _44)" FontSize="10" Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
-                                    <Grid ColumnSpacing="4">
-                                        <Grid.ColumnDefinitions>
-                                            <ColumnDefinition Width="*"/>
-                                            <ColumnDefinition Width="*"/>
-                                            <ColumnDefinition Width="*"/>
-                                            <ColumnDefinition Width="*"/>
-                                        </Grid.ColumnDefinitions>
-                                        <Grid Grid.Column="0" ColumnSpacing="2"><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions><TextBox x:Name="M41" PlaceholderText="_41" TextChanged="LocatorMatrix_TextChanged" FontSize="11" MinHeight="24" Padding="4,2"/><StackPanel Grid.Column="1" Spacing="1"><RepeatButton Click="M41_Up" Height="12" Width="16" Padding="0" CornerRadius="2"><FontIcon Glyph="&#xE70E;" FontSize="8"/></RepeatButton><RepeatButton Click="M41_Down" Height="12" Width="16" Padding="0" CornerRadius="2"><FontIcon Glyph="&#xE70D;" FontSize="8"/></RepeatButton></StackPanel></Grid>
-                                        <Grid Grid.Column="1" ColumnSpacing="2"><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions><TextBox x:Name="M42" PlaceholderText="_42" TextChanged="LocatorMatrix_TextChanged" FontSize="11" MinHeight="24" Padding="4,2"/><StackPanel Grid.Column="1" Spacing="1"><RepeatButton Click="M42_Up" Height="12" Width="16" Padding="0" CornerRadius="2"><FontIcon Glyph="&#xE70E;" FontSize="8"/></RepeatButton><RepeatButton Click="M42_Down" Height="12" Width="16" Padding="0" CornerRadius="2"><FontIcon Glyph="&#xE70D;" FontSize="8"/></RepeatButton></StackPanel></Grid>
-                                        <Grid Grid.Column="2" ColumnSpacing="2"><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions><TextBox x:Name="M43" PlaceholderText="_43" TextChanged="LocatorMatrix_TextChanged" FontSize="11" MinHeight="24" Padding="4,2"/><StackPanel Grid.Column="1" Spacing="1"><RepeatButton Click="M43_Up" Height="12" Width="16" Padding="0" CornerRadius="2"><FontIcon Glyph="&#xE70E;" FontSize="8"/></RepeatButton><RepeatButton Click="M43_Down" Height="12" Width="16" Padding="0" CornerRadius="2"><FontIcon Glyph="&#xE70D;" FontSize="8"/></RepeatButton></StackPanel></Grid>
-                                        <Grid Grid.Column="3" ColumnSpacing="2"><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions><TextBox x:Name="M44" PlaceholderText="_44" TextChanged="LocatorMatrix_TextChanged" FontSize="11" MinHeight="24" Padding="4,2"/><StackPanel Grid.Column="1" Spacing="1"><RepeatButton Click="M44_Up" Height="12" Width="16" Padding="0" CornerRadius="2"><FontIcon Glyph="&#xE70E;" FontSize="8"/></RepeatButton><RepeatButton Click="M44_Down" Height="12" Width="16" Padding="0" CornerRadius="2"><FontIcon Glyph="&#xE70D;" FontSize="8"/></RepeatButton></StackPanel></Grid>
+                                        <StackPanel Grid.Column="0" Spacing="2">
+                                            <TextBlock Text="X" FontSize="10" Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
+                                            <Grid ColumnSpacing="2"><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions><TextBox x:Name="LocatorScaleX" Text="1.000" TextChanged="LocatorMatrix_TextChanged" FontSize="11" MinHeight="24" Padding="4,2"/><StackPanel Grid.Column="1" Spacing="1"><RepeatButton Click="TransformSpinnerUp_Click" Tag="LocatorScaleX|0.001" Height="12" Width="16" Padding="0" CornerRadius="2"><FontIcon Glyph="&#xE70E;" FontSize="8"/></RepeatButton><RepeatButton Click="TransformSpinnerDown_Click" Tag="LocatorScaleX|0.001" Height="12" Width="16" Padding="0" CornerRadius="2"><FontIcon Glyph="&#xE70D;" FontSize="8"/></RepeatButton></StackPanel></Grid>
+                                        </StackPanel>
+                                        <StackPanel Grid.Column="1" Spacing="2">
+                                            <TextBlock Text="Y" FontSize="10" Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
+                                            <Grid ColumnSpacing="2"><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions><TextBox x:Name="LocatorScaleY" Text="1.000" TextChanged="LocatorMatrix_TextChanged" FontSize="11" MinHeight="24" Padding="4,2"/><StackPanel Grid.Column="1" Spacing="1"><RepeatButton Click="TransformSpinnerUp_Click" Tag="LocatorScaleY|0.001" Height="12" Width="16" Padding="0" CornerRadius="2"><FontIcon Glyph="&#xE70E;" FontSize="8"/></RepeatButton><RepeatButton Click="TransformSpinnerDown_Click" Tag="LocatorScaleY|0.001" Height="12" Width="16" Padding="0" CornerRadius="2"><FontIcon Glyph="&#xE70D;" FontSize="8"/></RepeatButton></StackPanel></Grid>
+                                        </StackPanel>
+                                        <StackPanel Grid.Column="2" Spacing="2">
+                                            <TextBlock Text="Z" FontSize="10" Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
+                                            <Grid ColumnSpacing="2"><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions><TextBox x:Name="LocatorScaleZ" Text="1.000" TextChanged="LocatorMatrix_TextChanged" FontSize="11" MinHeight="24" Padding="4,2"/><StackPanel Grid.Column="1" Spacing="1"><RepeatButton Click="TransformSpinnerUp_Click" Tag="LocatorScaleZ|0.001" Height="12" Width="16" Padding="0" CornerRadius="2"><FontIcon Glyph="&#xE70E;" FontSize="8"/></RepeatButton><RepeatButton Click="TransformSpinnerDown_Click" Tag="LocatorScaleZ|0.001" Height="12" Width="16" Padding="0" CornerRadius="2"><FontIcon Glyph="&#xE70D;" FontSize="8"/></RepeatButton></StackPanel></Grid>
+                                        </StackPanel>
                                     </Grid>
                                 </StackPanel>
 
@@ -1089,7 +1166,80 @@
                                           Unchecked="CarbinUseTransforms_Changed"
                                           FontSize="12"/>
 
-                                <StackPanel Spacing="2">
+                                <StackPanel Spacing="8">
+                                    <TextBlock Text="Transform" FontWeight="SemiBold" FontSize="12"/>
+
+                                    <StackPanel Spacing="2">
+                                        <TextBlock Text="Position" FontWeight="SemiBold" FontSize="11"/>
+                                        <Grid ColumnSpacing="4">
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="*"/>
+                                                <ColumnDefinition Width="*"/>
+                                                <ColumnDefinition Width="*"/>
+                                            </Grid.ColumnDefinitions>
+                                            <StackPanel Grid.Column="0" Spacing="2">
+                                                <TextBlock Text="X" FontSize="10" Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
+                                                <Grid ColumnSpacing="2"><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions><TextBox x:Name="CarbinPosX" TextChanged="CarbinField_TextChanged" FontSize="11" MinHeight="24" Padding="4,2"/><StackPanel Grid.Column="1" Spacing="1"><RepeatButton Click="TransformSpinnerUp_Click" Tag="CarbinPosX|0.001" Height="12" Width="16" Padding="0" CornerRadius="2"><FontIcon Glyph="&#xE70E;" FontSize="8"/></RepeatButton><RepeatButton Click="TransformSpinnerDown_Click" Tag="CarbinPosX|0.001" Height="12" Width="16" Padding="0" CornerRadius="2"><FontIcon Glyph="&#xE70D;" FontSize="8"/></RepeatButton></StackPanel></Grid>
+                                            </StackPanel>
+                                            <StackPanel Grid.Column="1" Spacing="2">
+                                                <TextBlock Text="Y" FontSize="10" Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
+                                                <Grid ColumnSpacing="2"><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions><TextBox x:Name="CarbinPosY" TextChanged="CarbinField_TextChanged" FontSize="11" MinHeight="24" Padding="4,2"/><StackPanel Grid.Column="1" Spacing="1"><RepeatButton Click="TransformSpinnerUp_Click" Tag="CarbinPosY|0.001" Height="12" Width="16" Padding="0" CornerRadius="2"><FontIcon Glyph="&#xE70E;" FontSize="8"/></RepeatButton><RepeatButton Click="TransformSpinnerDown_Click" Tag="CarbinPosY|0.001" Height="12" Width="16" Padding="0" CornerRadius="2"><FontIcon Glyph="&#xE70D;" FontSize="8"/></RepeatButton></StackPanel></Grid>
+                                            </StackPanel>
+                                            <StackPanel Grid.Column="2" Spacing="2">
+                                                <TextBlock Text="Z" FontSize="10" Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
+                                                <Grid ColumnSpacing="2"><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions><TextBox x:Name="CarbinPosZ" TextChanged="CarbinField_TextChanged" FontSize="11" MinHeight="24" Padding="4,2"/><StackPanel Grid.Column="1" Spacing="1"><RepeatButton Click="TransformSpinnerUp_Click" Tag="CarbinPosZ|0.001" Height="12" Width="16" Padding="0" CornerRadius="2"><FontIcon Glyph="&#xE70E;" FontSize="8"/></RepeatButton><RepeatButton Click="TransformSpinnerDown_Click" Tag="CarbinPosZ|0.001" Height="12" Width="16" Padding="0" CornerRadius="2"><FontIcon Glyph="&#xE70D;" FontSize="8"/></RepeatButton></StackPanel></Grid>
+                                            </StackPanel>
+                                        </Grid>
+                                    </StackPanel>
+
+                                    <StackPanel Spacing="2">
+                                        <TextBlock Text="Rotation" FontWeight="SemiBold" FontSize="11"/>
+                                        <Grid ColumnSpacing="4">
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="*"/>
+                                                <ColumnDefinition Width="*"/>
+                                                <ColumnDefinition Width="*"/>
+                                            </Grid.ColumnDefinitions>
+                                            <StackPanel Grid.Column="0" Spacing="2">
+                                                <TextBlock Text="X" FontSize="10" Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
+                                                <Grid ColumnSpacing="2"><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions><TextBox x:Name="CarbinRotX" TextChanged="CarbinField_TextChanged" FontSize="11" MinHeight="24" Padding="4,2"/><StackPanel Grid.Column="1" Spacing="1"><RepeatButton Click="TransformSpinnerUp_Click" Tag="CarbinRotX|1" Height="12" Width="16" Padding="0" CornerRadius="2"><FontIcon Glyph="&#xE70E;" FontSize="8"/></RepeatButton><RepeatButton Click="TransformSpinnerDown_Click" Tag="CarbinRotX|1" Height="12" Width="16" Padding="0" CornerRadius="2"><FontIcon Glyph="&#xE70D;" FontSize="8"/></RepeatButton></StackPanel></Grid>
+                                            </StackPanel>
+                                            <StackPanel Grid.Column="1" Spacing="2">
+                                                <TextBlock Text="Y" FontSize="10" Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
+                                                <Grid ColumnSpacing="2"><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions><TextBox x:Name="CarbinRotY" TextChanged="CarbinField_TextChanged" FontSize="11" MinHeight="24" Padding="4,2"/><StackPanel Grid.Column="1" Spacing="1"><RepeatButton Click="TransformSpinnerUp_Click" Tag="CarbinRotY|1" Height="12" Width="16" Padding="0" CornerRadius="2"><FontIcon Glyph="&#xE70E;" FontSize="8"/></RepeatButton><RepeatButton Click="TransformSpinnerDown_Click" Tag="CarbinRotY|1" Height="12" Width="16" Padding="0" CornerRadius="2"><FontIcon Glyph="&#xE70D;" FontSize="8"/></RepeatButton></StackPanel></Grid>
+                                            </StackPanel>
+                                            <StackPanel Grid.Column="2" Spacing="2">
+                                                <TextBlock Text="Z" FontSize="10" Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
+                                                <Grid ColumnSpacing="2"><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions><TextBox x:Name="CarbinRotZ" TextChanged="CarbinField_TextChanged" FontSize="11" MinHeight="24" Padding="4,2"/><StackPanel Grid.Column="1" Spacing="1"><RepeatButton Click="TransformSpinnerUp_Click" Tag="CarbinRotZ|1" Height="12" Width="16" Padding="0" CornerRadius="2"><FontIcon Glyph="&#xE70E;" FontSize="8"/></RepeatButton><RepeatButton Click="TransformSpinnerDown_Click" Tag="CarbinRotZ|1" Height="12" Width="16" Padding="0" CornerRadius="2"><FontIcon Glyph="&#xE70D;" FontSize="8"/></RepeatButton></StackPanel></Grid>
+                                            </StackPanel>
+                                        </Grid>
+                                    </StackPanel>
+
+                                    <StackPanel Spacing="2">
+                                        <TextBlock Text="Scale" FontWeight="SemiBold" FontSize="11"/>
+                                        <Grid ColumnSpacing="4">
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="*"/>
+                                                <ColumnDefinition Width="*"/>
+                                                <ColumnDefinition Width="*"/>
+                                            </Grid.ColumnDefinitions>
+                                            <StackPanel Grid.Column="0" Spacing="2">
+                                                <TextBlock Text="X" FontSize="10" Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
+                                                <Grid ColumnSpacing="2"><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions><TextBox x:Name="CarbinScaleX" TextChanged="CarbinField_TextChanged" FontSize="11" MinHeight="24" Padding="4,2"/><StackPanel Grid.Column="1" Spacing="1"><RepeatButton Click="TransformSpinnerUp_Click" Tag="CarbinScaleX|0.001" Height="12" Width="16" Padding="0" CornerRadius="2"><FontIcon Glyph="&#xE70E;" FontSize="8"/></RepeatButton><RepeatButton Click="TransformSpinnerDown_Click" Tag="CarbinScaleX|0.001" Height="12" Width="16" Padding="0" CornerRadius="2"><FontIcon Glyph="&#xE70D;" FontSize="8"/></RepeatButton></StackPanel></Grid>
+                                            </StackPanel>
+                                            <StackPanel Grid.Column="1" Spacing="2">
+                                                <TextBlock Text="Y" FontSize="10" Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
+                                                <Grid ColumnSpacing="2"><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions><TextBox x:Name="CarbinScaleY" TextChanged="CarbinField_TextChanged" FontSize="11" MinHeight="24" Padding="4,2"/><StackPanel Grid.Column="1" Spacing="1"><RepeatButton Click="TransformSpinnerUp_Click" Tag="CarbinScaleY|0.001" Height="12" Width="16" Padding="0" CornerRadius="2"><FontIcon Glyph="&#xE70E;" FontSize="8"/></RepeatButton><RepeatButton Click="TransformSpinnerDown_Click" Tag="CarbinScaleY|0.001" Height="12" Width="16" Padding="0" CornerRadius="2"><FontIcon Glyph="&#xE70D;" FontSize="8"/></RepeatButton></StackPanel></Grid>
+                                            </StackPanel>
+                                            <StackPanel Grid.Column="2" Spacing="2">
+                                                <TextBlock Text="Z" FontSize="10" Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
+                                                <Grid ColumnSpacing="2"><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions><TextBox x:Name="CarbinScaleZ" TextChanged="CarbinField_TextChanged" FontSize="11" MinHeight="24" Padding="4,2"/><StackPanel Grid.Column="1" Spacing="1"><RepeatButton Click="TransformSpinnerUp_Click" Tag="CarbinScaleZ|0.001" Height="12" Width="16" Padding="0" CornerRadius="2"><FontIcon Glyph="&#xE70E;" FontSize="8"/></RepeatButton><RepeatButton Click="TransformSpinnerDown_Click" Tag="CarbinScaleZ|0.001" Height="12" Width="16" Padding="0" CornerRadius="2"><FontIcon Glyph="&#xE70D;" FontSize="8"/></RepeatButton></StackPanel></Grid>
+                                            </StackPanel>
+                                        </Grid>
+                                    </StackPanel>
+                                </StackPanel>
+
+                                <StackPanel Visibility="Collapsed" Spacing="2">
                                     <TextBlock Text="Transform Matrix" FontWeight="SemiBold" FontSize="12"/>
                                     <Grid ColumnSpacing="4" RowSpacing="4">
                                         <Grid.ColumnDefinitions>
@@ -1516,15 +1666,15 @@
                     DefaultLabelPosition="Right"
                     Background="{ThemeResource LayerFillColorDefaultBrush}">
             <CommandBar.Resources>
-                <Style TargetType="AppBarButton">
+                <Style TargetType="AppBarButton" BasedOn="{StaticResource AppBarButtonRevealLabelsOnRightStyle}">
                     <Setter Property="FontSize" Value="11"/>
-                    <Setter Property="MinWidth" Value="56"/>
-                    <Setter Property="Padding" Value="5,0"/>
+                    <Setter Property="MinWidth" Value="0"/>
+                    <Setter Property="Padding" Value="4,0"/>
                 </Style>
-                <Style TargetType="AppBarToggleButton">
+                <Style TargetType="AppBarToggleButton" BasedOn="{StaticResource AppBarToggleButtonRevealLabelsOnRightStyle}">
                     <Setter Property="FontSize" Value="11"/>
-                    <Setter Property="MinWidth" Value="56"/>
-                    <Setter Property="Padding" Value="5,0"/>
+                    <Setter Property="MinWidth" Value="0"/>
+                    <Setter Property="Padding" Value="4,0"/>
                 </Style>
             </CommandBar.Resources>
             <CommandBar.Content>
@@ -1565,6 +1715,16 @@
                 </AppBarButton.Icon>
                 <AppBarButton.KeyboardAccelerators>
                     <KeyboardAccelerator Modifiers="Control,Shift" Key="S"/>
+                </AppBarButton.KeyboardAccelerators>
+            </AppBarButton>
+
+            <AppBarButton Label="Save All" Click="SaveAllModified_Click"
+                          ToolTipService.ToolTip="Save all modified files (Ctrl+Alt+S)">
+                <AppBarButton.Icon>
+                    <FontIcon Glyph="&#xEA35;"/>
+                </AppBarButton.Icon>
+                <AppBarButton.KeyboardAccelerators>
+                    <KeyboardAccelerator Modifiers="Control,Menu" Key="S"/>
                 </AppBarButton.KeyboardAccelerators>
             </AppBarButton>
 
@@ -1666,6 +1826,10 @@
                 </AppBarButton.Icon>
                 <AppBarButton.Flyout>
                     <MenuFlyout>
+                        <MenuFlyoutItem Text="Export Options..." Click="ExportOptions_Click">
+                            <MenuFlyoutItem.Icon><FontIcon Glyph="&#xE713;"/></MenuFlyoutItem.Icon>
+                        </MenuFlyoutItem>
+                        <MenuFlyoutSeparator/>
                         <MenuFlyoutSubItem Text="OBJ">
                             <MenuFlyoutSubItem.Icon><FontIcon Glyph="&#xEDE1;"/></MenuFlyoutSubItem.Icon>
                             <MenuFlyoutItem Text="Export Scene" Click="ExportObjScene_Click">
@@ -1752,51 +1916,145 @@
                 </AppBarButton.Icon>
                 <AppBarButton.Flyout>
                     <Flyout Placement="Bottom">
-                        <StackPanel Width="340" Spacing="10">
-                            <TextBlock Text="Manufacturer Colors" FontWeight="SemiBold" FontSize="13"/>
-                            <ComboBox x:Name="ManufacturerColorCombo"
-                                      HorizontalAlignment="Stretch"
-                                      SelectionChanged="ManufacturerColorCombo_SelectionChanged">
-                                <ComboBox.ItemTemplate>
-                                    <DataTemplate>
-                                        <Grid ColumnSpacing="8">
-                                            <Grid.ColumnDefinitions>
-                                                <ColumnDefinition Width="Auto"/>
-                                                <ColumnDefinition Width="*"/>
-                                            </Grid.ColumnDefinitions>
-                                            <Border Width="18" Height="18" CornerRadius="3"
-                                                    BorderThickness="1"
-                                                    BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
-                                                    Background="{Binding SwatchBrush}"/>
-                                            <StackPanel Grid.Column="1" Spacing="1">
-                                                <TextBlock Text="{Binding DisplayName}" TextTrimming="CharacterEllipsis"/>
-                                                <TextBlock Text="{Binding SourceText}" FontSize="11" Opacity="0.65" TextTrimming="CharacterEllipsis"/>
-                                            </StackPanel>
-                                        </Grid>
-                                    </DataTemplate>
-                                </ComboBox.ItemTemplate>
-                            </ComboBox>
-                            <TextBlock x:Name="ManufacturerColorStatusText"
-                                       Text="No manufacturercolors.bin found in the loaded car zip."
-                                       FontSize="11"
-                                       Opacity="0.7"
-                                       TextWrapping="Wrap"/>
-                            <Button x:Name="ResetManufacturerColorBtn"
-                                    Click="ResetManufacturerColor_Click"
-                                    IsEnabled="False"
-                                    HorizontalAlignment="Stretch">
+                        <StackPanel Width="220" Spacing="6">
+                            <Button x:Name="ManufacturerColorsFlyoutBtn"
+                                    HorizontalAlignment="Stretch"
+                                    HorizontalContentAlignment="Left">
                                 <StackPanel Orientation="Horizontal" Spacing="8">
-                                    <FontIcon Glyph="&#xE72C;" FontSize="12"/>
-                                    <TextBlock Text="Use Default Grey"/>
+                                    <FontIcon Glyph="&#xE8FD;" FontSize="14"/>
+                                    <TextBlock Text="Manufacturer Colors"/>
                                 </StackPanel>
+                                <Button.Flyout>
+                                    <Flyout Placement="RightEdgeAlignedTop">
+                                        <StackPanel Width="340" Spacing="10">
+                                            <TextBlock Text="Manufacturer Colors" FontWeight="SemiBold" FontSize="13"/>
+                                            <Border BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
+                                                    BorderThickness="1"
+                                                    CornerRadius="4">
+                                                <ListView x:Name="ManufacturerColorCombo"
+                                                          SelectionMode="Single"
+                                                          MaxHeight="200"
+                                                          Padding="0,2"
+                                                          SelectionChanged="ManufacturerColorCombo_SelectionChanged">
+                                                    <ListView.ItemContainerStyle>
+                                                        <Style TargetType="ListViewItem">
+                                                            <Setter Property="MinHeight" Value="0"/>
+                                                            <Setter Property="Padding" Value="8,4"/>
+                                                            <Setter Property="HorizontalContentAlignment" Value="Stretch"/>
+                                                        </Style>
+                                                    </ListView.ItemContainerStyle>
+                                                    <ListView.ItemTemplate>
+                                                        <DataTemplate>
+                                                            <Grid ColumnSpacing="8">
+                                                                <Grid.ColumnDefinitions>
+                                                                    <ColumnDefinition Width="Auto"/>
+                                                                    <ColumnDefinition Width="*"/>
+                                                                </Grid.ColumnDefinitions>
+                                                                <Border Width="18" Height="18" CornerRadius="3"
+                                                                        VerticalAlignment="Center"
+                                                                        BorderThickness="1"
+                                                                        BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
+                                                                        Background="{Binding SwatchBrush}"/>
+                                                                <StackPanel Grid.Column="1" Spacing="1">
+                                                                    <TextBlock Text="{Binding DisplayName}" TextTrimming="CharacterEllipsis"/>
+                                                                    <TextBlock Text="{Binding SourceText}" FontSize="11" Opacity="0.65" TextTrimming="CharacterEllipsis"/>
+                                                                </StackPanel>
+                                                            </Grid>
+                                                        </DataTemplate>
+                                                    </ListView.ItemTemplate>
+                                                </ListView>
+                                            </Border>
+                                            <TextBlock x:Name="ManufacturerColorStatusText"
+                                                       Text="No manufacturercolors.bin found in the loaded car zip."
+                                                       FontSize="11"
+                                                       Opacity="0.7"
+                                                       TextWrapping="Wrap"/>
+                                            <Button x:Name="ResetManufacturerColorBtn"
+                                                    Click="ResetManufacturerColor_Click"
+                                                    IsEnabled="False"
+                                                    HorizontalAlignment="Stretch">
+                                                <StackPanel Orientation="Horizontal" Spacing="8">
+                                                    <FontIcon Glyph="&#xE72C;" FontSize="12"/>
+                                                    <TextBlock Text="Use Default Grey"/>
+                                                </StackPanel>
+                                            </Button>
+                                        </StackPanel>
+                                    </Flyout>
+                                </Button.Flyout>
                             </Button>
-                            <Border Height="1" Background="{ThemeResource DividerStrokeColorDefaultBrush}"/>
-                            <Button x:Name="ZipTexturesBtn"
-                                    Click="ShowZipTextures_Click"
-                                    HorizontalAlignment="Stretch">
+
+                            <Button x:Name="TexturesFlyoutBtn"
+                                    HorizontalAlignment="Stretch"
+                                    HorizontalContentAlignment="Left">
                                 <StackPanel Orientation="Horizontal" Spacing="8">
-                                    <FontIcon Glyph="&#xEB9F;" FontSize="12"/>
+                                    <FontIcon Glyph="&#xEB9F;" FontSize="14"/>
                                     <TextBlock Text="Textures"/>
+                                </StackPanel>
+                                <Button.Flyout>
+                                    <Flyout Placement="RightEdgeAlignedTop">
+                                        <StackPanel Width="340" Spacing="10">
+                                            <TextBlock Text="Texture Sources" FontWeight="SemiBold" FontSize="13"/>
+                                            <CheckBox x:Name="UseLocalTexturesCheckBox"
+                                                      Content="Use Local Textures"
+                                                      IsChecked="True"
+                                                      Click="ViewportTextureSourceCheckBox_Click"/>
+                                            <CheckBox x:Name="UseLibraryTexturesCheckBox"
+                                                      Content="Use Library Textures"
+                                                      IsChecked="True"
+                                                      Click="ViewportTextureSourceCheckBox_Click"/>
+                                            <Border Height="1" Background="{ThemeResource DividerStrokeColorDefaultBrush}"/>
+                                            <TextBlock Text="Texture Library" FontWeight="SemiBold" FontSize="13"/>
+                                            <Border BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
+                                                    BorderThickness="1"
+                                                    CornerRadius="4">
+                                                <ListView x:Name="TextureGameSourceCombo"
+                                                          SelectionMode="Single"
+                                                          MaxHeight="180"
+                                                          Padding="0,2"
+                                                          SelectionChanged="TextureGameSourceCombo_SelectionChanged">
+                                                    <ListView.ItemContainerStyle>
+                                                        <Style TargetType="ListViewItem">
+                                                            <Setter Property="MinHeight" Value="0"/>
+                                                            <Setter Property="Padding" Value="8,4"/>
+                                                            <Setter Property="HorizontalContentAlignment" Value="Stretch"/>
+                                                        </Style>
+                                                    </ListView.ItemContainerStyle>
+                                                    <ListView.ItemTemplate>
+                                                        <DataTemplate>
+                                                            <StackPanel Spacing="1">
+                                                                <TextBlock Text="{Binding DisplayName}" TextTrimming="CharacterEllipsis"/>
+                                                                <TextBlock Text="{Binding DetailText}" FontSize="11" Opacity="0.65" TextTrimming="CharacterEllipsis"/>
+                                                            </StackPanel>
+                                                        </DataTemplate>
+                                                    </ListView.ItemTemplate>
+                                                </ListView>
+                                            </Border>
+                                            <TextBlock x:Name="TextureGameSourceStatusText"
+                                                       Text="No configured game paths found in Setup."
+                                                       FontSize="11"
+                                                       Opacity="0.7"
+                                                       TextWrapping="Wrap"/>
+                                            <Border Height="1" Background="{ThemeResource DividerStrokeColorDefaultBrush}"/>
+                                            <Button x:Name="ZipTexturesBtn"
+                                                    Click="ShowZipTextures_Click"
+                                                    HorizontalAlignment="Stretch">
+                                                <StackPanel Orientation="Horizontal" Spacing="8">
+                                                    <FontIcon Glyph="&#xEB9F;" FontSize="12"/>
+                                                    <TextBlock Text="Browse Zip Textures"/>
+                                                </StackPanel>
+                                            </Button>
+                                        </StackPanel>
+                                    </Flyout>
+                                </Button.Flyout>
+                            </Button>
+
+                            <Button x:Name="UvMapsFlyoutBtn"
+                                    Click="UvMaps_Click"
+                                    HorizontalAlignment="Stretch"
+                                    HorizontalContentAlignment="Left">
+                                <StackPanel Orientation="Horizontal" Spacing="8">
+                                    <FontIcon Glyph="&#xE158;" FontSize="14"/>
+                                    <TextBlock Text="UV Maps"/>
                                 </StackPanel>
                             </Button>
                         </StackPanel>
@@ -2186,6 +2444,13 @@
                                HorizontalAlignment="Center"
                                TextAlignment="Center"
                                TextWrapping="Wrap"/>
+                    <TextBlock Text="{x:Bind LoadingDetail, Mode=OneWay}"
+                               FontSize="12"
+                               HorizontalAlignment="Center"
+                               TextAlignment="Center"
+                               TextWrapping="Wrap"
+                               Opacity="0.65"
+                               MaxWidth="360"/>
                 </StackPanel>
             </Border>
         </Grid>

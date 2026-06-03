@@ -1,5 +1,4 @@
 using System;
-using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.IO;
@@ -7,6 +6,8 @@ using System.IO.Compression;
 using System.Linq;
 using System.Numerics;
 using System.Text;
+using ForzaTools.Bundles.Blobs;
+using ForzaTechStudio.Models;
 
 namespace ForzaTechStudio.Services
 {
@@ -21,23 +22,24 @@ namespace ForzaTechStudio.Services
         // Public entry point 
 
         public static void Export(IEnumerable<ModelBinExportData> models, string outputPath, FbxExportFormat format,
-            Dictionary<string, string>? texMap = null)
+            Dictionary<string, string>? texMap = null, ExportOptions? options = null)
         {
             var list = models.ToList();
+            var opt = options ?? new ExportOptions();
             if (format == FbxExportFormat.Binary)
-                ExportBinary(list, outputPath, texMap);
+                ExportBinary(list, outputPath, texMap, opt);
             else
-                ExportAscii(list, outputPath, texMap);
+                ExportAscii(list, outputPath, texMap, opt);
         }
 
 
         //  ASCII writer
 
 
-        private static void ExportAscii(List<ModelBinExportData> models, string outputPath, Dictionary<string, string>? texMap)
-            => File.WriteAllText(outputPath, BuildFbxAscii(models, texMap), new UTF8Encoding(false));
+        private static void ExportAscii(List<ModelBinExportData> models, string outputPath, Dictionary<string, string>? texMap, ExportOptions opt)
+            => File.WriteAllText(outputPath, BuildFbxAscii(models, texMap, opt, Path.GetDirectoryName(outputPath) ?? string.Empty), new UTF8Encoding(false));
 
-        private static string BuildFbxAscii(List<ModelBinExportData> models, Dictionary<string, string>? texMap)
+        private static string BuildFbxAscii(List<ModelBinExportData> models, Dictionary<string, string>? texMap, ExportOptions opt, string outputDir)
         {
             var sb = new StringBuilder(1 << 20);
 
@@ -52,6 +54,10 @@ namespace ForzaTechStudio.Services
             long MeshGeoId(int fi)      => 200_001L + fi * 2;
             long MatNodeId(int mi)      => 900_000L + mi;
             long TexNodeId(int mi)      => 950_000L + mi;
+
+            var axisScale = opt.GetAxisScaleMatrix();
+            bool hasAxisScale = opt.HasAxisScale;
+            var bones = CollectBones(models, mbNodeId, opt);
 
             var now = DateTime.UtcNow;
 
@@ -102,15 +108,16 @@ namespace ForzaTechStudio.Services
             sb.AppendLine();
 
             // Definitions 
-            int modelCount = allMeshes.Count + models.Count;
+            int modelCount = allMeshes.Count + models.Count + bones.Count;
             sb.AppendLine("Definitions:  {");
             sb.AppendLine("\tVersion: 100");
-            sb.AppendLine($"\tCount: {3 + modelCount + matList.Count + texCount}");
+            sb.AppendLine($"\tCount: {3 + modelCount + matList.Count + texCount + bones.Count}");
             sb.AppendLine("\tObjectType: \"GlobalSettings\" {"); sb.AppendLine("\t\tCount: 1"); sb.AppendLine("\t}");
             sb.AppendLine($"\tObjectType: \"Model\" {{"); sb.AppendLine($"\t\tCount: {modelCount}"); sb.AppendLine("\t}");
             sb.AppendLine($"\tObjectType: \"Geometry\" {{"); sb.AppendLine($"\t\tCount: {allMeshes.Count}"); sb.AppendLine("\t}");
             sb.AppendLine($"\tObjectType: \"Material\" {{"); sb.AppendLine($"\t\tCount: {matList.Count}"); sb.AppendLine("\t}");
             if (texCount > 0) { sb.AppendLine($"\tObjectType: \"Texture\" {{"); sb.AppendLine($"\t\tCount: {texCount}"); sb.AppendLine("\t}"); }
+            if (bones.Count > 0) { sb.AppendLine($"\tObjectType: \"NodeAttribute\" {{"); sb.AppendLine($"\t\tCount: {bones.Count}"); sb.AppendLine("\t}"); }
             sb.AppendLine("}");
             sb.AppendLine();
 
@@ -136,7 +143,7 @@ namespace ForzaTechStudio.Services
             {
                 var (_, _, meshName, data) = allMeshes[fi];
                 string sn = SanitiseName(meshName);
-                AsciiWriteGeometry(sb, MeshGeoId(fi), sn, data);
+                AsciiWriteGeometry(sb, MeshGeoId(fi), sn, data, opt, axisScale, hasAxisScale);
                 AsciiWriteMeshModel(sb, MeshModelId(fi), sn);
             }
 
@@ -168,12 +175,13 @@ namespace ForzaTechStudio.Services
                 sb.AppendLine("\t\tProperties70:  {");
                 sb.AppendLine($"\t\t\tP: \"UseMaterial\", \"bool\", \"\", \"\",1");
                 sb.AppendLine("\t\t}");
-                string absPath = texPath.Replace('\\', '/');
-                string relPath = texPath.Replace('/', '\\');
+                var (absPath, relPath) = ResolveTexturePaths(texPath, outputDir);
                 sb.AppendLine($"\t\tFileName: \"{absPath}\"");
                 sb.AppendLine($"\t\tRelativeFilename: \"{relPath}\"");
                 sb.AppendLine("\t}");
             }
+
+            AsciiWriteBones(sb, bones, axisScale);
 
             sb.AppendLine("}");
             sb.AppendLine();
@@ -203,6 +211,13 @@ namespace ForzaTechStudio.Services
                 sb.AppendLine($"\tC: \"OP\",{TexNodeId(i)},{MatNodeId(i)},\"DiffuseColor\"");
             }
 
+            foreach (var b in bones)
+            {
+                long parentId = b.IsRoot ? b.ParentModelBinId : bones[b.ParentBoneGlobal].Id;
+                sb.AppendLine($"\tC: \"OO\",{b.Id},{parentId}");
+                sb.AppendLine($"\tC: \"OO\",{b.AttrId},{b.Id}");
+            }
+
             sb.AppendLine("}");
             sb.AppendLine();
             return sb.ToString();
@@ -210,12 +225,13 @@ namespace ForzaTechStudio.Services
 
         // ASCII Geometry node 
 
-        private static void AsciiWriteGeometry(StringBuilder sb, long id, string name, ForzaGeometryData data)
+        private static void AsciiWriteGeometry(StringBuilder sb, long id, string name, ForzaGeometryData data, ExportOptions opt, Matrix4x4 axisScale, bool hasAxisScale)
         {
-            var (worldVerts, indices) = ResolveGeometry(data);
+            var (worldVerts, indices) = ResolveGeometry(data, axisScale, hasAxisScale);
             int vc = worldVerts.Length;
             bool hasN = data.Normals != null && data.Normals.Length == vc;
-            bool hasU = data.UVs     != null && data.UVs.Length     == vc;
+            bool hasU = opt.IncludeUVs && data.UVs != null && data.UVs.Length == vc;
+            bool hasColors = opt.IncludeVertexColors && data.Colors != null && data.Colors.Length == vc;
 
             var rot    = data.GetRotationMatrix();
             bool hasRot  = rot != Matrix4x4.Identity;
@@ -259,6 +275,7 @@ namespace ForzaTechStudio.Services
                     var n = data.Normals[indices[i]];
                     if (hasRot)  n = Vector3.Normalize(Vector3.TransformNormal(n, rot));
                     if (hasBone) n = Vector3.Normalize(Vector3.TransformNormal(n, data.BoneTransform));
+                    if (hasAxisScale) n = Vector3.Normalize(Vector3.TransformNormal(n, axisScale));
                     sb.Append(n.X.ToString("F6", CI)); sb.Append(',');
                     sb.Append(n.Y.ToString("F6", CI)); sb.Append(',');
                     sb.Append(n.Z.ToString("F6", CI));
@@ -288,6 +305,31 @@ namespace ForzaTechStudio.Services
                 sb.AppendLine(); sb.AppendLine("\t\t\t}"); sb.AppendLine("\t\t}");
             }
 
+            // Vertex colors
+            if (hasColors)
+            {
+                sb.AppendLine("\t\tLayerElementColor: 0 {");
+                sb.AppendLine("\t\t\tVersion: 101"); sb.AppendLine("\t\t\tName: \"VertexColors\"");
+                sb.AppendLine("\t\t\tMappingInformationType: \"ByPolygonVertex\"");
+                sb.AppendLine("\t\t\tReferenceInformationType: \"IndexToDirect\"");
+                sb.AppendLine($"\t\t\tColors: *{vc * 4} {{");
+                sb.Append("\t\t\t\ta: ");
+                for (int i = 0; i < vc; i++)
+                {
+                    if (i > 0) sb.Append(',');
+                    var c = data.Colors[i];
+                    sb.Append(c.X.ToString("F6", CI)); sb.Append(',');
+                    sb.Append(c.Y.ToString("F6", CI)); sb.Append(',');
+                    sb.Append(c.Z.ToString("F6", CI)); sb.Append(',');
+                    sb.Append(c.W.ToString("F6", CI));
+                }
+                sb.AppendLine(); sb.AppendLine("\t\t\t}");
+                sb.AppendLine($"\t\t\tColorIndex: *{indices.Length} {{");
+                sb.Append("\t\t\t\ta: ");
+                for (int i = 0; i < indices.Length; i++) { if (i > 0) sb.Append(','); sb.Append(indices[i]); }
+                sb.AppendLine(); sb.AppendLine("\t\t\t}"); sb.AppendLine("\t\t}");
+            }
+
             // LayerElementMaterial
             sb.AppendLine("\t\tLayerElementMaterial: 0 {");
             sb.AppendLine("\t\t\tVersion: 101"); sb.AppendLine("\t\t\tName: \"\"");
@@ -300,6 +342,7 @@ namespace ForzaTechStudio.Services
             sb.AppendLine("\t\tLayer: 0 {"); sb.AppendLine("\t\t\tVersion: 100");
             if (hasN) { sb.AppendLine("\t\t\tLayerElement:  {"); sb.AppendLine("\t\t\t\tType: \"LayerElementNormal\"");   sb.AppendLine("\t\t\t\tTypedIndex: 0"); sb.AppendLine("\t\t\t}"); }
             if (hasU) { sb.AppendLine("\t\t\tLayerElement:  {"); sb.AppendLine("\t\t\t\tType: \"LayerElementUV\"");        sb.AppendLine("\t\t\t\tTypedIndex: 0"); sb.AppendLine("\t\t\t}"); }
+            if (hasColors) { sb.AppendLine("\t\t\tLayerElement:  {"); sb.AppendLine("\t\t\t\tType: \"LayerElementColor\""); sb.AppendLine("\t\t\t\tTypedIndex: 0"); sb.AppendLine("\t\t\t}"); }
             sb.AppendLine("\t\t\tLayerElement:  {"); sb.AppendLine("\t\t\t\tType: \"LayerElementMaterial\""); sb.AppendLine("\t\t\t\tTypedIndex: 0"); sb.AppendLine("\t\t\t}");
             sb.AppendLine("\t\t}");
             sb.AppendLine("\t}");
@@ -324,7 +367,7 @@ namespace ForzaTechStudio.Services
         //  Binary writer  (FBX 7.4 binary)
 
 
-        private static void ExportBinary(List<ModelBinExportData> models, string outputPath, Dictionary<string, string>? texMap)
+        private static void ExportBinary(List<ModelBinExportData> models, string outputPath, Dictionary<string, string>? texMap, ExportOptions opt)
         {
             using var ms = new MemoryStream(4 << 20);
             using (var bw = new BinaryWriter(ms, Encoding.UTF8, leaveOpen: true))
@@ -345,6 +388,9 @@ namespace ForzaTechStudio.Services
                 long MeshGeoId(int fi)   => 200_001L + fi * 2;
                 long MatNodeId(int mi)   => 900_000L + mi;
                 long TexNodeId(int mi)   => 950_000L + mi;
+                var axisScale = opt.GetAxisScaleMatrix();
+                bool hasAxisScale = opt.HasAxisScale;
+                var bones = CollectBones(models, mbNodeId, opt);
                 var now = DateTime.UtcNow;
 
                 // FBXHeaderExtension
@@ -391,16 +437,17 @@ namespace ForzaTechStudio.Services
                 });
 
                 // Definitions
-                int modelCount = allMeshes.Count + models.Count;
+                int modelCount = allMeshes.Count + models.Count + bones.Count;
                 BN(bw, "Definitions", null, defs =>
                 {
                     BN(defs, "Version", new[] { BP.I32(100) });
-                    BN(defs, "Count",   new[] { BP.I32(3 + modelCount + matList.Count + texCount) });
+                    BN(defs, "Count",   new[] { BP.I32(3 + modelCount + matList.Count + texCount + bones.Count) });
                     BDefType(defs, "GlobalSettings", 1);
                     BDefType(defs, "Model",    modelCount);
                     BDefType(defs, "Geometry", allMeshes.Count);
                     BDefType(defs, "Material", matList.Count);
                     if (texCount > 0) BDefType(defs, "Texture", texCount);
+                    if (bones.Count > 0) BDefType(defs, "NodeAttribute", bones.Count);
                 });
 
                 // Objects
@@ -431,7 +478,7 @@ namespace ForzaTechStudio.Services
                     {
                         var (_, _, meshName, meshData) = allMeshes[fi];
                         string sn = SanitiseName(meshName);
-                        BinWriteGeometry(objs, MeshGeoId(fi), sn, meshData);
+                        BinWriteGeometry(objs, MeshGeoId(fi), sn, meshData, opt, axisScale, hasAxisScale);
                         BN(objs, "Model", new[] { BP.I64(MeshModelId(fi)), BP.S($"{sn}\x00\x01Model"), BP.S("Mesh") }, m =>
                         {
                             BN(m, "Version", new[] { BP.I32(232) });
@@ -472,8 +519,7 @@ namespace ForzaTechStudio.Services
                         string? texPath = matTexPaths[i];
                         if (texPath == null) continue;
                         string tn = matList[i];
-                        string absPath = texPath.Replace('\\', '/');
-                        string relPath = texPath.Replace('/', '\\');
+                        var (absPath, relPath) = ResolveTexturePaths(texPath, Path.GetDirectoryName(outputPath) ?? string.Empty);
                         BN(objs, "Texture", new[] { BP.I64(TexNodeId(i)), BP.S($"{tn}\x00\x01Texture"), BP.S("") }, tex =>
                         {
                             BN(tex, "Type",         new[] { BP.S("TextureVideoClip") });
@@ -483,6 +529,32 @@ namespace ForzaTechStudio.Services
                                 BP70(p, "UseMaterial", "bool", "", "", BP.I32(1)));
                             BN(tex, "FileName",         new[] { BP.S(absPath) });
                             BN(tex, "RelativeFilename", new[] { BP.S(relPath) });
+                        });
+                    }
+
+                    // Bones (LimbNode skeleton)
+                    foreach (var b in bones)
+                    {
+                        string bn = SanitiseName(b.Bone.Name ?? "bone");
+                        BN(objs, "NodeAttribute", new[] { BP.I64(b.AttrId), BP.S($"{bn}\x00\x01NodeAttribute"), BP.S("LimbNode") }, na =>
+                        {
+                            BN(na, "Properties70", null, p =>
+                                BP70(p, "Size", "double", "Number", "", BP.D(1.0)));
+                            BN(na, "TypeFlags", new[] { BP.S("Skeleton") });
+                        });
+                        var (bt, br, bsc) = BoneLcl(b, axisScale);
+                        BN(objs, "Model", new[] { BP.I64(b.Id), BP.S($"{bn}\x00\x01Model"), BP.S("LimbNode") }, m =>
+                        {
+                            BN(m, "Version", new[] { BP.I32(232) });
+                            BN(m, "Properties70", null, p =>
+                            {
+                                BP70(p, "RotationActive", "bool",     "",       "", BP.I32(1));
+                                BP70(p, "InheritType",    "enum",     "",       "", BP.I32(1));
+                                BP70(p, "ScalingMax",     "Vector3D", "Vector", "", BP.D(0), BP.D(0), BP.D(0));
+                                BP70(p, "Lcl Translation", "Lcl Translation", "", "A", BP.D(bt.X), BP.D(bt.Y), BP.D(bt.Z));
+                                BP70(p, "Lcl Rotation",    "Lcl Rotation",    "", "A", BP.D(br.X), BP.D(br.Y), BP.D(br.Z));
+                                BP70(p, "Lcl Scaling",     "Lcl Scaling",     "", "A", BP.D(bsc.X), BP.D(bsc.Y), BP.D(bsc.Z));
+                            });
                         });
                     }
                 });
@@ -512,6 +584,13 @@ namespace ForzaTechStudio.Services
                         if (matTexPaths[i] == null) continue;
                         BN(conns, "C", new[] { BP.S("OP"), BP.I64(TexNodeId(i)), BP.I64(MatNodeId(i)), BP.S("DiffuseColor") });
                     }
+
+                    foreach (var b in bones)
+                    {
+                        long parentId = b.IsRoot ? b.ParentModelBinId : bones[b.ParentBoneGlobal].Id;
+                        BN(conns, "C", new[] { BP.S("OO"), BP.I64(b.Id), BP.I64(parentId) });
+                        BN(conns, "C", new[] { BP.S("OO"), BP.I64(b.AttrId), BP.I64(b.Id) });
+                    }
                 });
 
                 // Top-level null sentinel
@@ -523,12 +602,13 @@ namespace ForzaTechStudio.Services
 
         // Binary: Geometry node 
 
-        private static void BinWriteGeometry(BinaryWriter bw, long id, string name, ForzaGeometryData data)
+        private static void BinWriteGeometry(BinaryWriter bw, long id, string name, ForzaGeometryData data, ExportOptions opt, Matrix4x4 axisScale, bool hasAxisScale)
         {
-            var (worldVerts, indices) = ResolveGeometry(data);
+            var (worldVerts, indices) = ResolveGeometry(data, axisScale, hasAxisScale);
             int vc      = worldVerts.Length;
             bool hasN   = data.Normals != null && data.Normals.Length == vc;
-            bool hasU   = data.UVs     != null && data.UVs.Length     == vc;
+            bool hasU   = opt.IncludeUVs && data.UVs != null && data.UVs.Length == vc;
+            bool hasColors = opt.IncludeVertexColors && data.Colors != null && data.Colors.Length == vc;
             var rot     = data.GetRotationMatrix();
             bool hasRot  = rot != Matrix4x4.Identity;
             bool hasBone = data.BoneTransform != Matrix4x4.Identity;
@@ -557,6 +637,7 @@ namespace ForzaTechStudio.Services
                         var n = data.Normals[indices[i]];
                         if (hasRot)  n = Vector3.Normalize(Vector3.TransformNormal(n, rot));
                         if (hasBone) n = Vector3.Normalize(Vector3.TransformNormal(n, data.BoneTransform));
+                        if (hasAxisScale) n = Vector3.Normalize(Vector3.TransformNormal(n, axisScale));
                         nArr[i * 3] = n.X; nArr[i * 3 + 1] = n.Y; nArr[i * 3 + 2] = n.Z;
                     }
                     BN(geo, "LayerElementNormal", null, ln =>
@@ -587,6 +668,27 @@ namespace ForzaTechStudio.Services
                     });
                 }
 
+                if (hasColors)
+                {
+                    var cArr = new double[vc * 4];
+                    var cIdx = new int[indices.Length];
+                    for (int i = 0; i < vc; i++)
+                    {
+                        var c = data.Colors[i];
+                        cArr[i * 4] = c.X; cArr[i * 4 + 1] = c.Y; cArr[i * 4 + 2] = c.Z; cArr[i * 4 + 3] = c.W;
+                    }
+                    for (int i = 0; i < indices.Length; i++) cIdx[i] = indices[i];
+                    BN(geo, "LayerElementColor", null, lc =>
+                    {
+                        BN(lc, "Version", new[] { BP.I32(101) });
+                        BN(lc, "Name",    new[] { BP.S("VertexColors") });
+                        BN(lc, "MappingInformationType",   new[] { BP.S("ByPolygonVertex") });
+                        BN(lc, "ReferenceInformationType", new[] { BP.S("IndexToDirect") });
+                        BN(lc, "Colors",     new[] { BP.DA(cArr) });
+                        BN(lc, "ColorIndex", new[] { BP.IA(cIdx) });
+                    });
+                }
+
                 BN(geo, "LayerElementMaterial", null, lm =>
                 {
                     BN(lm, "Version", new[] { BP.I32(101) });
@@ -601,6 +703,7 @@ namespace ForzaTechStudio.Services
                     BN(layer, "Version", new[] { BP.I32(100) });
                     if (hasN) BN(layer, "LayerElement", null, le => { BN(le, "Type", new[] { BP.S("LayerElementNormal") });   BN(le, "TypedIndex", new[] { BP.I32(0) }); });
                     if (hasU) BN(layer, "LayerElement", null, le => { BN(le, "Type", new[] { BP.S("LayerElementUV") });        BN(le, "TypedIndex", new[] { BP.I32(0) }); });
+                    if (hasColors) BN(layer, "LayerElement", null, le => { BN(le, "Type", new[] { BP.S("LayerElementColor") }); BN(le, "TypedIndex", new[] { BP.I32(0) }); });
                     BN(layer, "LayerElement", null, le => { BN(le, "Type", new[] { BP.S("LayerElementMaterial") }); BN(le, "TypedIndex", new[] { BP.I32(0) }); });
                 });
             });
@@ -621,7 +724,7 @@ namespace ForzaTechStudio.Services
 
             // Write node header
             long endOffsetPos = bw.BaseStream.Position;
-            bw.Write((uint)0);                      // placeholder — patched below
+            bw.Write((uint)0);                      // placeholder ï¿½ patched below
             bw.Write((uint)props.Length);           // NumProperties
             bw.Write((uint)propBytes.Length);       // PropertyListLen
             bw.Write((byte)nameBytes.Length);       // NameLen
@@ -743,7 +846,7 @@ namespace ForzaTechStudio.Services
             return ids;
         }
 
-        private static (Vector3[] WorldVerts, int[] Indices) ResolveGeometry(ForzaGeometryData data)
+        private static (Vector3[] WorldVerts, int[] Indices) ResolveGeometry(ForzaGeometryData data, Matrix4x4 axisScale, bool hasAxisScale)
         {
             int vc      = data.RawPositions.Length;
             var scale   = data.SourceMesh?.PositionScale     ?? Vector4.One;
@@ -759,7 +862,8 @@ namespace ForzaTechStudio.Services
                 var s = new Vector3(r.X * scale.X, r.Y * scale.Y, r.Z * scale.Z);
                 if (hasRot) s = Vector3.Transform(s, rot);
                 var v = new Vector3(s.X + trans.X, s.Y + trans.Y, s.Z + trans.Z);
-                wv[i] = hasBone ? Vector3.Transform(v, data.BoneTransform) : v;
+                var world = hasBone ? Vector3.Transform(v, data.BoneTransform) : v;
+                wv[i] = hasAxisScale ? Vector3.Transform(world, axisScale) : world;
             }
 
             int[] idx;
@@ -812,6 +916,104 @@ namespace ForzaTechStudio.Services
             return new string(c);
         }
 
+        // Skeleton bone flattened for FBX emission
+        private sealed class FbxBone
+        {
+            public Bone Bone = null!;
+            public long Id;
+            public long AttrId;
+            public bool IsRoot;
+            public int ParentBoneGlobal;   // index into the global bones list
+            public long ParentModelBinId;  // root parent = owning ModelBin null node
+        }
+
+        private static List<FbxBone> CollectBones(List<ModelBinExportData> models, long[] mbNodeId, ExportOptions opt)
+        {
+            var bones = new List<FbxBone>();
+            if (!opt.IncludeBones) return bones;
+
+            for (int mi = 0; mi < models.Count; mi++)
+            {
+                var skel = models[mi].Bundle?.Blobs.OfType<SkeletonBlob>().FirstOrDefault();
+                if (skel == null || skel.Bones.Count == 0) continue;
+
+                int baseIdx = bones.Count;
+                for (int bi = 0; bi < skel.Bones.Count; bi++)
+                {
+                    int g = bones.Count;
+                    var b = skel.Bones[bi];
+                    bool isRoot = b.ParentId < 0 || b.ParentId >= skel.Bones.Count;
+                    bones.Add(new FbxBone
+                    {
+                        Bone = b,
+                        Id = 700_000L + g * 2,
+                        AttrId = 700_001L + g * 2,
+                        IsRoot = isRoot,
+                        ParentBoneGlobal = isRoot ? -1 : baseIdx + b.ParentId,
+                        ParentModelBinId = mbNodeId[mi]
+                    });
+                }
+            }
+            return bones;
+        }
+
+        // Local TRS for a bone; root bones fold in the axis/scale conversion
+        private static (Vector3 T, Vector3 R, Vector3 S) BoneLcl(FbxBone b, Matrix4x4 axisScale)
+        {
+            var m = b.IsRoot ? b.Bone.Matrix * axisScale : b.Bone.Matrix;
+            if (!Matrix4x4.Decompose(m, out var scale, out var rot, out var trans))
+            {
+                scale = Vector3.One; rot = Quaternion.Identity; trans = m.Translation;
+            }
+            return (trans, QuatToEulerXyz(rot), scale);
+        }
+
+        // Quaternion to XYZ Euler angles in degrees
+        private static Vector3 QuatToEulerXyz(Quaternion q)
+        {
+            float sinrCosp = 2f * (q.W * q.X + q.Y * q.Z);
+            float cosrCosp = 1f - 2f * (q.X * q.X + q.Y * q.Y);
+            float x = MathF.Atan2(sinrCosp, cosrCosp);
+
+            float sinp = 2f * (q.W * q.Y - q.Z * q.X);
+            float y = MathF.Abs(sinp) >= 1f ? MathF.CopySign(MathF.PI / 2f, sinp) : MathF.Asin(sinp);
+
+            float sinyCosp = 2f * (q.W * q.Z + q.X * q.Y);
+            float cosyCosp = 1f - 2f * (q.Y * q.Y + q.Z * q.Z);
+            float z = MathF.Atan2(sinyCosp, cosyCosp);
+
+            const float r2d = 180f / MathF.PI;
+            return new Vector3(x * r2d, y * r2d, z * r2d);
+        }
+
+        // ASCII bone Model + NodeAttribute nodes
+        private static void AsciiWriteBones(StringBuilder sb, List<FbxBone> bones, Matrix4x4 axisScale)
+        {
+            foreach (var b in bones)
+            {
+                string bn = SanitiseName(b.Bone.Name ?? "bone");
+                sb.AppendLine($"\tNodeAttribute: {b.AttrId}, \"NodeAttribute::{bn}\", \"LimbNode\" {{");
+                sb.AppendLine("\t\tProperties70:  {");
+                sb.AppendLine("\t\t\tP: \"Size\", \"double\", \"Number\", \"\",1");
+                sb.AppendLine("\t\t}");
+                sb.AppendLine("\t\tTypeFlags: \"Skeleton\"");
+                sb.AppendLine("\t}");
+
+                var (t, r, s) = BoneLcl(b, axisScale);
+                sb.AppendLine($"\tModel: {b.Id}, \"Model::{bn}\", \"LimbNode\" {{");
+                sb.AppendLine("\t\tVersion: 232");
+                sb.AppendLine("\t\tProperties70:  {");
+                sb.AppendLine("\t\t\tP: \"RotationActive\", \"bool\", \"\", \"\",1");
+                sb.AppendLine("\t\t\tP: \"InheritType\", \"enum\", \"\", \"\",1");
+                sb.AppendLine("\t\t\tP: \"ScalingMax\", \"Vector3D\", \"Vector\", \"\",0,0,0");
+                sb.AppendLine($"\t\t\tP: \"Lcl Translation\", \"Lcl Translation\", \"\", \"A\",{t.X.ToString("F6", CI)},{t.Y.ToString("F6", CI)},{t.Z.ToString("F6", CI)}");
+                sb.AppendLine($"\t\t\tP: \"Lcl Rotation\", \"Lcl Rotation\", \"\", \"A\",{r.X.ToString("F6", CI)},{r.Y.ToString("F6", CI)},{r.Z.ToString("F6", CI)}");
+                sb.AppendLine($"\t\t\tP: \"Lcl Scaling\", \"Lcl Scaling\", \"\", \"A\",{s.X.ToString("F6", CI)},{s.Y.ToString("F6", CI)},{s.Z.ToString("F6", CI)}");
+                sb.AppendLine("\t\t}");
+                sb.AppendLine("\t}");
+            }
+        }
+
         // Returns an array (parallel to matList) where each element is the DDS
         // relative path from texMap, or null if no texture was found for that material.
         private static string?[] BuildMatTexPaths(List<string> matList, Dictionary<string, string>? texMap)
@@ -821,6 +1023,17 @@ namespace ForzaTechStudio.Services
             for (int i = 0; i < matList.Count; i++)
                 texMap.TryGetValue(matList[i], out result[i]);
             return result;
+        }
+
+        // FBX FileName must be an absolute path (forward slashes); RelativeFilename
+        // is relative to the FBX file (backslashes). texPath is the relative path.
+        private static (string Abs, string Rel) ResolveTexturePaths(string texPath, string outputDir)
+        {
+            string rel = texPath.Replace('/', '\\');
+            string abs = string.IsNullOrEmpty(outputDir)
+                ? texPath
+                : Path.GetFullPath(Path.Combine(outputDir, rel));
+            return (abs.Replace('\\', '/'), rel);
         }
     }
 }

@@ -36,6 +36,7 @@
         </Style>
 
         <MenuFlyout x:Key="ModelContextFlyout" Opening="ModelContextFlyout_Opening">
+            <MenuFlyoutItem Text="Replace Model File" Click="ReplaceModelFile_Click"/>
             <MenuFlyoutItem Text="Edit Model Path" Click="EditModelPath_Click" Icon="Edit"/>
             <MenuFlyoutItem Text="Edit AO Path" Click="EditAoPath_Click" Icon="Edit"/>
         </MenuFlyout>
@@ -463,13 +464,13 @@
                                                             <ColumnDefinition Width="Auto"/>
                                                         </Grid.ColumnDefinitions>
                                                         <FontIcon Glyph="&#xE7F4;" FontSize="12" Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
-                                                        <TextBox Grid.Column="1" Text="{x:Bind Key, Mode=TwoWay}" PlaceholderText="Material Name"
+                                                        <TextBox Grid.Column="1" Text="{x:Bind Key, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" PlaceholderText="Material Name"
                                                                  BorderThickness="0" Background="Transparent" VerticalAlignment="Center"/>
                                                         <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="6" Margin="12,0,0,0">
                                                             <NumberBox Value="{x:Bind ValueAsDouble, Mode=TwoWay}"
                                                                        Visibility="{x:Bind UseHexValue, Mode=OneWay, Converter={StaticResource InvertedBoolToVis}}"
                                                                        SpinButtonPlacementMode="Compact" Width="100"/>
-                                                            <TextBox Text="{x:Bind ValueHexString, Mode=TwoWay}"
+                                                            <TextBox Text="{x:Bind ValueHexString, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
                                                                      Visibility="{x:Bind UseHexValue, Mode=OneWay, Converter={StaticResource BoolToVis}}"
                                                                      Width="170" PlaceholderText="0x0000000000000000"/>
                                                             <ComboBox ItemsSource="{x:Bind SavedMaterialHashes, Mode=OneWay}"
@@ -566,6 +567,10 @@
                                         <TextBox Header="GUID" IsReadOnly="True" Text="{x:Bind ViewModel.SelectedNonUpgradableModel.GuidV13, Mode=OneWay}"/>
                                         <TextBox Header="Drop GUID" IsReadOnly="True" Text="{x:Bind ViewModel.SelectedNonUpgradableModel.DropGuidV14, Mode=OneWay}"/>
                                         <TextBox Header="Assembly Name" Text="{x:Bind ViewModel.SelectedNonUpgradableModel.AssemblyName, Mode=TwoWay}" PlaceholderText="Optional assembly reference"/>
+                                        <NumberBox Header="Horizon ID"
+                                                   Value="{x:Bind ViewModel.SelectedNonUpgradableModel.HorizonId, Mode=TwoWay}"
+                                                   ToolTipService.ToolTip="Used by Horizon model versions 17 and newer"
+                                                   SpinButtonPlacementMode="Compact" Minimum="0" Maximum="255"/>
                                     </StackPanel>
                                 </Border>
 
@@ -842,13 +847,13 @@
                                                                 <ColumnDefinition Width="Auto"/>
                                                             </Grid.ColumnDefinitions>
                                                             <FontIcon Glyph="&#xE7F4;" FontSize="12" Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
-                                                            <TextBox Grid.Column="1" Text="{x:Bind Key, Mode=TwoWay}" PlaceholderText="Material Name"
+                                                            <TextBox Grid.Column="1" Text="{x:Bind Key, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" PlaceholderText="Material Name"
                                                                      BorderThickness="0" Background="Transparent" VerticalAlignment="Center"/>
                                                             <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="6" Margin="12,0,0,0">
                                                                 <NumberBox Value="{x:Bind ValueAsDouble, Mode=TwoWay}"
                                                                            Visibility="{x:Bind UseHexValue, Mode=OneWay, Converter={StaticResource InvertedBoolToVis}}"
                                                                            SpinButtonPlacementMode="Compact" Width="100"/>
-                                                                <TextBox Text="{x:Bind ValueHexString, Mode=TwoWay}"
+                                                                <TextBox Text="{x:Bind ValueHexString, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
                                                                          Visibility="{x:Bind UseHexValue, Mode=OneWay, Converter={StaticResource BoolToVis}}"
                                                                          Width="170" PlaceholderText="0x0000000000000000"/>
                                                                 <ComboBox ItemsSource="{x:Bind SavedMaterialHashes, Mode=OneWay}"
@@ -955,6 +960,10 @@
                                                          Text="{x:Bind ViewModel.SelectedUpgradableModel.DropGuidV14, Mode=OneWay}"/>
                                             </Grid>
                                             <TextBox Header="Assembly Name" Text="{x:Bind ViewModel.SelectedUpgradableModel.AssemblyName, Mode=TwoWay}" PlaceholderText="Optional assembly reference"/>
+                                                                                        <NumberBox Header="Horizon ID"
+                                                                                                             Value="{x:Bind ViewModel.SelectedUpgradableModel.HorizonId, Mode=TwoWay}"
+                                                                                                             ToolTipService.ToolTip="Used by Horizon model versions 17 and newer"
+                                                                                                             SpinButtonPlacementMode="Compact" Minimum="0" Maximum="255"/>
                                         </StackPanel>
                                     </Border>
 

@@ -5,9 +5,11 @@ using HelixToolkit.WinUI;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
 using System.Numerics;
+using System.Threading.Tasks;
 using SDX = SharpDX;
 using Color = Windows.UI.Color;
 
@@ -21,8 +23,25 @@ namespace ForzaTechStudio.Views
         private Dictionary<DamageMeshNode, GeometryModel3D> _damageRenderMap = new();
         private float _boneScale = 1.0f;
 
+        // Batch rendering
+        private bool _isBulkLoading;
+        private readonly List<MeshNode> _pendingMeshRenders = new();
+        private readonly List<DamageMeshNode> _pendingDamageMeshRenders = new();
+
         private void RenderMesh(MeshNode node)
         {
+            if (ShouldAutoHideProxyModelBin(node.ParentModelBin))
+            {
+                HideMesh(node);
+                return;
+            }
+
+            if (ShouldSuppressOriginalModelBin(node.ParentModelBin))
+            {
+                HideMesh(node);
+                return;
+            }
+
             if (_renderMap.ContainsKey(node)) return;
 
             if (node.GeometryData.Positions != null && (node.GeometryData.Indices == null || node.GeometryData.Indices.Length == 0))
@@ -53,6 +72,18 @@ namespace ForzaTechStudio.Views
 
         private void RenderDamageMesh(DamageMeshNode node)
         {
+            if (ShouldAutoHideProxyModelBin(node.ParentModelBin))
+            {
+                HideDamageMesh(node);
+                return;
+            }
+
+            if (ShouldSuppressOriginalModelBin(node.ParentModelBin))
+            {
+                HideDamageMesh(node);
+                return;
+            }
+
             if (_damageRenderMap.ContainsKey(node)) return;
 
             var geometry = CreateMesh3D(node.GeometryData, node.ParentModelBin);
@@ -68,6 +99,106 @@ namespace ForzaTechStudio.Views
                 _damageRenderMap.Remove(node);
             }
         }
+
+
+        private async Task BatchRenderPendingMeshesAsync()
+        {
+            if (_pendingMeshRenders.Count == 0 && _pendingDamageMeshRenders.Count == 0)
+                return;
+
+            // (ShouldAutoHideProxy / ShouldSuppressOriginal read scene state)
+            var solidMeshes = _pendingMeshRenders
+                .Where(n => n.GeometryData != null
+                         && !_renderMap.ContainsKey(n)
+                         && !ShouldAutoHideProxyModelBin(n.ParentModelBin)
+                         && !ShouldSuppressOriginalModelBin(n.ParentModelBin)
+                         && !(n.GeometryData.Positions != null
+                              && (n.GeometryData.Indices == null || n.GeometryData.Indices.Length == 0)))
+                .ToList();
+
+            var pointMeshes = _pendingMeshRenders
+                .Where(n => n.GeometryData?.Positions != null
+                         && (n.GeometryData.Indices == null || n.GeometryData.Indices.Length == 0)
+                         && !_renderMap.ContainsKey(n)
+                         && !ShouldAutoHideProxyModelBin(n.ParentModelBin)
+                         && !ShouldSuppressOriginalModelBin(n.ParentModelBin))
+                .ToList();
+
+            var dmgMeshes = _pendingDamageMeshRenders
+                .Where(n => n.GeometryData != null
+                         && !_damageRenderMap.ContainsKey(n)
+                         && !ShouldAutoHideProxyModelBin(n.ParentModelBin)
+                         && !ShouldSuppressOriginalModelBin(n.ParentModelBin))
+                .ToList();
+
+            _pendingMeshRenders.Clear();
+            _pendingDamageMeshRenders.Clear();
+
+            // Build all solid mesh geometries in parallel on background threads
+            var builtMeshes = new ConcurrentBag<(MeshNode Node, MeshGeometryModel3D Model)>();
+            var builtDmg    = new ConcurrentBag<(DamageMeshNode Node, MeshGeometryModel3D Model)>();
+
+            await Task.Run(() =>
+            {
+                Parallel.ForEach(solidMeshes, node =>
+                {
+                    try
+                    {
+                        var model = CreateMesh3D(node.GeometryData, node.ParentModelBin);
+                        builtMeshes.Add((node, model));
+                    }
+                    catch (Exception ex)
+                    {
+                        System.Diagnostics.Debug.WriteLine($"[BatchRender] Mesh '{node.Name}': {ex.Message}");
+                    }
+                });
+
+                Parallel.ForEach(dmgMeshes, node =>
+                {
+                    try
+                    {
+                        var model = CreateMesh3D(node.GeometryData, node.ParentModelBin);
+                        builtDmg.Add((node, model));
+                    }
+                    catch (Exception ex)
+                    {
+                        System.Diagnostics.Debug.WriteLine($"[BatchRender] DmgMesh '{node.Name}': {ex.Message}");
+                    }
+                });
+            });
+
+            // Add all pre-built models to the scene on UI thread
+            foreach (var (node, model) in builtMeshes)
+            {
+                if (!_renderMap.ContainsKey(node))
+                {
+                    _modelGroup.Children.Add(model);
+                    _renderMap[node] = model;
+                }
+            }
+
+            foreach (var (node, model) in builtDmg)
+            {
+                if (!_damageRenderMap.ContainsKey(node))
+                {
+                    _modelGroup.Children.Add(model);
+                    _damageRenderMap[node] = model;
+                }
+            }
+
+            // Point-cloud meshes are fast to build; handle them synchronously on UI thread
+            foreach (var node in pointMeshes)
+            {
+                if (_renderMap.ContainsKey(node)) continue;
+                var model = CreatePoint3D(node.GeometryData);
+                if (model != null)
+                {
+                    _modelGroup.Children.Add(model);
+                    _renderMap[node] = model;
+                }
+            }
+        }
+
 
         private void RenderLight(LightGroupNode node)
         {
@@ -370,8 +501,13 @@ namespace ForzaTechStudio.Views
             }
 
             var uvCol = new Vector2Collection();
+            var materialUvTiling = ResolveViewportMaterialUvTiling(data, modelBin);
             if (data.UVs != null)
-                foreach (var u in data.UVs) uvCol.Add(new SDX.Vector2(u.X, u.Y));
+                foreach (var u in data.UVs)
+                {
+                    var transformedUv = ApplyViewportUvTransform(data, u, materialUvTiling);
+                    uvCol.Add(new SDX.Vector2(transformedUv.X, transformedUv.Y));
+                }
             
             var indCol = new IntCollection();
             if (data.Indices != null)
@@ -383,14 +519,44 @@ namespace ForzaTechStudio.Views
             geometry.TriangleIndices = indCol;
             geometry.UpdateBounds();
 
-            var material = CreateViewportMaterial(data, modelBin);
+            // Build with color-only material initially so geometry appears instantly.
+            // Textures are loaded asynchronously afterwards via StartViewportTextureRefreshAsync.
+            var material = CreateViewportMaterial(data, modelBin, out bool isTransparent, loadTextures: false);
 
             return new MeshGeometryModel3D
             {
                 Geometry = geometry,
                 Material = material,
+                IsTransparent = isTransparent,
                 CullMode = SDX.Direct3D11.CullMode.None
             };
+        }
+
+        private static Vector2 ApplyViewportUvTransform(ForzaGeometryData data, Vector2 uv, Vector2 materialUvTiling)
+        {
+            var transforms = data?.SourceMesh?.TexCoordTransforms;
+            float sourceU = uv.X;
+            float sourceV = 1f - uv.Y;
+            var transformedUv = new Vector2(sourceU, sourceV);
+
+            if (transforms != null && transforms.Length > 0)
+            {
+                var transform = transforms[0];
+                if (transform != default)
+                {
+                    float u = sourceU * transform.Y + transform.X;
+                    float transformedSourceV = sourceV * transform.W + transform.Z;
+                    transformedUv = new Vector2(u, transformedSourceV);
+                }
+            }
+
+            transformedUv = new Vector2(
+                transformedUv.X * materialUvTiling.X,
+                transformedUv.Y * materialUvTiling.Y);
+
+            return float.IsFinite(transformedUv.X) && float.IsFinite(transformedUv.Y)
+                ? transformedUv
+                : uv;
         }
         
         private PointGeometryModel3D CreatePoint3D(ForzaGeometryData data)
@@ -414,108 +580,96 @@ namespace ForzaTechStudio.Views
             };
         }
 
-        // Builds a small oriented cone for a single CarLight position.
+        // Builds a small oriented edge pyramid for a single CarLight position.
 
-        private MeshGeometryModel3D CreateLightCone(LightGroupNode node, bool damage)
+        private LineGeometryModel3D CreateLightCone(LightGroupNode node, bool damage)
         {
-            const int   segments = 10;
-            const float coneRadius = 0.04f;
-            const float coneHeight = 0.12f;
+            const float radius = 0.04f;
+            const float height = 0.12f;
 
+            // Normal state: light blue. Damage state: slightly dimmer blue.
+            var color = damage
+                ? Color.FromArgb(191, 77, 128, 179)
+                : Color.FromArgb(255, 140, 204, 255);
+
+            var builder = new LineBuilder();
+            AppendLightConeWireframe(builder, node, damage, radius, height);
+
+            return new LineGeometryModel3D
+            {
+                Geometry = builder.ToLineGeometry3D(),
+                Color = color,
+                Thickness = damage ? 0.9 : 1.1
+            };
+        }
+
+        private static void AppendLightConeWireframe(
+            LineBuilder builder,
+            LightGroupNode node,
+            bool damage,
+            float radius = 0.04f,
+            float height = 0.12f)
+        {
             var group = node.GroupData;
 
-            // Choose pos + rot based on which variant we're building
-            var posV4  = damage ? group.DamagePos : group.Pos;
-            var rotQ   = damage ? group.DamageRotation : group.Rotation;
+            var posV4 = damage ? group.DamagePos : group.Pos;
+            var rotQ = damage ? group.DamageRotation : group.Rotation;
 
-            // World origin of this cone
             var origin = new SDX.Vector3(posV4.X, posV4.Y, posV4.Z);
-
-            // Orientation: rotate local +Y so the cone points "forward" for the light.
-
             var qn = System.Numerics.Quaternion.Normalize(rotQ);
             var rotMat = System.Numerics.Matrix4x4.CreateFromQuaternion(qn);
 
-            // Local axes in world space (row-vector convention: col = row of rotMat)
-            var axisRight = new SDX.Vector3(rotMat.M11,  rotMat.M12,  rotMat.M13);  // local +X
-            var axisUp    = new SDX.Vector3(rotMat.M21,  rotMat.M22,  rotMat.M23);  // local +Y
-            var axisAhead = new SDX.Vector3(rotMat.M31,  rotMat.M32,  rotMat.M33);  // local +Z
+            var axisRight = new SDX.Vector3(rotMat.M11, rotMat.M12, rotMat.M13);
+            var axisUp = new SDX.Vector3(rotMat.M21, rotMat.M22, rotMat.M23);
+            var axisAhead = new SDX.Vector3(rotMat.M31, rotMat.M32, rotMat.M33);
+            var apex = origin + axisAhead * height;
 
-            // Cone apex: point along local +Z axis
-            var apex = origin + axisAhead * coneHeight;
+            AppendPyramidWireframeLines(
+                builder,
+                origin + axisRight * -radius + axisUp * -radius,
+                origin + axisRight * radius + axisUp * -radius,
+                origin + axisRight * radius + axisUp * radius,
+                origin + axisRight * -radius + axisUp * radius,
+                apex);
+        }
 
-            var positions = new Vector3Collection();
-            var normals   = new Vector3Collection();
-            var indices   = new IntCollection();
+        private static LineGeometryModel3D CreatePyramidWireframe(
+            SDX.Vector3 base0,
+            SDX.Vector3 base1,
+            SDX.Vector3 base2,
+            SDX.Vector3 base3,
+            SDX.Vector3 apex,
+            Color color,
+            double thickness)
+        {
+            var builder = new LineBuilder();
+            AppendPyramidWireframeLines(builder, base0, base1, base2, base3, apex);
 
-            // Apex (index 0)
-            positions.Add(apex);
-            normals.Add(axisAhead);
-
-            // Base ring (indices 1 ? segments) - in local XY plane
-            for (int i = 0; i < segments; i++)
+            return new LineGeometryModel3D
             {
-                float angle = (float)(2.0 * Math.PI * i / segments);
-                float lx = (float)Math.Cos(angle) * coneRadius;
-                float ly = (float)Math.Sin(angle) * coneRadius;
-
-                // Ring vertex in world space
-                var ringPt = origin + axisRight * lx + axisUp * ly;
-                positions.Add(ringPt);
-
-                // Approximate outward normal for shading
-                var outward = SDX.Vector3.Normalize(ringPt - origin);
-                normals.Add(outward);
-            }
-
-            // Base centre (index segments+1)
-            int baseCenterIdx = positions.Count;
-            positions.Add(origin);
-            normals.Add(-axisAhead);
-
-            // Side triangles: apex ? ring
-            for (int i = 0; i < segments; i++)
-            {
-                int curr = 1 + i;
-                int next = 1 + (i + 1) % segments;
-                indices.Add(0);    indices.Add(next); indices.Add(curr);
-            }
-
-            // Base cap
-            for (int i = 0; i < segments; i++)
-            {
-                int curr = 1 + i;
-                int next = 1 + (i + 1) % segments;
-                indices.Add(baseCenterIdx); indices.Add(curr); indices.Add(next);
-            }
-
-            var geometry = new MeshGeometry3D
-            {
-                Positions       = positions,
-                Normals         = normals,
-                TriangleIndices = indices
+                Geometry = builder.ToLineGeometry3D(),
+                Color = color,
+                Thickness = thickness
             };
-            geometry.UpdateBounds();
+        }
 
-            // Normal state: light blue. Damage state: slightly dimmer blue.
-            SDX.Color4 diffuse  = damage
-                ? new SDX.Color4(0.30f, 0.50f, 0.70f, 0.75f)   // damage
-                : new SDX.Color4(0.55f, 0.80f, 1.00f, 1.0f);   // normal 
+        private static void AppendPyramidWireframeLines(
+            LineBuilder builder,
+            SDX.Vector3 base0,
+            SDX.Vector3 base1,
+            SDX.Vector3 base2,
+            SDX.Vector3 base3,
+            SDX.Vector3 apex)
+        {
+            builder.AddLine(base0, base1);
+            builder.AddLine(base1, base2);
+            builder.AddLine(base2, base3);
+            builder.AddLine(base3, base0);
 
-            SDX.Color4 emissive = damage
-                ? new SDX.Color4(0.02f, 0.05f, 0.10f, 1f)
-                : new SDX.Color4(0.05f, 0.10f, 0.20f, 1f);
-
-            return new MeshGeometryModel3D
-            {
-                Geometry = geometry,
-                Material = new PhongMaterial
-                {
-                    DiffuseColor  = diffuse,
-                    EmissiveColor = emissive
-                },
-                CullMode = SDX.Direct3D11.CullMode.None
-            };
+            builder.AddLine(apex, base0);
+            builder.AddLine(apex, base1);
+            builder.AddLine(apex, base2);
+            builder.AddLine(apex, base3);
         }
 
         private LineGeometryModel3D CreateGrid()
@@ -572,7 +726,7 @@ namespace ForzaTechStudio.Views
 
              foreach (var child in _modelGroup.Children)
              {
-                 if (child is MeshGeometryModel3D mesh && mesh.IsRendering && mesh.Geometry != null)
+                 if (child is GeometryModel3D mesh && mesh.IsRendering && mesh.Geometry != null)
                  {
                      if (!hasBounds)
                      {
@@ -707,9 +861,8 @@ namespace ForzaTechStudio.Views
             }
         }
 
-        private MeshGeometryModel3D CreateLocatorCone(LocatorNode node)
+        private LineGeometryModel3D CreateLocatorCone(LocatorNode node)
         {
-            const int segments = 8;
             const float radius = 0.025f;
             const float height = 0.0625f;
 
@@ -723,69 +876,19 @@ namespace ForzaTechStudio.Views
                 return new SDX.Vector3(wx, wy, wz);
             }
 
-            var positions = new Vector3Collection();
-            var indices   = new IntCollection();
-            var normals   = new Vector3Collection();
-
-
-            // Apex
-            positions.Add(TransformPoint(0f, 0f, height));
-            normals.Add(new SDX.Vector3(0, 0, 1));
-
-            // Base ring
-            for (int i = 0; i < segments; i++)
-            {
-                float angle = (float)(2.0 * Math.PI * i / segments);
-                float lx = (float)Math.Cos(angle) * radius;
-                float ly = (float)Math.Sin(angle) * radius;
-                positions.Add(TransformPoint(lx, ly, 0f));
-                normals.Add(new SDX.Vector3(lx, ly, 0f));
-            }
-
-            // Base centre
-            int baseCenterIdx = positions.Count;
-            positions.Add(TransformPoint(0f, 0f, 0f));
-            normals.Add(new SDX.Vector3(0, 0, -1));
-
-            // Side triangles (apex ? ring)
-            for (int i = 0; i < segments; i++)
-            {
-                int curr = 1 + i;
-                int next = 1 + (i + 1) % segments;
-                indices.Add(0);    indices.Add(next); indices.Add(curr);
-            }
-
-            // Base cap
-            for (int i = 0; i < segments; i++)
-            {
-                int curr = 1 + i;
-                int next = 1 + (i + 1) % segments;
-                indices.Add(baseCenterIdx); indices.Add(curr); indices.Add(next);
-            }
-
-            var geometry = new MeshGeometry3D
-            {
-                Positions       = positions,
-                Normals         = normals,
-                TriangleIndices = indices
-            };
-            geometry.UpdateBounds();
-
             bool isSelected = ViewModel.SelectedNode == node;
             var color = isSelected
-                ? new SDX.Color4(1f, 1f, 0f, 1f)
-                : new SDX.Color4(0.78f, 0.58f, 0.38f, 1f); // light brown
+                ? Color.FromArgb(255, 255, 255, 0)
+                : Color.FromArgb(255, 199, 148, 97); // light brown
 
-            return new MeshGeometryModel3D
-            {
-                Geometry = geometry,
-                Material = new PhongMaterial
-                {
-                    DiffuseColor  = color,
-                    EmissiveColor = isSelected ? new SDX.Color4(0.4f, 0.4f, 0f, 1f) : new SDX.Color4(0.12f, 0.06f, 0.0f, 1f)
-                },
-                CullMode = SDX.Direct3D11.CullMode.None
-            };
+            return CreatePyramidWireframe(
+                TransformPoint(-radius, -radius, 0f),
+                TransformPoint( radius, -radius, 0f),
+                TransformPoint( radius,  radius, 0f),
+                TransformPoint(-radius,  radius, 0f),
+                TransformPoint(0f, 0f, height),
+                color,
+                isSelected ? 1.8 : 1.2);
         }
 
         private void RefreshLocatorCone(LocatorNode node)
@@ -795,7 +898,7 @@ namespace ForzaTechStudio.Views
                 RenderLocator(node);
         }
 
-        // AvPin (POI Cone) Rendering
+        // AvPin (POI edge pyramid) rendering
 
         private void RenderAvPin(AvPinNode node)
         {
@@ -824,9 +927,8 @@ namespace ForzaTechStudio.Views
                 RenderAvPin(node);
         }
 
-        private MeshGeometryModel3D CreateAvPinCone(AvPinNode node)
+        private LineGeometryModel3D? CreateAvPinCone(AvPinNode node)
         {
-            const int   segments = 8;
             const float radius   = 0.025f;
             const float height   = 0.0625f;
 
@@ -850,74 +952,20 @@ namespace ForzaTechStudio.Views
             var axisUp      = new SDX.Vector3(rotMat.M21, rotMat.M22, rotMat.M23);
             var axisForward = new SDX.Vector3(rotMat.M31, rotMat.M32, rotMat.M33);
 
-            var apex = origin + axisForward * height;
-
-            var positions = new Vector3Collection();
-            var normals   = new Vector3Collection();
-            var indices   = new IntCollection();
-
-            // Apex (index 0)
-            positions.Add(apex);
-            normals.Add(axisForward);
-
-            // Base ring
-            for (int i = 0; i < segments; i++)
-            {
-                float angle = (float)(2.0 * Math.PI * i / segments);
-                float lx = (float)Math.Cos(angle) * radius;
-                float ly = (float)Math.Sin(angle) * radius;
-                var pt = origin + axisRight * lx + axisUp * ly;
-                positions.Add(pt);
-                normals.Add(SDX.Vector3.Normalize(pt - origin));
-            }
-
-            // Base centre
-            int baseCenterIdx = positions.Count;
-            positions.Add(origin);
-            normals.Add(-axisForward);
-
-            // Side triangles (apex ? ring)
-            for (int i = 0; i < segments; i++)
-            {
-                int curr = 1 + i;
-                int next = 1 + (i + 1) % segments;
-                indices.Add(0); indices.Add(next); indices.Add(curr);
-            }
-
-            // Base cap
-            for (int i = 0; i < segments; i++)
-            {
-                int curr = 1 + i;
-                int next = 1 + (i + 1) % segments;
-                indices.Add(baseCenterIdx); indices.Add(curr); indices.Add(next);
-            }
-
-            var geometry = new MeshGeometry3D
-            {
-                Positions       = positions,
-                Normals         = normals,
-                TriangleIndices = indices
-            };
-            geometry.UpdateBounds();
-
             bool isSelected = ViewModel.SelectedNode == node;
-            var diffuse  = isSelected
-                ? new SDX.Color4(1f, 1f, 0f, 1f)          // yellow when selected
-                : new SDX.Color4(1f, 1f, 1f, 1f);          // white
-            var emissive = isSelected
-                ? new SDX.Color4(0.4f, 0.4f, 0f, 1f)
-                : new SDX.Color4(0.15f, 0.15f, 0.15f, 1f);
+            var color = isSelected
+                ? Color.FromArgb(255, 255, 255, 0)
+                : Color.FromArgb(255, 255, 255, 255);
 
-            return new MeshGeometryModel3D
-            {
-                Geometry = geometry,
-                Material = new PhongMaterial
-                {
-                    DiffuseColor  = diffuse,
-                    EmissiveColor = emissive
-                },
-                CullMode = SDX.Direct3D11.CullMode.None
-            };
+            var apex = origin + axisForward * height;
+            return CreatePyramidWireframe(
+                origin + axisRight * -radius + axisUp * -radius,
+                origin + axisRight *  radius + axisUp * -radius,
+                origin + axisRight *  radius + axisUp *  radius,
+                origin + axisRight * -radius + axisUp *  radius,
+                apex,
+                color,
+                isSelected ? 1.8 : 1.2);
         }
     }
 }

@@ -46,7 +46,8 @@ namespace ForzaTechStudio.Views
 
         private async void OnFileChangedExternally(string path)
         {
-            if (_changeDialogShowing) return;
+
+            if (_changeDialogShowing || IsLoading) return;
             _changeDialogShowing = true;
             try
             {
@@ -84,6 +85,8 @@ namespace ForzaTechStudio.Views
             }
             if (target == null || string.IsNullOrEmpty(path) || !File.Exists(path)) return;
 
+
+            ViewModel_RequestCloseRoot(this, target);
             ViewModel.RemoveRoot(target);
             await ProcessDroppedFilesAsync(new System.Collections.Generic.List<string> { path });
         }

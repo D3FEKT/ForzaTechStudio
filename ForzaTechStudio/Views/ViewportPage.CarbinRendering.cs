@@ -42,13 +42,21 @@ namespace ForzaTechStudio.Views
             }
 
             if (elements.Count > 0)
+            {
                 _carbinRenderMap[node] = elements;
+                RefreshSuppressedOriginalMeshes(modelBin);
+            }
         }
 
         private void HideCarbinModel(CarbinModelNode node)
         {
+            var modelBin = FindMatchingModelBin(node);
+
             if (!_carbinRenderMap.TryGetValue(node, out var elements))
+            {
+                RefreshSuppressedOriginalMeshes(modelBin);
                 return;
+            }
 
             var modelGroup = _modelGroup;
             if (modelGroup != null)
@@ -62,6 +70,7 @@ namespace ForzaTechStudio.Views
             }
 
             _carbinRenderMap.Remove(node);
+            RefreshSuppressedOriginalMeshes(modelBin);
         }
 
         private void RefreshAllCarbinInstances()
@@ -74,6 +83,8 @@ namespace ForzaTechStudio.Views
                 if (carbinModel.IsChecked == true && carbinModel.UseTransforms)
                     RenderCarbinModel(carbinModel);
             }
+
+            RefreshSuppressedOriginalMeshesForAllModelBins();
         }
 
         private void RefreshCarbinInstancesForModel(ModelBinNode? modelBin)
@@ -212,8 +223,91 @@ namespace ForzaTechStudio.Views
                 InitialRenderPositions = positions,
                 Normals = normals ?? Array.Empty<Vector3>(),
                 UVs = source.UVs ?? Array.Empty<Vector2>(),
-                Indices = source.Indices ?? Array.Empty<int>()
+                Indices = source.Indices ?? Array.Empty<int>(),
+                SourceMesh = source.SourceMesh,
+                BoneTransform = Matrix4x4.Identity,
+                BoneIndex = source.BoneIndex,
+                BoneName = source.BoneName ?? string.Empty,
+                OriginalBoneTransform = source.OriginalBoneTransform
             };
+        }
+
+        private void RefreshSuppressedOriginalMeshesForAllModelBins()
+        {
+            foreach (var modelBin in EnumerateViewerNodes<ModelBinNode>(ViewModel.Roots))
+                RefreshSuppressedOriginalMeshes(modelBin);
+        }
+
+        private void RefreshSuppressedOriginalMeshes(ModelBinNode? modelBin)
+        {
+            if (modelBin == null)
+                return;
+
+            bool suppress = ShouldAutoHideProxyModelBin(modelBin) || ShouldSuppressOriginalModelBin(modelBin);
+            foreach (var mesh in EnumerateViewerNodes<MeshNode>(new IViewerNode[] { modelBin }))
+            {
+                if (suppress)
+                {
+                    HideMesh(mesh);
+                }
+                else if (mesh.IsChecked == true && !_renderMap.ContainsKey(mesh))
+                {
+                    RenderMesh(mesh);
+                }
+            }
+
+            foreach (var damageMesh in EnumerateViewerNodes<DamageMeshNode>(new IViewerNode[] { modelBin }))
+            {
+                if (suppress)
+                {
+                    HideDamageMesh(damageMesh);
+                }
+                else if (damageMesh.IsChecked == true && !_damageRenderMap.ContainsKey(damageMesh))
+                {
+                    RenderDamageMesh(damageMesh);
+                }
+            }
+        }
+
+        private bool ShouldSuppressOriginalModelBin(ModelBinNode? modelBin)
+        {
+            if (modelBin == null)
+                return false;
+
+            foreach (var carbinModel in EnumerateViewerNodes<CarbinModelNode>(ViewModel.Roots))
+            {
+                if (carbinModel.IsChecked != true || !carbinModel.UseTransforms)
+                    continue;
+
+                if (!_carbinRenderMap.ContainsKey(carbinModel))
+                    continue;
+
+                var matchedModelBin = FindMatchingModelBin(carbinModel);
+                if (!ReferenceEquals(matchedModelBin, modelBin))
+                    continue;
+
+                if (TryResolveCarbinInstanceTransform(carbinModel, modelBin, out _))
+                    return true;
+            }
+
+            return false;
+        }
+
+        private static bool ShouldAutoHideProxyModelBin(ModelBinNode? modelBin)
+        {
+            if (modelBin == null)
+                return false;
+
+            return ContainsProxyToken(modelBin.Name)
+                || ContainsProxyToken(modelBin.FileName)
+                || ContainsProxyToken(modelBin.FilePath)
+                || ContainsProxyToken(modelBin.ZipEntryName);
+        }
+
+        private static bool ContainsProxyToken(string? value)
+        {
+            return !string.IsNullOrWhiteSpace(value)
+                && value.Contains("proxy", StringComparison.OrdinalIgnoreCase);
         }
 
         private static IEnumerable<Vector3> BuildCurrentRenderPositions(ForzaGeometryData data)

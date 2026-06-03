@@ -40,12 +40,9 @@ namespace ForzaTechStudio.ViewModels
 
                 if (materials.Count > 0)
                 {
-                    model.MaterialIndexes.Clear();
-                    bool useHexValue = UsesFh6MaterialHashEditorForModel(model);
-                    foreach (var mat in materials)
-                    {
-                        model.MaterialIndexes.Add(new MaterialIndexEntry(mat, 0, useHexValue));
-                    }
+                    model.ModelFullPath = file.Path;
+                    model.ModelFileName = Path.GetFileName(file.Path);
+                    RebuildMaterialIndexesFromNames(model, materials, preserveExistingValues: true);
                     StatusMessage = $"Loaded {materials.Count} materials from {file.Name}.";
                 }
                 else
@@ -84,6 +81,7 @@ namespace ForzaTechStudio.ViewModels
                 {
                     targetModel.MaterialIndexes.Add(new MaterialIndexEntry(matIdx.Key, matIdx.Value, useHexValue));
                 }
+                targetModel.SelectedMaterialIndex = targetModel.MaterialIndexes.FirstOrDefault();
 
                 string carbinFileName = Path.GetFileName(carbinPath);
                 StatusMessage = $"Copied {selectedModel.MaterialIndexes.Count} material indexes from '{selectedModel.DisplayName}' in {carbinFileName}.";
@@ -206,6 +204,190 @@ namespace ForzaTechStudio.ViewModels
             }
 
             return models;
+        }
+
+        public void UpdateModelPath(CarbinModelEntry model, string newGamePath)
+        {
+            if (model == null)
+                return;
+
+            string normalizedPath = NormalizeModelGamePath(newGamePath);
+            if (string.IsNullOrWhiteSpace(normalizedPath))
+                return;
+
+            string previousFullPath = model.ModelFullPath;
+            string newFileName = ExtractFileNameFromGamePath(normalizedPath);
+
+            model.ModelGamePath = normalizedPath;
+            if (!string.IsNullOrWhiteSpace(newFileName))
+                model.ModelFileName = newFileName;
+
+            if (!string.IsNullOrWhiteSpace(newFileName)
+                && TryResolveReplacementModelFile(previousFullPath, newFileName, out string resolvedModelPath))
+            {
+                model.ModelFullPath = resolvedModelPath;
+                int materialCount = RebuildMaterialIndexesFromModelFile(model, resolvedModelPath, preserveExistingValues: true);
+                StatusMessage = materialCount > 0
+                    ? $"Updated model path and reloaded {materialCount} material index slot(s) from {newFileName}."
+                    : $"Updated model path to {newFileName}, but no materials were found in the replacement modelbin.";
+                return;
+            }
+
+            if (!string.IsNullOrWhiteSpace(previousFullPath)
+                && !string.Equals(Path.GetFileName(previousFullPath), newFileName, StringComparison.OrdinalIgnoreCase))
+            {
+                model.ModelFullPath = string.Empty;
+            }
+
+            StatusMessage = "Updated model path. Material indexes were left unchanged because no local replacement modelbin could be resolved.";
+        }
+
+        public async Task ReplaceModelFileAsync(CarbinModelEntry model)
+        {
+            if (model == null)
+                return;
+
+            var picker = new FileOpenPicker();
+            var window = App.MainWindow;
+            var hWnd = WinRT.Interop.WindowNative.GetWindowHandle(window);
+            WinRT.Interop.InitializeWithWindow.Initialize(picker, hWnd);
+
+            picker.ViewMode = PickerViewMode.List;
+            picker.SuggestedStartLocation = PickerLocationId.Desktop;
+            picker.FileTypeFilter.Add(".modelbin");
+
+            var file = await picker.PickSingleFileAsync();
+            if (file == null)
+                return;
+
+            ApplyReplacementModelFile(model, file.Path, updateGamePath: true);
+        }
+
+        private void ApplyReplacementModelFile(CarbinModelEntry model, string modelFilePath, bool updateGamePath)
+        {
+            string previousFileName = model.ModelFileName;
+            string newFileName = Path.GetFileName(modelFilePath);
+
+            model.ModelFullPath = modelFilePath;
+            model.ModelFileName = newFileName;
+
+            if (updateGamePath)
+                model.ModelGamePath = BuildReplacementModelGamePath(model.ModelGamePath, newFileName);
+
+            if (ShouldRefreshAssemblyName(model.AssemblyName, previousFileName))
+                model.AssemblyName = BuildDefaultAssemblyName(newFileName);
+
+            int materialCount = RebuildMaterialIndexesFromModelFile(model, modelFilePath, preserveExistingValues: true);
+            StatusMessage = materialCount > 0
+                ? $"Replaced model with '{newFileName}' and reloaded {materialCount} material index slot(s)."
+                : $"Replaced model with '{newFileName}', but no materials were found in the selected modelbin.";
+        }
+
+        private int RebuildMaterialIndexesFromModelFile(CarbinModelEntry model, string modelFilePath, bool preserveExistingValues)
+        {
+            var materials = MaterialExtractionService.GetMaterialNames(modelFilePath);
+            RebuildMaterialIndexesFromNames(model, materials, preserveExistingValues);
+            return model.MaterialIndexes.Count;
+        }
+
+        private void RebuildMaterialIndexesFromNames(CarbinModelEntry model, IEnumerable<string> materialNames, bool preserveExistingValues)
+        {
+            var existingValues = preserveExistingValues
+                ? model.MaterialIndexes
+                    .GroupBy(entry => entry.Key ?? string.Empty, StringComparer.OrdinalIgnoreCase)
+                    .ToDictionary(group => group.Key, group => group.Last().Value, StringComparer.OrdinalIgnoreCase)
+                : new Dictionary<string, ulong>(StringComparer.OrdinalIgnoreCase);
+
+            string? selectedKey = model.SelectedMaterialIndex?.Key;
+            bool useHexValue = UsesFh6MaterialHashEditorForModel(model);
+
+            model.MaterialIndexes.Clear();
+
+            foreach (string materialName in materialNames.Where(name => !string.IsNullOrWhiteSpace(name)).Distinct(StringComparer.OrdinalIgnoreCase))
+            {
+                ulong value = existingValues.TryGetValue(materialName, out ulong existingValue) ? existingValue : 0UL;
+                model.MaterialIndexes.Add(new MaterialIndexEntry(materialName, value, useHexValue));
+            }
+
+            model.SelectedMaterialIndex = !string.IsNullOrWhiteSpace(selectedKey)
+                ? model.MaterialIndexes.FirstOrDefault(entry => string.Equals(entry.Key, selectedKey, StringComparison.OrdinalIgnoreCase))
+                : model.MaterialIndexes.FirstOrDefault();
+        }
+
+        private string BuildReplacementModelGamePath(string currentGamePath, string newFileName)
+        {
+            if (string.IsNullOrWhiteSpace(newFileName))
+                return currentGamePath ?? string.Empty;
+
+            string normalizedCurrentPath = NormalizeModelGamePath(currentGamePath);
+            if (string.IsNullOrWhiteSpace(normalizedCurrentPath))
+            {
+                if (!string.IsNullOrWhiteSpace(SceneName))
+                    return $@"game:\media\cars\{SceneName}\scene\{newFileName}";
+
+                return newFileName;
+            }
+
+            int separatorIndex = normalizedCurrentPath.LastIndexOf('\\');
+            if (separatorIndex >= 0)
+                return normalizedCurrentPath[..(separatorIndex + 1)] + newFileName;
+
+            return newFileName;
+        }
+
+        private static string NormalizeModelGamePath(string path)
+        {
+            string normalized = (path ?? string.Empty).Trim();
+            if (normalized.Length == 0)
+                return string.Empty;
+
+            return normalized.Replace('/', '\\');
+        }
+
+        private static string ExtractFileNameFromGamePath(string gamePath)
+        {
+            string normalized = NormalizeModelGamePath(gamePath)
+                .Replace(@"game:\", string.Empty, StringComparison.OrdinalIgnoreCase)
+                .Replace("game:", string.Empty, StringComparison.OrdinalIgnoreCase);
+
+            return Path.GetFileName(normalized);
+        }
+
+        private static bool TryResolveReplacementModelFile(string currentModelFullPath, string newFileName, out string resolvedModelPath)
+        {
+            resolvedModelPath = string.Empty;
+
+            if (string.IsNullOrWhiteSpace(currentModelFullPath) || string.IsNullOrWhiteSpace(newFileName))
+                return false;
+
+            if (File.Exists(currentModelFullPath)
+                && string.Equals(Path.GetFileName(currentModelFullPath), newFileName, StringComparison.OrdinalIgnoreCase))
+            {
+                resolvedModelPath = currentModelFullPath;
+                return true;
+            }
+
+            string? directory = Path.GetDirectoryName(currentModelFullPath);
+            if (string.IsNullOrWhiteSpace(directory))
+                return false;
+
+            string candidatePath = Path.Combine(directory, newFileName);
+            if (!File.Exists(candidatePath))
+                return false;
+
+            resolvedModelPath = candidatePath;
+            return true;
+        }
+
+        private bool ShouldRefreshAssemblyName(string assemblyName, string previousFileName)
+        {
+            if (string.IsNullOrWhiteSpace(assemblyName))
+                return true;
+
+            if (string.IsNullOrWhiteSpace(previousFileName))
+                return false;
+
+            return string.Equals(assemblyName, BuildDefaultAssemblyName(previousFileName), StringComparison.OrdinalIgnoreCase);
         }
 
         // Parses a CarRenderModel from the stream, extracting only the path and material indexes.

@@ -867,6 +867,79 @@ namespace ForzaTechStudio.ViewModels
             return true;
         }
 
+        private (ushort modelVersion, bool isHorizon) GetNewModelDefaultsProfile()
+        {
+            ushort existingModelVersion = NonUpgradableParts.SelectMany(part => part.Models)
+                .Concat(UpgradableParts.SelectMany(part => part.Models))
+                .Select(model => (int)model.OriginalModelVersion)
+                .Where(version => version > 0)
+                .GroupBy(version => version)
+                .OrderByDescending(group => group.Count())
+                .ThenByDescending(group => group.Key)
+                .Select(group => (ushort)group.Key)
+                .FirstOrDefault();
+
+            if (existingModelVersion > 0)
+                return (existingModelVersion, IsHorizon);
+
+            if (DetectedModelVersion > 0)
+                return (DetectedModelVersion, IsHorizon);
+
+            var (_, targetModelVersion, targetIsHorizon) = GetVersionInfo();
+            return (targetModelVersion, targetIsHorizon);
+        }
+
+        private static string BuildDefaultAssemblyName(string? modelFileName)
+        {
+            string baseName = Path.GetFileNameWithoutExtension(modelFileName ?? string.Empty);
+            if (string.IsNullOrWhiteSpace(baseName))
+                return string.Empty;
+
+            int suffixSeparatorIndex = baseName.LastIndexOf('_');
+            if (suffixSeparatorIndex > 0)
+            {
+                string suffix = baseName[(suffixSeparatorIndex + 1)..];
+                if (suffix.Length == 1 && char.IsLetterOrDigit(suffix[0]))
+                    return baseName[..suffixSeparatorIndex];
+            }
+
+            return baseName;
+        }
+
+        private bool TryAssignNextAddedModelHorizonId(CarbinModelEntry entry, ushort modelVersion, bool isHorizon)
+        {
+            if (!isHorizon || modelVersion < 17)
+            {
+                entry.HorizonId = 0;
+                return true;
+            }
+
+            int maxHorizonId = NonUpgradableParts.SelectMany(part => part.Models)
+                .Concat(UpgradableParts.SelectMany(part => part.Models))
+                .Select(model => (int)model.HorizonId)
+                .DefaultIfEmpty(0)
+                .Max();
+
+            if (maxHorizonId >= byte.MaxValue)
+            {
+                StatusMessage = "Cannot add model: all Horizon ID values are in use.";
+                return false;
+            }
+
+            entry.HorizonId = (byte)(maxHorizonId + 1);
+            return true;
+        }
+
+        private bool InitializeAddedModelEntry(CarbinModelEntry entry)
+        {
+            var (modelVersion, isHorizon) = GetNewModelDefaultsProfile();
+
+            entry.OriginalModelVersion = modelVersion;
+            entry.AssemblyName = BuildDefaultAssemblyName(entry.ModelFileName);
+
+            return TryAssignNextAddedModelHorizonId(entry, modelVersion, isHorizon);
+        }
+
         [RelayCommand]
         private void DuplicateNonUpgradableModel()
         {
@@ -957,8 +1030,11 @@ namespace ForzaTechStudio.ViewModels
                 }
                 else
                 {
-                    // Import from modelbin: existing behaviour
                     var entry = new CarbinModelEntry(file.Path, SceneName);
+                    if (!await PromptForModelPathAsync(entry))
+                        continue;
+                    if (!InitializeAddedModelEntry(entry))
+                        continue;
 
                     var materials = MaterialExtractionService.GetMaterialNames(file.Path);
                     bool useHexValue = UsesFh6MaterialHashEditorForModel(entry);
@@ -980,6 +1056,48 @@ namespace ForzaTechStudio.ViewModels
                 else if (part == SelectedUpgradablePart && SelectedUpgradableModel == null)
                     SelectedUpgradableModel = part.Models.FirstOrDefault();
             }
+        }
+
+        private async Task<bool> PromptForModelPathAsync(CarbinModelEntry entry)
+        {
+            if (App.MainWindow.Content is not FrameworkElement root || root.XamlRoot == null)
+                return true;
+
+            var inputTextBox = new TextBox
+            {
+                AcceptsReturn = false,
+                Height = 32,
+                Text = entry.ModelGamePath ?? ""
+            };
+
+            var dialog = new ContentDialog
+            {
+                Title = "Set Model Path",
+                Content = inputTextBox,
+                PrimaryButtonText = "Add Model",
+                CloseButtonText = "Cancel",
+                DefaultButton = ContentDialogButton.Primary,
+                IsPrimaryButtonEnabled = !string.IsNullOrWhiteSpace(inputTextBox.Text),
+                XamlRoot = root.XamlRoot
+            };
+
+            inputTextBox.TextChanged += (_, _) =>
+            {
+                dialog.IsPrimaryButtonEnabled = !string.IsNullOrWhiteSpace(inputTextBox.Text);
+            };
+
+            var result = await dialog.ShowAsync();
+            if (result != ContentDialogResult.Primary)
+                return false;
+
+            string newPath = inputTextBox.Text.Trim();
+            entry.ModelGamePath = newPath;
+            entry.ModelFileName = Path.GetFileName(newPath
+                .Replace("game:\\", "")
+                .Replace("game:/", "")
+                .Replace("\\", "/"));
+
+            return true;
         }
 
         private async Task BrowseSwatchbinForModelAsync(CarbinModelEntry model)
@@ -1179,8 +1297,8 @@ namespace ForzaTechStudio.ViewModels
             public bool IsUpgradable { get; }
             public string DisplayName => Part.PartTypeName;
             public string SubInfo => IsUpgradable
-                ? $"Upgradable  �  {Part.Models.Count} model(s)  �  {Part.Upgrades.Count} upgrade(s)"
-                : $"Standard  �  {Part.Models.Count} model(s)";
+                ? $"Upgradable  {Part.Models.Count} model(s)  {Part.Upgrades.Count} upgrade(s)"
+                : $"Standard   {Part.Models.Count} model(s)";
 
             public MoveModelTarget(CarbinPartEntry part, bool isUpgradable)
             {

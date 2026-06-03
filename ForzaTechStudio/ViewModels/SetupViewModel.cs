@@ -34,6 +34,29 @@ namespace ForzaTechStudio.ViewModels
         [ObservableProperty]
         private string _dbBuildProgress = "";
 
+        [ObservableProperty]
+        private GameInstallation? _selectedDefaultGame;
+
+        private bool _suppressDefaultGameSave;
+
+        partial void OnSelectedDefaultGameChanged(GameInstallation? value)
+        {
+            if (_suppressDefaultGameSave) return;
+            _ = SaveDefaultGameAsync(value?.GameId ?? "");
+        }
+
+        private async Task SaveDefaultGameAsync(string gameId)
+        {
+            try
+            {
+                await _settingsService.SetDefaultGameIdAsync(gameId);
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"SaveDefaultGame error: {ex.Message}");
+            }
+        }
+
         public IReadOnlyList<GameInstallation> Games => _games;
 
         public SetupViewModel()
@@ -95,6 +118,13 @@ namespace ForzaTechStudio.ViewModels
                 {
                     LoadGamePath(game, config.GamePaths.GetValueOrDefault(game.GameId, string.Empty));
                 }
+
+                _suppressDefaultGameSave = true;
+                SelectedDefaultGame = !string.IsNullOrWhiteSpace(config.DefaultGameId)
+                    && _gamesById.TryGetValue(config.DefaultGameId, out var defaultGame)
+                    ? defaultGame
+                    : null;
+                _suppressDefaultGameSave = false;
             }
             catch (Exception ex)
             {
