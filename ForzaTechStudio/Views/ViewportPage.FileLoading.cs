@@ -521,7 +521,7 @@ namespace ForzaTechStudio.Views
             LoadingDetail = "";
         }
         
-        private LightsBinNode LoadLightsBin(string name, byte[] data)
+        private LightsBinNode? LoadLightsBin(string name, byte[] data)
         {
             try
             {
@@ -572,7 +572,7 @@ namespace ForzaTechStudio.Views
             }
         }
 
-        private ZipNode LoadZip(string path)
+        private ZipNode? LoadZip(string path)
         {
              var zipNode = new ZipNode { Name = Path.GetFileName(path), FilePath = path, IsChecked = true };
              
@@ -632,7 +632,7 @@ namespace ForzaTechStudio.Views
                                          node = LoadLightsBin(fileName, bytes);
                                          if (node is LightsBinNode lightsNode)
                                          {
-                                             lightsNode.FilePath = null!;
+                                             lightsNode.FilePath = null;
                                              lightsNode.SourceZipPath = path;
                                              lightsNode.ZipEntryName = entry.Name;
                                          }
@@ -646,7 +646,7 @@ namespace ForzaTechStudio.Views
                                          node = LoadLightsBin(fileName, bytes);
                                          if (node is LightsBinNode lightsNode)
                                          {
-                                             lightsNode.FilePath = null!;
+                                             lightsNode.FilePath = null;
                                              lightsNode.SourceZipPath = path;
                                              lightsNode.ZipEntryName = entry.Name;
                                          }
@@ -663,7 +663,7 @@ namespace ForzaTechStudio.Views
                                          node.Name = fileName;
                                          if (node is LocatorsXmlNode locNode)
                                          {
-                                             locNode.FilePath = null!; // Don't save back to temp file
+                                             locNode.FilePath = null; // Don't save back to temp file
                                              locNode.SourceZipPath = path;
                                              locNode.ZipEntryName = entry.Name;
                                          }
@@ -675,7 +675,7 @@ namespace ForzaTechStudio.Views
                              {
                                  var bytes = zip.ExtractToMemory(entry);
                                  var xmlText = DecodeXmlText(bytes);
-                                 node = LoadAvPins(fileName, xmlText, null!, path, entry.Name);
+                                node = LoadAvPins(fileName, xmlText, null, path, entry.Name);
                              }
                              else if (fileName.EndsWith(".carbin", StringComparison.OrdinalIgnoreCase))
                              {
@@ -764,7 +764,7 @@ namespace ForzaTechStudio.Views
         // Loads a Playground MiniZip (.minizip / PGZP) file, extracting all ModelBin entries
         // and any other supported content. Returns a <see cref="ZipNode"/> whose children
         // mirror the flat index-addressed structure of the archive.
-        private ZipNode LoadMiniZip(string path)
+        private ZipNode? LoadMiniZip(string path)
         {
             var zipNode = new ZipNode { Name = Path.GetFileName(path), FilePath = path, IsChecked = true };
 
@@ -826,7 +826,7 @@ namespace ForzaTechStudio.Views
             }
         }
 
-        private ModelBinNode LoadModelBin(string name, Stream stream)
+        private ModelBinNode? LoadModelBin(string name, Stream stream)
         {
             try 
             {
@@ -928,7 +928,7 @@ namespace ForzaTechStudio.Views
             }
         }
 
-        private CarbinFileNode LoadCarbin(string name, byte[] data, string? filePath = null, string? sourceZipPath = null, string? zipEntryName = null)
+        private CarbinFileNode? LoadCarbin(string name, byte[] data, string? filePath = null, string? sourceZipPath = null, string? zipEntryName = null)
         {
             try
             {
@@ -1028,7 +1028,7 @@ namespace ForzaTechStudio.Views
             return $"{modelName} [{boneText}]";
         }
 
-        private PhysicsDefinitionNode LoadPhysicsDefinition(string name, byte[] data)
+        private PhysicsDefinitionNode? LoadPhysicsDefinition(string name, byte[] data)
         {
             try
             {
@@ -1110,7 +1110,7 @@ namespace ForzaTechStudio.Views
 
                         await Task.Run(() => ZipArchiveHelper.ReplaceEntry(binNode.SourceZipPath, binNode.ZipEntryName, newBytes));
 
-                        ModelBinNode newTempNode;
+                        ModelBinNode? newTempNode;
                         using (var ms = new MemoryStream(newBytes))
                         {
                             newTempNode = LoadModelBin(file.Name, ms);
@@ -1136,7 +1136,7 @@ namespace ForzaTechStudio.Views
                             RefreshModelList();
                             if (ViewModel.SelectedNode == binNode)
                             {
-                                ViewModel.SelectedNode = null!;
+                                ViewModel.SelectedNode = null;
                                 ViewModel.SelectedNode = binNode;
                             }
 
@@ -1156,7 +1156,7 @@ namespace ForzaTechStudio.Views
             }
         }
 
-        private LocatorsXmlNode LoadLocatorsXml(string filePath)
+        private LocatorsXmlNode? LoadLocatorsXml(string filePath)
         {
             try
             {
@@ -1201,10 +1201,10 @@ namespace ForzaTechStudio.Views
             }
         }
 
-        private AvPinsFileNode LoadAvPins(
+        private AvPinsFileNode? LoadAvPins(
             string name,
             string xmlText,
-            string filePath,
+            string? filePath,
             string? sourceZipPath = null,
             string? zipEntryName = null)
         {
@@ -1254,7 +1254,7 @@ namespace ForzaTechStudio.Views
             }
         }
 
-        private GrannyFileNode LoadGrannyFileFromBytes(string fileName, byte[] bytes, string? sourceZipPath = null)
+        private GrannyFileNode? LoadGrannyFileFromBytes(string fileName, byte[] bytes, string? sourceZipPath = null)
         {
             GrannyFileData? data = null;
             string? parseError = null;
@@ -1407,7 +1407,7 @@ namespace ForzaTechStudio.Views
             return rootNode;
         }
 
-        private GrannyFileNode LoadGrannyFile(string filePath)
+        private GrannyFileNode? LoadGrannyFile(string filePath)
         {
             GrannyFileData? data = null;
             string? parseError = null;

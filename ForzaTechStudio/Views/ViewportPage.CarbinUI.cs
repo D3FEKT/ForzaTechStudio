@@ -108,9 +108,8 @@ namespace ForzaTechStudio.Views
             if (FindAncestor<CarbinFileNode>(node) is CarbinFileNode fileNode)
                 fileNode.IsDirty = true;
 
-            HideCarbinModel(node);
-            if (node.IsChecked == true && node.UseTransforms)
-                RenderCarbinModel(node);
+            _carbinModelBinCache.Remove(node);
+            RebuildCarbinModel(node);
 
             if (ReferenceEquals(ViewModel.SelectedNode, node))
                 UpdateHighlight(node);

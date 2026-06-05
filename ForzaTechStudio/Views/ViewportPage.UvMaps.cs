@@ -758,13 +758,14 @@ namespace ForzaTechStudio.Views
 
                 var poly = new Microsoft.UI.Xaml.Shapes.Polygon { Fill = fill, Stroke = stroke, StrokeThickness = 1.5 };
                 var pts = new Microsoft.UI.Xaml.Media.PointCollection();
+                bool isValidFace = true;
                 for (int k = 0; k < 3; k++)
                 {
                     int vi = indices[b + k];
-                    if (vi >= uvs.Length) { pts = null!; break; }
+                    if (vi >= uvs.Length) { isValidFace = false; break; }
                     pts.Add(new Windows.Foundation.Point(uvs[vi].X * _uvSurfaceWidth, uvs[vi].Y * _uvSurfaceHeight));
                 }
-                if (pts == null) continue;
+                if (!isValidFace) continue;
                 poly.Points = pts;
                 _uvSelectionCanvas.Children.Add(poly);
             }

@@ -487,7 +487,7 @@ namespace ForzaTechStudio.Views
         {
             if (sender is Button btn && btn.DataContext is IViewerNode node)
             {
-                node.IsChecked = !(node.IsChecked ?? false);
+                RunVisibilityBatch(() => node.IsChecked = !(node.IsChecked ?? false));
             }
         }
 
@@ -495,79 +495,82 @@ namespace ForzaTechStudio.Views
         {
             if (sender is Button btn && btn.DataContext is MeshScopeItem item)
             {
-                bool newState = !(item.IsChecked ?? false);
-                item.IsChecked = newState;
+                RunVisibilityBatch(() =>
+                {
+                    bool newState = !(item.IsChecked ?? false);
+                    item.IsChecked = newState;
 
-                if (item.Node != null)
-                {
-                    item.Node.IsChecked = newState;
-                }
-                else
-                {
-                   if (ModelBinSelector.SelectedItem is ModelBinNode modelBin)
-                   {
-                       IEnumerable<MeshNode> targets;
-                       if (!string.IsNullOrEmpty(item.MaterialGroup))
+                    if (item.Node != null)
+                    {
+                        item.Node.IsChecked = newState;
+                    }
+                    else
+                    {
+                       if (ModelBinSelector.SelectedItem is ModelBinNode modelBin)
                        {
-                            targets = modelBin.Children.OfType<MeshNode>()
-                                                    .Where(m => m.GeometryData?.MaterialName == item.MaterialGroup);
-                       }
-                       else
-                       {
-                            targets = modelBin.Children.OfType<MeshNode>();
-                       }
-                       
-                       foreach(var t in targets) t.IsChecked = newState;
-                   }
-                   else if (ModelBinSelector.SelectedItem is PhysicsDefinitionNode physicsNode)
-                   {
-                       foreach(var t in physicsNode.Children.OfType<MeshNode>()) t.IsChecked = newState;
-                   }
-                   else if (ModelBinSelector.SelectedItem is LocatorsXmlNode locatorsNode)
-                   {
-                       if (item.Name == "All Locators")
-                       {
-                           foreach(var t in locatorsNode.Children.OfType<LocatorNode>()) t.IsChecked = newState;
-                       }
-                       else
-                       {
-                           var target = locatorsNode.Children.OfType<LocatorNode>().FirstOrDefault(l => l.Name == item.Name);
-                           if (target != null) target.IsChecked = newState;
-                       }
-                   }
-                   else if (ModelBinSelector.SelectedItem is LightsBinNode lightsBin)
-                   {
-                       if (item.Name == "All Lights")
-                       {
-                           foreach(var t in lightsBin.Children.OfType<LightGroupNode>()) t.IsChecked = newState;
-                       }
-                       else
-                       {
-                           var target = lightsBin.Children.OfType<LightGroupNode>().FirstOrDefault(l => l.Name == item.Name);
-                           if (target != null) target.IsChecked = newState;
-                       }
-                   }
-                   else if (ModelBinSelector.SelectedItem is LightGroupNode lightGroup)
-                   {
-                       if (!string.IsNullOrEmpty(item.MaterialGroup) && item.MaterialGroup.StartsWith("Row"))
-                       {
-                           if (int.TryParse(item.MaterialGroup.Substring(3), out int idx))
+                           IEnumerable<MeshNode> targets;
+                           if (!string.IsNullOrEmpty(item.MaterialGroup))
                            {
-                               if (idx >= 0 && idx < lightGroup.Children.Count && lightGroup.Children[idx] is LightRowNode rowNode)
+                                targets = modelBin.Children.OfType<MeshNode>()
+                                                        .Where(m => m.GeometryData?.MaterialName == item.MaterialGroup);
+                           }
+                           else
+                           {
+                                targets = modelBin.Children.OfType<MeshNode>();
+                           }
+                           
+                           foreach(var t in targets) t.IsChecked = newState;
+                       }
+                       else if (ModelBinSelector.SelectedItem is PhysicsDefinitionNode physicsNode)
+                       {
+                           foreach(var t in physicsNode.Children.OfType<MeshNode>()) t.IsChecked = newState;
+                       }
+                       else if (ModelBinSelector.SelectedItem is LocatorsXmlNode locatorsNode)
+                       {
+                           if (item.Name == "All Locators")
+                           {
+                               foreach(var t in locatorsNode.Children.OfType<LocatorNode>()) t.IsChecked = newState;
+                           }
+                           else
+                           {
+                               var target = locatorsNode.Children.OfType<LocatorNode>().FirstOrDefault(l => l.Name == item.Name);
+                               if (target != null) target.IsChecked = newState;
+                           }
+                       }
+                       else if (ModelBinSelector.SelectedItem is LightsBinNode lightsBin)
+                       {
+                           if (item.Name == "All Lights")
+                           {
+                               foreach(var t in lightsBin.Children.OfType<LightGroupNode>()) t.IsChecked = newState;
+                           }
+                           else
+                           {
+                               var target = lightsBin.Children.OfType<LightGroupNode>().FirstOrDefault(l => l.Name == item.Name);
+                               if (target != null) target.IsChecked = newState;
+                           }
+                       }
+                       else if (ModelBinSelector.SelectedItem is LightGroupNode lightGroup)
+                       {
+                           if (!string.IsNullOrEmpty(item.MaterialGroup) && item.MaterialGroup.StartsWith("Row"))
+                           {
+                               if (int.TryParse(item.MaterialGroup.Substring(3), out int idx))
                                {
-                                   rowNode.IsChecked = newState;
+                                   if (idx >= 0 && idx < lightGroup.Children.Count && lightGroup.Children[idx] is LightRowNode rowNode)
+                                   {
+                                       rowNode.IsChecked = newState;
+                                   }
                                }
                            }
                        }
-                   }
-                }
+                    }
+                });
             }
         }
 
         private void DamageMeshVisibility_Click(object sender, RoutedEventArgs e)
         {
             if (sender is Button btn && btn.DataContext is DamageMeshNode dmgNode)
-                dmgNode.IsChecked = !(dmgNode.IsChecked ?? false);
+                RunVisibilityBatch(() => dmgNode.IsChecked = !(dmgNode.IsChecked ?? false));
         }
 
         private void DamageMeshSelector_SelectionChanged(object sender, SelectionChangedEventArgs e) { }
@@ -635,7 +638,8 @@ namespace ForzaTechStudio.Views
 
         private void LightAngleSlider_Changed(object sender, Microsoft.UI.Xaml.Controls.Primitives.RangeBaseValueChangedEventArgs e)
         {
-            if (_sceneLight == null) return;
+            var sceneLight = _sceneLight;
+            if (sceneLight == null) return;
 
             double hDeg = LightHorizontalSlider?.Value ?? 315;
             double vDeg = LightVerticalSlider?.Value ?? 45;
@@ -649,20 +653,23 @@ namespace ForzaTechStudio.Views
             float x = (float)(Math.Cos(vRad) * Math.Sin(hRad));
             float y = (float)(-Math.Sin(vRad));
             float z = (float)(Math.Cos(vRad) * Math.Cos(hRad));
-            _sceneLight.Direction = new SDX.Vector3(x, y, z);
+            sceneLight.Direction = new SDX.Vector3(x, y, z);
         }
 
         private void LOD_Click(object sender, RoutedEventArgs e)
         {
-            if (sender is ToggleMenuFlyoutItem item && item == ShadowsItem)
+            if (sender is ToggleMenuFlyoutItem item && ReferenceEquals(item, ShadowsItem))
             {
                 // Only toggle shadow meshes; don't re-evaluate regular meshes.
                 bool shadows = ShadowsItem.IsChecked;
                 ViewerNode.SuppressCheckCascade = true;
                 try
                 {
-                    foreach (var root in ViewModel.Roots)
-                        ApplyShadowsOnlyRecursive(root, shadows);
+                    RunVisibilityBatch(() =>
+                    {
+                        foreach (var root in ViewModel.Roots)
+                            ApplyShadowsOnlyRecursive(root, shadows);
+                    });
                 }
                 finally
                 {
@@ -708,10 +715,13 @@ namespace ForzaTechStudio.Views
             bool showPhysics = PhysicsItem.IsChecked;
             bool showDamage = DamageModelItem.IsChecked;
 
-            foreach (var root in ViewModel.Roots)
+            RunVisibilityBatch(() =>
             {
-                ApplyViewTypeFilterRecursive(root, showLights, showLocators, showPhysics, showDamage);
-            }
+                foreach (var root in ViewModel.Roots)
+                {
+                    ApplyViewTypeFilterRecursive(root, showLights, showLocators, showPhysics, showDamage);
+                }
+            });
         }
 
         // Syncs the View dropdown toggles (LightsItem, LocatorsItem, PhysicsItem) to reflect
@@ -783,10 +793,13 @@ namespace ForzaTechStudio.Views
             bool shadows = ShadowsItem.IsChecked;
             bool showDamage = DamageModelItem.IsChecked;
 
-            foreach (var root in ViewModel.Roots)
+            RunVisibilityBatch(() =>
             {
-                ApplyLODFilterRecursive(root, l0, l1, l2, l3, l4, l5, shadows, showDamage);
-            }
+                foreach (var root in ViewModel.Roots)
+                {
+                    ApplyLODFilterRecursive(root, l0, l1, l2, l3, l4, l5, shadows, showDamage);
+                }
+            });
         }
 
         private void ShowLocatorMatrixUI(LocatorNode locNode)
@@ -1367,26 +1380,29 @@ namespace ForzaTechStudio.Views
 
         private void HideSelected()
         {
-            if (_isMultiLightSelectActive && _multiSelectedLightGroups.Count > 0)
+            RunVisibilityBatch(() =>
             {
-                foreach (var lg in _multiSelectedLightGroups.ToList())
-                    lg.IsChecked = false;
-                ClearMultiLightSelection();
-                UpdateHighlightForLightGroups(new List<LightGroupNode>());
-            }
-            else if (_isMultiSelectActive && _multiSelectedMeshes.Count > 0)
-            {
-                foreach (var mesh in _multiSelectedMeshes.ToList())
-                    mesh.IsChecked = false;
-                ClearMultiSelection();
-            }
-            else if (ViewModel.SelectedNode != null)
-            {
-                var n = ViewModel.SelectedNode;
-                ViewModel.SelectedNode = null!;
-                n.IsChecked = false;
-                UpdateHighlight((IEnumerable<MeshNode>?)null);
-            }
+                if (_isMultiLightSelectActive && _multiSelectedLightGroups.Count > 0)
+                {
+                    foreach (var lg in _multiSelectedLightGroups.ToList())
+                        lg.IsChecked = false;
+                    ClearMultiLightSelection();
+                    UpdateHighlightForLightGroups(new List<LightGroupNode>());
+                }
+                else if (_isMultiSelectActive && _multiSelectedMeshes.Count > 0)
+                {
+                    foreach (var mesh in _multiSelectedMeshes.ToList())
+                        mesh.IsChecked = false;
+                    ClearMultiSelection();
+                }
+                else if (ViewModel.SelectedNode != null)
+                {
+                    var n = ViewModel.SelectedNode;
+                    ViewModel.SelectedNode = null;
+                    n.IsChecked = false;
+                    UpdateHighlight((IEnumerable<MeshNode>?)null);
+                }
+            });
         }
 
         private void IsolateSelected()
@@ -1413,8 +1429,11 @@ namespace ForzaTechStudio.Views
             bool filterLights = keepLights.Count > 0;
             if (!filterMeshes && !filterLights) return;
 
-            foreach (var root in ViewModel.Roots)
-                IsolateRecursive(root, keepMeshes, keepLights, keepDamage, filterMeshes, filterLights);
+            RunVisibilityBatch(() =>
+            {
+                foreach (var root in ViewModel.Roots)
+                    IsolateRecursive(root, keepMeshes, keepLights, keepDamage, filterMeshes, filterLights);
+            });
         }
 
         private void IsolateRecursive(IViewerNode node,
@@ -1441,11 +1460,14 @@ namespace ForzaTechStudio.Views
 
         private void UnhideAll()
         {
-            foreach (var root in ViewModel.Roots)
-                UnhideAllRecursive(root);
-            // Re-apply current filter settings so view-option toggles are respected
-            UpdateLODVisibility();
-            UpdateViewTypeVisibility();
+            RunVisibilityBatch(() =>
+            {
+                foreach (var root in ViewModel.Roots)
+                    UnhideAllRecursive(root);
+                // Re-apply current filter settings so view-option toggles are respected
+                UpdateLODVisibility();
+                UpdateViewTypeVisibility();
+            });
         }
 
         private void UnhideAllRecursive(IViewerNode node)

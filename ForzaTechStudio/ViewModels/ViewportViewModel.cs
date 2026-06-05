@@ -20,7 +20,7 @@ namespace ForzaTechStudio.ViewModels.ThreeDViewer
         bool? IsChecked { get; set; }
         bool IsExpanded { get; set; }
         ObservableCollection<IViewerNode> Children { get; }
-        IViewerNode Parent { get; set; }
+        IViewerNode? Parent { get; set; }
         NodeType Type { get; }
     }
 
@@ -56,7 +56,7 @@ namespace ForzaTechStudio.ViewModels.ThreeDViewer
         // Suppresses checkbox cascade updates during bulk child construction.
         public static bool SuppressCheckCascade { get; set; }
 
-        private string _name;
+        private string _name = string.Empty;
         public string Name
         {
             get => _name;
@@ -77,7 +77,7 @@ namespace ForzaTechStudio.ViewModels.ThreeDViewer
             private set => SetProperty(ref _children, value);
         }
 
-        public IViewerNode Parent { get; set; }
+        public IViewerNode? Parent { get; set; }
 
         public abstract NodeType Type { get; }
 
@@ -87,9 +87,7 @@ namespace ForzaTechStudio.ViewModels.ThreeDViewer
             get => _isChecked;
             set
             {
-
-                var efficientValue = value;
-                if (efficientValue == null) efficientValue = false;
+                var efficientValue = value ?? false;
 
                 if (SetProperty(ref _isChecked, efficientValue))
                 {
@@ -107,11 +105,14 @@ namespace ForzaTechStudio.ViewModels.ThreeDViewer
                     _isSettingChildren = true;
                     if (IsChecked == false)
                     {
-                        // Snapshot child states before unchecking so we can restore them
-                        _childCheckSnapshot = new Dictionary<IViewerNode, bool?>(Children.Count);
+                        // Remember only children that were already unchecked. Most trees are
+                        // fully visible, so this avoids allocating a state entry for every node.
+                        _uncheckedChildSnapshot = null;
                         foreach (var child in Children)
                         {
-                            _childCheckSnapshot[child] = child.IsChecked;
+                            if (child.IsChecked == false)
+                                (_uncheckedChildSnapshot ??= new HashSet<IViewerNode>()).Add(child);
+
                             if (child.IsChecked != false)
                             {
                                 child.IsChecked = false;
@@ -121,18 +122,17 @@ namespace ForzaTechStudio.ViewModels.ThreeDViewer
                     else
                     {
                         // Restore prior child states if we have a snapshot, else cascade true
-                        if (_childCheckSnapshot != null)
+                        if (_uncheckedChildSnapshot != null)
                         {
                             foreach (var child in Children)
                             {
-                                bool? restored = _childCheckSnapshot.TryGetValue(child, out var s) ? s : true;
-                                if (restored == null) restored = true;
+                                bool restored = !_uncheckedChildSnapshot.Contains(child);
                                 if (child.IsChecked != restored)
                                 {
                                     child.IsChecked = restored;
                                 }
                             }
-                            _childCheckSnapshot = null;
+                            _uncheckedChildSnapshot = null;
                         }
                         else
                         {
@@ -158,16 +158,23 @@ namespace ForzaTechStudio.ViewModels.ThreeDViewer
             }
         }
 
-        // Snapshot of children's check states captured when this node is unchecked
-        private Dictionary<IViewerNode, bool?> _childCheckSnapshot;
+        // Child nodes that were unchecked before this node was hidden.
+        private HashSet<IViewerNode>? _uncheckedChildSnapshot;
 
         public void UpdateCheckStateFromChildren()
         {
             if (_isSettingChildren || SuppressCheckCascade) return;
             if (Children.Count == 0) return;
 
-            bool allChecked = Children.All(c => c.IsChecked == true);
-            bool allUnchecked = Children.All(c => c.IsChecked == false);
+            bool allUnchecked = true;
+            foreach (var child in Children)
+            {
+                if (child.IsChecked != false)
+                {
+                    allUnchecked = false;
+                    break;
+                }
+            }
 
             // Mixed (some checked, some not) ? parent stays checked, not indeterminate
             bool? newState = allUnchecked ? false : true;
@@ -183,13 +190,13 @@ namespace ForzaTechStudio.ViewModels.ThreeDViewer
             }
         }
         
-        public ICommand CloseCommand { get; set; }
+        public ICommand? CloseCommand { get; set; }
     }
 
     public class ZipNode : ViewerNode
     {
         public override NodeType Type => NodeType.Zip;
-        public string FilePath { get; set; }
+        public string FilePath { get; set; } = string.Empty;
         public ManufacturerColorsBlob? ManufacturerColors { get; set; }
     }
 
@@ -201,9 +208,9 @@ namespace ForzaTechStudio.ViewModels.ThreeDViewer
     public class ModelBinNode : ViewerNode
     {
         public override NodeType Type => NodeType.ModelBin;
-        public string FileName { get; set; }
-        public string FilePath { get; set; }
-        public ForzaTools.Bundles.Bundle Bundle { get; set; }
+        public string FileName { get; set; } = string.Empty;
+        public string? FilePath { get; set; }
+        public ForzaTools.Bundles.Bundle Bundle { get; set; } = default!;
         public string? SourceZipPath { get; set; }
         public string? ZipEntryName { get; set; }
         public bool IsDirty { get; set; }
@@ -232,14 +239,14 @@ namespace ForzaTechStudio.ViewModels.ThreeDViewer
     public class PhysicsDefinitionNode : ViewerNode
     {
         public override NodeType Type => NodeType.PhysicsDefinition;
-        public List<PhysicsDefinitionParser.PhysicsDefinition> Definitions { get; set; }
+        public List<PhysicsDefinitionParser.PhysicsDefinition> Definitions { get; set; } = new();
     }
 
     public class LightsBinNode : ViewerNode
     {
         public override NodeType Type => NodeType.LightsBin;
-        public string FilePath { get; set; }
-        public LightsBinParser.LightsBinData OriginalData { get; set; }
+        public string? FilePath { get; set; }
+        public LightsBinParser.LightsBinData OriginalData { get; set; } = default!;
         public bool IsDirty { get; set; }
         public string? SourceZipPath { get; set; }
         public string? ZipEntryName { get; set; }
@@ -248,7 +255,7 @@ namespace ForzaTechStudio.ViewModels.ThreeDViewer
     public class LightGroupNode : ViewerNode
     {
         public override NodeType Type => NodeType.LightGroup;
-        public LightsBinParser.LightGroup GroupData { get; set; }
+        public LightsBinParser.LightGroup GroupData { get; set; } = default!;
     }
 
     public class LightRowNode : ViewerNode
@@ -262,7 +269,7 @@ namespace ForzaTechStudio.ViewModels.ThreeDViewer
     {
         public override NodeType Type => NodeType.Mesh;
         
-        public ForzaGeometryData GeometryData { get; set; }
+        public ForzaGeometryData GeometryData { get; set; } = default!;
         public int LODLevel { get; set; }
         public bool IsShadow { get; set; }
         
@@ -270,22 +277,22 @@ namespace ForzaTechStudio.ViewModels.ThreeDViewer
         public Vector4 OriginalPositionTranslate { get; set; }
         public Vector3 OriginalRotationEulerDegrees { get; set; } = Vector3.Zero;
         
-        public ModelBinNode ParentModelBin { get; set; }
+        public ModelBinNode ParentModelBin { get; set; } = default!;
     }
 
     public class DamageMeshNode : ViewerNode
     {
         public override NodeType Type => NodeType.DamageMesh;
-        public ForzaGeometryData GeometryData { get; set; }
-        public ModelBinNode ParentModelBin { get; set; }
+        public ForzaGeometryData GeometryData { get; set; } = default!;
+        public ModelBinNode ParentModelBin { get; set; } = default!;
         public bool IsShadow { get; set; }
     }
 
     public class LocatorsXmlNode : ViewerNode
     {
         public override NodeType Type => NodeType.LocatorsXml;
-        public string FilePath { get; set; }
-        public LocatorsData LocatorsData { get; set; }
+        public string? FilePath { get; set; }
+        public LocatorsData LocatorsData { get; set; } = default!;
         public bool IsDirty { get; set; }
         public string? SourceZipPath { get; set; }
         public string? ZipEntryName { get; set; }
@@ -294,7 +301,7 @@ namespace ForzaTechStudio.ViewModels.ThreeDViewer
     public class LocatorNode : ViewerNode
     {
         public override NodeType Type => NodeType.Locator;
-        public LocatorEntry LocatorEntry { get; set; }
+        public LocatorEntry LocatorEntry { get; set; } = default!;
     }
 
     public class GrannyFileNode : ViewerNode
@@ -309,26 +316,26 @@ namespace ForzaTechStudio.ViewModels.ThreeDViewer
     public class SkeletonNode : ViewerNode
     {
         public override NodeType Type => NodeType.Skeleton;
-        public GrannySkeleton SkeletonData { get; set; }
+        public GrannySkeleton SkeletonData { get; set; } = default!;
     }
 
     public class BoneNode : ViewerNode
     {
         public override NodeType Type => NodeType.Bone;
-        public GrannyBone BoneData { get; set; }
+        public GrannyBone BoneData { get; set; } = default!;
         public int BoneIndex { get; set; }
     }
 
     public class AnimationClipNode : ViewerNode
     {
         public override NodeType Type => NodeType.AnimationClip;
-        public GrannyAnimation AnimationData { get; set; }
+        public GrannyAnimation AnimationData { get; set; } = default!;
     }
 
     public class GsfInfoNode : ViewerNode
     {
         public override NodeType Type => NodeType.GsfInfo;
-        public GsfCharacterInfo CharacterInfoData { get; set; }
+        public GsfCharacterInfo CharacterInfoData { get; set; } = default!;
     }
 
     public class AvPinsFileNode : ViewerNode
@@ -344,7 +351,7 @@ namespace ForzaTechStudio.ViewModels.ThreeDViewer
     public class AvPinNode : ViewerNode
     {
         public override NodeType Type => NodeType.AvPin;
-        public PointOfInterest PoiData { get; set; }
+        public PointOfInterest PoiData { get; set; } = default!;
     }
 
     public class CarbinFileNode : ViewerNode
@@ -367,7 +374,7 @@ namespace ForzaTechStudio.ViewModels.ThreeDViewer
     public class CarbinModelNode : ViewerNode
     {
         public override NodeType Type => NodeType.CarbinModel;
-        public CarRenderModel Model { get; set; }
+        public CarRenderModel Model { get; set; } = default!;
         public int ModelIndex { get; set; }
         public string PartName { get; set; } = string.Empty;
 
@@ -383,7 +390,7 @@ namespace ForzaTechStudio.ViewModels.ThreeDViewer
     public class BoneMatchEntry
     {
         public int Index { get; set; }
-        public string BoneName { get; set; }
+        public string BoneName { get; set; } = string.Empty;
         public bool InModelBinSkeleton { get; set; }
         public bool InGr2Skeleton { get; set; }
         public bool InAnimTrack { get; set; }
@@ -458,7 +465,7 @@ namespace ForzaTechStudio.ViewModels.ThreeDViewer
 
     public partial class ViewportTab : ObservableObject
     {
-        [ObservableProperty] private string _name;
+        [ObservableProperty] private string _name = string.Empty;
         public List<IViewerNode> Roots { get; } = new();
         public ViewportTab(string name) => _name = name;
     }
@@ -472,8 +479,8 @@ namespace ForzaTechStudio.ViewModels.ThreeDViewer
             set => SetProperty(ref _roots, value);
         }
 
-        private IViewerNode _selectedNode;
-        public IViewerNode SelectedNode
+        private IViewerNode? _selectedNode;
+        public IViewerNode? SelectedNode
         {
             get => _selectedNode;
             set => SetProperty(ref _selectedNode, value);
@@ -540,27 +547,29 @@ namespace ForzaTechStudio.ViewModels.ThreeDViewer
                 tab.Roots.Remove(root);
         }
 
-        private RelayCommand _closeSelectedCommand;
+        private RelayCommand? _closeSelectedCommand;
         public ICommand CloseSelectedCommand => _closeSelectedCommand ??= new RelayCommand(CloseSelected);
 
         private void CloseSelected()
         {
-            if (SelectedNode == null) return;
+            var selectedNode = SelectedNode;
+            if (selectedNode == null) return;
 
-            var root = FindRoot(SelectedNode);
+            var root = FindRoot(selectedNode);
             if (root != null)
             {
                 RequestCloseRoot?.Invoke(this, root);
                 RemoveRoot(root);
                 // Also clear selection?
-                if (SelectedNode != null && FindRoot(SelectedNode) == root)
+                selectedNode = SelectedNode;
+                if (selectedNode != null && FindRoot(selectedNode) == root)
                 {
                     SelectedNode = null;
                 }
             }
         }
 
-        private RelayCommand _closeAllCommand;
+        private RelayCommand? _closeAllCommand;
         public ICommand CloseAllCommand => _closeAllCommand ??= new RelayCommand(CloseAll);
 
         private void CloseAll()
@@ -583,7 +592,7 @@ namespace ForzaTechStudio.ViewModels.ThreeDViewer
             return current;
         }
 
-        public event EventHandler<IViewerNode> RequestCloseRoot;
+        public event EventHandler<IViewerNode>? RequestCloseRoot;
 
         // Cross-file helpers 
 
@@ -741,7 +750,7 @@ namespace ForzaTechStudio.ViewModels.ThreeDViewer
 
             // ModelBin skeleton blob bones
             var mbSkelBones = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-            SkeletonBlob skelBlob = null;
+            SkeletonBlob? skelBlob = null;
             if (modelBin.Bundle != null)
             {
                 skelBlob = modelBin.Bundle.Blobs.OfType<SkeletonBlob>().FirstOrDefault();
@@ -781,7 +790,7 @@ namespace ForzaTechStudio.ViewModels.ThreeDViewer
                     short boneIdx = mesh.GeometryData?.BoneIndex ?? -1;
                     if (boneIdx >= 0 && boneIdx < skelBlob.Bones.Count)
                     {
-                        string boneName = skelBlob.Bones[boneIdx].Name;
+                        string? boneName = skelBlob.Bones[boneIdx].Name;
                         if (!string.IsNullOrEmpty(boneName))
                         {
                             if (!boneToMeshes.ContainsKey(boneName))

@@ -3,6 +3,7 @@ using ForzaTechStudio.ViewModels.ThreeDViewer;
 using Microsoft.UI.Xaml.Controls;
 using System;
 using System.Collections.Generic;
+using System.Diagnostics.CodeAnalysis;
 using System.IO;
 using System.Linq;
 using System.Text;
@@ -244,7 +245,7 @@ namespace ForzaTechStudio.Views
             return result;
         }
 
-        private static bool TryGetViewerNode(object item, out IViewerNode node)
+        private static bool TryGetViewerNode(object item, [NotNullWhen(true)] out IViewerNode? node)
         {
             if (item is TreeViewNode treeNode && treeNode.Content is IViewerNode treeContent)
             {
@@ -258,7 +259,7 @@ namespace ForzaTechStudio.Views
                 return true;
             }
 
-            node = null!;
+            node = null;
             return false;
         }
 

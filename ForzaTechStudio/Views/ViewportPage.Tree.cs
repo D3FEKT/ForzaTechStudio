@@ -2,6 +2,7 @@
 using HelixToolkit.SharpDX.Core;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
+using System;
 using System.Collections.Generic;
 using System.ComponentModel;
 using System.Linq;
@@ -11,6 +12,106 @@ namespace ForzaTechStudio.Views
     // Tree/Node Management and Event Handling Methods
     public sealed partial class ViewportPage : Page
     {
+        private int _visibilityBatchDepth;
+        private bool _visibilityPostRefreshQueued;
+        private bool _pendingViewDropdownSync;
+        private bool _pendingHighlightRefresh;
+        private readonly HashSet<ModelBinNode> _pendingCarbinRefreshModelBins = new();
+        private readonly HashSet<LightGroupNode> _pendingLightRefreshGroups = new();
+
+        private void RunVisibilityBatch(Action action)
+        {
+            _visibilityBatchDepth++;
+            try
+            {
+                action();
+            }
+            finally
+            {
+                if (_visibilityBatchDepth > 0)
+                    _visibilityBatchDepth--;
+
+                if (_visibilityBatchDepth == 0)
+                    ScheduleVisibilityPostRefresh();
+            }
+        }
+
+        private void QueueVisibilityPostRefresh(
+            bool syncViewDropdown = false,
+            bool refreshHighlight = false,
+            ModelBinNode? carbinModelBin = null,
+            LightGroupNode? lightRefreshGroup = null)
+        {
+            _pendingViewDropdownSync |= syncViewDropdown;
+            _pendingHighlightRefresh |= refreshHighlight;
+
+            if (carbinModelBin != null)
+                _pendingCarbinRefreshModelBins.Add(carbinModelBin);
+
+            if (lightRefreshGroup != null)
+                _pendingLightRefreshGroups.Add(lightRefreshGroup);
+
+            if (_visibilityBatchDepth == 0)
+                ScheduleVisibilityPostRefresh();
+        }
+
+        private void ScheduleVisibilityPostRefresh()
+        {
+            if (_visibilityPostRefreshQueued || !HasPendingVisibilityPostRefresh())
+                return;
+
+            _visibilityPostRefreshQueued = true;
+            if (!DispatcherQueue.TryEnqueue(FlushVisibilityPostRefresh))
+                FlushVisibilityPostRefresh();
+        }
+
+        private bool HasPendingVisibilityPostRefresh()
+        {
+            return _pendingViewDropdownSync
+                || _pendingHighlightRefresh
+                || _pendingCarbinRefreshModelBins.Count > 0
+                || _pendingLightRefreshGroups.Count > 0;
+        }
+
+        private void FlushVisibilityPostRefresh()
+        {
+            _visibilityPostRefreshQueued = false;
+
+            if (_visibilityBatchDepth > 0)
+            {
+                ScheduleVisibilityPostRefresh();
+                return;
+            }
+
+            bool syncViewDropdown = _pendingViewDropdownSync;
+            bool refreshHighlight = _pendingHighlightRefresh;
+            var carbinModelBins = _pendingCarbinRefreshModelBins.ToList();
+            var lightRefreshGroups = _pendingLightRefreshGroups.ToList();
+
+            _pendingViewDropdownSync = false;
+            _pendingHighlightRefresh = false;
+            _pendingCarbinRefreshModelBins.Clear();
+            _pendingLightRefreshGroups.Clear();
+
+            foreach (var lightGroup in lightRefreshGroups)
+            {
+                if (lightGroup.IsChecked != false)
+                {
+                    HideLight(lightGroup);
+                    RenderLight(lightGroup);
+                }
+            }
+
+            foreach (var modelBin in carbinModelBins)
+                RefreshCarbinInstancesForModel(modelBin);
+
+            if (syncViewDropdown)
+                SyncViewDropdownItems();
+
+            if (refreshHighlight)
+                RefreshHighlight();
+        }
+
         // Adds a node tree to the TreeView. When <paramref name="deferRendering"/> is true,
         // PropertyChanged subscriptions are still attached but mesh rendering is deferred
         // (the caller is responsible for triggering a render pass afterwards via LOD filtering).
@@ -112,16 +213,17 @@ namespace ForzaTechStudio.Views
                      else
                          RenderMesh(meshNode);
                  }
-                 else
-                 {
+                else
+                {
                      HideMesh(meshNode);
-                     RefreshHighlight();
                  }
 
                  if (!_isBulkLoading)
                  {
-                     SyncViewDropdownItems();
-                     RefreshCarbinInstancesForModel(meshNode.ParentModelBin);
+                     QueueVisibilityPostRefresh(
+                         syncViewDropdown: true,
+                         refreshHighlight: true,
+                         carbinModelBin: meshNode.ParentModelBin);
                  }
             }
         }
@@ -132,12 +234,13 @@ namespace ForzaTechStudio.Views
                     || e.PropertyName == nameof(CarbinModelNode.UseTransforms))
                 && sender is CarbinModelNode carbinModelNode)
             {
-                HideCarbinModel(carbinModelNode);
                 if (carbinModelNode.IsChecked == true && carbinModelNode.UseTransforms)
                     RenderCarbinModel(carbinModelNode);
+                else
+                    HideCarbinModel(carbinModelNode);
 
                 if (ReferenceEquals(ViewModel.SelectedNode, carbinModelNode))
-                    UpdateHighlight(carbinModelNode);
+                    QueueVisibilityPostRefresh(refreshHighlight: true);
             }
         }
 
@@ -153,7 +256,7 @@ namespace ForzaTechStudio.Views
                 {
                     HideLight(lightNode);
                 }
-                SyncViewDropdownItems();
+                QueueVisibilityPostRefresh(syncViewDropdown: true, refreshHighlight: true);
             }
         }
 
@@ -165,8 +268,9 @@ namespace ForzaTechStudio.Views
                 {
                     if (lightNode.IsChecked != false)
                     {
-                        HideLight(lightNode);
-                        RenderLight(lightNode);
+                        QueueVisibilityPostRefresh(
+                            refreshHighlight: true,
+                            lightRefreshGroup: lightNode);
                     }
                 }
             }
@@ -180,7 +284,7 @@ namespace ForzaTechStudio.Views
                     RenderLocator(locNode);
                 else
                     HideLocator(locNode);
-                SyncViewDropdownItems();
+                QueueVisibilityPostRefresh(syncViewDropdown: true, refreshHighlight: true);
             }
         }
 
@@ -203,7 +307,7 @@ namespace ForzaTechStudio.Views
                     RenderAvPin(pinNode);
                 else
                     HideAvPin(pinNode);
-                SyncViewDropdownItems();
+                QueueVisibilityPostRefresh(syncViewDropdown: true, refreshHighlight: true);
             }
         }
 
@@ -220,11 +324,15 @@ namespace ForzaTechStudio.Views
                 }
                 else
                     HideDamageMesh(dmgNode);
+
+                QueueVisibilityPostRefresh(refreshHighlight: true);
             }
         }
 
         private void ViewModel_RequestCloseRoot(object? sender, IViewerNode root)
         {
+            _carbinModelBinCache.Clear();
+
             if (_treeNodeMap.TryGetValue(root, out var treeNode))
             {
                  FileTree.RootNodes.Remove(treeNode);
@@ -233,6 +341,7 @@ namespace ForzaTechStudio.Views
 
             InvalidateViewportTextureLookup();
             _viewportAssignedMaterialCache.Clear();
+            InvalidateViewportMaterialCache();
             DispatcherQueue.TryEnqueue(() =>
             {
                 RefreshManufacturerColorsFromLoadedRoots();
@@ -245,7 +354,7 @@ namespace ForzaTechStudio.Views
             if (node is MeshNode meshNode)
             {
                 meshNode.PropertyChanged -= MeshNode_PropertyChanged;
-                HideMesh(meshNode);
+                ReleaseMesh(meshNode);
             }
             else if (node is LightGroupNode lightNode)
             {
@@ -274,12 +383,13 @@ namespace ForzaTechStudio.Views
             else if (node is DamageMeshNode dmgNode)
             {
                 dmgNode.PropertyChanged -= DamageMeshNode_PropertyChanged;
-                HideDamageMesh(dmgNode);
+                ReleaseDamageMesh(dmgNode);
             }
             else if (node is CarbinModelNode carbinModelNode)
             {
                 carbinModelNode.PropertyChanged -= CarbinModelNode_PropertyChanged;
-                HideCarbinModel(carbinModelNode);
+                _carbinModelBinCache.Remove(carbinModelNode);
+                ReleaseCarbinModel(carbinModelNode);
             }
 
             

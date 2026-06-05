@@ -303,9 +303,13 @@ namespace ForzaTechStudio.Views
 
             TrackKeyframeInfoText.Visibility = Visibility.Visible;
 
-            bool hasPos = track.PositionCurve    != null && !track.PositionCurve.IsIdentity;
-            bool hasOri = track.OrientationCurve != null && !track.OrientationCurve.IsIdentity;
-            bool hasScl = track.ScaleShearCurve  != null && !track.ScaleShearCurve.IsIdentity;
+            var positionCurve = track.PositionCurve;
+            var orientationCurve = track.OrientationCurve;
+            var scaleShearCurve = track.ScaleShearCurve;
+
+            bool hasPos = positionCurve    != null && !positionCurve.IsIdentity;
+            bool hasOri = orientationCurve != null && !orientationCurve.IsIdentity;
+            bool hasScl = scaleShearCurve  != null && !scaleShearCurve.IsIdentity;
 
             var lines = new System.Text.StringBuilder();
             lines.AppendLine($"Track: {track.Name}   {track.KnotCount} knots");
@@ -313,12 +317,12 @@ namespace ForzaTechStudio.Views
 
             // Sample up to 8 evenly-spaced points along the curves for a quick preview
             float maxKnot = 0f;
-            if (hasPos && track.PositionCurve.Knots?.Length > 0)
-                maxKnot = Math.Max(maxKnot, track.PositionCurve.Knots[^1]);
-            if (hasOri && track.OrientationCurve.Knots?.Length > 0)
-                maxKnot = Math.Max(maxKnot, track.OrientationCurve.Knots[^1]);
-            if (hasScl && track.ScaleShearCurve.Knots?.Length > 0)
-                maxKnot = Math.Max(maxKnot, track.ScaleShearCurve.Knots[^1]);
+            if (hasPos && positionCurve?.Knots?.Length > 0)
+                maxKnot = Math.Max(maxKnot, positionCurve.Knots[^1]);
+            if (hasOri && orientationCurve?.Knots?.Length > 0)
+                maxKnot = Math.Max(maxKnot, orientationCurve.Knots[^1]);
+            if (hasScl && scaleShearCurve?.Knots?.Length > 0)
+                maxKnot = Math.Max(maxKnot, scaleShearCurve.Knots[^1]);
 
             int show = Math.Min(track.KnotCount, 8);
             if (show > 0 && maxKnot > 0f)
@@ -659,6 +663,9 @@ namespace ForzaTechStudio.Views
             int boneCount = skeleton?.Bones.Count ?? 0;
             if (_boneLocalTransforms == null || _boneLocalTransforms.Length != boneCount)
                 _boneLocalTransforms = new Matrix4x4[boneCount];
+            var localTransforms = _boneLocalTransforms;
+            if (localTransforms == null)
+                return;
 
             // Track which skeleton bones are driven this frame; undriven root bones may have a non-zero GR2 bind-pose translation that would shift child-bone rotation pivots.
             bool[] updatedBones = new bool[boneCount];
@@ -667,7 +674,7 @@ namespace ForzaTechStudio.Views
             {
                 // Seed every bone with its bind-pose local transform.
                 for (int i = 0; i < boneCount; i++)
-                    _boneLocalTransforms[i] = skeleton.Bones[i].LocalTransform.ToMatrix();
+                    localTransforms[i] = skeleton.Bones[i].LocalTransform.ToMatrix();
             }
 
             // Clear track-only transforms
@@ -696,7 +703,7 @@ namespace ForzaTechStudio.Views
                             out var sampledPos, out var sampledOri,
                             out var sampledScl, out var sampledSS9);
 
-                        if (inSkeleton)
+                        if (inSkeleton && skeleton != null)
                         {
                             var bone = skeleton.Bones[boneIdx];
                             var bindPose = bone.LocalTransform;
@@ -784,7 +791,7 @@ namespace ForzaTechStudio.Views
                             }
 
                             // Write into the local-transform scratch array � NOT WorldTransform yet.
-                            _boneLocalTransforms[boneIdx] = animLocal;
+                            localTransforms[boneIdx] = animLocal;
                             updatedBones[boneIdx] = true;
                         }
                         else
@@ -842,7 +849,7 @@ namespace ForzaTechStudio.Views
                         // position AND orientation in GrannyRootBone.LocalTransform; both must
                         // be stripped here or the door/wheel hinge is displaced from its
                         // correct car-body position.
-                        _boneLocalTransforms[i] = Matrix4x4.Identity;
+                        localTransforms[i] = Matrix4x4.Identity;
                     }
                 }
             }
@@ -861,11 +868,15 @@ namespace ForzaTechStudio.Views
         // Granny guarantees parent index is always less than child index.
         private void ComputeWorldTransforms(GrannySkeleton skeleton)
         {
+            var localTransforms = _boneLocalTransforms;
+            if (localTransforms == null)
+                return;
+
             for (int i = 0; i < skeleton.Bones.Count; i++)
             {
                 var bone = skeleton.Bones[i];
                 // Read from the clean local-transform scratch array � never from WorldTransform.
-                var local = _boneLocalTransforms[i];
+                var local = localTransforms[i];
                 bone.WorldTransform = (bone.ParentIndex >= 0 && bone.ParentIndex < i)
                     ? local * skeleton.Bones[bone.ParentIndex].WorldTransform
                     : local;
@@ -975,7 +986,7 @@ namespace ForzaTechStudio.Views
             // Step 2: GR2 skeleton bone name set (O(1) membership) 
             var gr2SkeletonBoneNames = skeleton != null
                 ? new HashSet<string>(
-                    skeleton.Bones.Where(b => !string.IsNullOrEmpty(b.Name)).Select(b => b.Name),
+                    skeleton.Bones.Where(b => !string.IsNullOrEmpty(b.Name)).Select(b => b.Name!),
                     StringComparer.OrdinalIgnoreCase)
                 : new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
@@ -983,16 +994,21 @@ namespace ForzaTechStudio.Views
             SkeletonBlob? skelBlob = modelBin.Bundle?.Blobs.OfType<SkeletonBlob>().FirstOrDefault();
 
             // Step 4: Build mesh list via link-map (O(1)) or direct children scan
-            bool useLinkMap = _boneMeshLinkMap != null && _boneMeshLinkMap.Count > 0;
-
-            IEnumerable<MeshNode> meshesToProcess = useLinkMap
-                ? gr2BoneTransforms.Keys
-                      .Where(n => _boneMeshLinkMap.ContainsKey(n))
-                      .SelectMany(n => _boneMeshLinkMap[n])
-                      .Where(m => m?.GeometryData != null &&
-                                  (m.ParentModelBin == modelBin || (m.Parent as ModelBinNode) == modelBin))
-                      .Distinct()
-                : modelBin.Children.OfType<MeshNode>();
+            var boneMeshLinkMap = _boneMeshLinkMap;
+            IEnumerable<MeshNode> meshesToProcess;
+            if (boneMeshLinkMap != null && boneMeshLinkMap.Count > 0)
+            {
+                meshesToProcess = gr2BoneTransforms.Keys
+                    .Where(boneMeshLinkMap.ContainsKey)
+                    .SelectMany(n => boneMeshLinkMap[n])
+                    .Where(m => m?.GeometryData != null &&
+                                (m.ParentModelBin == modelBin || (m.Parent as ModelBinNode) == modelBin))
+                    .Distinct();
+            }
+            else
+            {
+                meshesToProcess = modelBin.Children.OfType<MeshNode>();
+            }
 
             foreach (var mesh in meshesToProcess)
             {

@@ -46,6 +46,7 @@ namespace ForzaTechStudio.Views
             _viewportTextureHashLookup.Clear();
             _viewportTextureModelCache.Clear();
             _viewportGameTextureEntryCache.Clear();
+            InvalidateViewportMaterialCache();
         }
 
         private void RefreshViewportTextureLookupFromLoadedRoots()
@@ -54,6 +55,7 @@ namespace ForzaTechStudio.Views
             _viewportTextureLookup.Clear();
             _viewportTextureHashLookup.Clear();
             _viewportTextureModelCache.Clear();
+            InvalidateViewportMaterialCache();
 
             if (!_useLocalViewportTextures)
                 return;
@@ -97,14 +99,16 @@ namespace ForzaTechStudio.Views
             if (_viewportTextureLookupDirty)
                 RefreshViewportTextureLookupFromLoadedRoots();
 
-            // Snapshot local zip entries to decompress
-            var uniqueLocalEntries = _viewportTextureLookup.Values
-                .Distinct()
-                .ToList();
+            // Only prewarm textures referenced by loaded model materials. The lookup still
+            // indexes every zip entry, so uncommon textures can be resolved on demand later.
+            var textureRequests = CollectViewportTextureRequestsToPrewarm();
+            var uniqueLocalEntries = _useLocalViewportTextures
+                ? CollectLocalTextureEntriesToPrewarm(textureRequests)
+                : new List<SwatchbinArchiveEntry>();
 
             // Collect every texture path that rendered meshes need from the game library
             var gameTexturePaths = _useLibraryViewportTextures
-                ? CollectGameTexturePathsToPrewarm()
+                ? CollectGameTexturePathsToPrewarm(textureRequests)
                 : new List<string>();
 
             // Snapshot keys already in the game entry cache so the background thread can skip them
@@ -202,9 +206,9 @@ namespace ForzaTechStudio.Views
         }
 
 
-        private List<string> CollectGameTexturePathsToPrewarm()
+        private List<ViewportTextureRequest> CollectViewportTextureRequestsToPrewarm()
         {
-            var paths = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            var requests = new Dictionary<string, ViewportTextureRequest>(StringComparer.OrdinalIgnoreCase);
 
             void CollectFromMesh(ForzaGeometryData? data, ModelBinNode? modelBin)
             {
@@ -218,21 +222,68 @@ namespace ForzaTechStudio.Views
                     foreach (var parameter in paramBlob.Parameters)
                     {
                         if (parameter.Type != ShaderParameterType.Texture2D) continue;
-                        if (parameter.Value is TextureParameter tp && !string.IsNullOrWhiteSpace(tp.Path))
-                            paths.Add(tp.Path);
+                        if (parameter.Value is TextureParameter tp)
+                            AddTextureRequest(tp);
                     }
                 }
             }
 
-            foreach (var kvp in _renderMap)
-                if (kvp.Key is MeshNode meshNode)
+            void AddTextureRequest(TextureParameter textureParameter)
+            {
+                string path = textureParameter.Path ?? string.Empty;
+                uint pathHash = textureParameter.PathHash;
+                if (string.IsNullOrWhiteSpace(path) && pathHash == 0)
+                    return;
+
+                string key = !string.IsNullOrWhiteSpace(path)
+                    ? NormalizeViewportTexturePath(path)
+                    : $"#{pathHash:X8}";
+
+                if (!requests.ContainsKey(key))
+                    requests[key] = new ViewportTextureRequest(path, pathHash);
+            }
+
+            foreach (var modelBin in EnumerateViewerNodes<ModelBinNode>(ViewModel.Roots))
+            {
+                foreach (var meshNode in modelBin.Children.OfType<MeshNode>())
                     CollectFromMesh(meshNode.GeometryData, meshNode.ParentModelBin);
 
-            foreach (var kvp in _damageRenderMap)
-                CollectFromMesh(kvp.Key.GeometryData, kvp.Key.ParentModelBin);
+                foreach (var damageMeshNode in modelBin.Children.OfType<DamageMeshNode>())
+                    CollectFromMesh(damageMeshNode.GeometryData, damageMeshNode.ParentModelBin);
+            }
 
             foreach (var kvp in _carbinMaterialContextMap)
                 CollectFromMesh(kvp.Value.Geometry, kvp.Value.ModelBin);
+
+            return requests.Values.ToList();
+        }
+
+        private List<SwatchbinArchiveEntry> CollectLocalTextureEntriesToPrewarm(IEnumerable<ViewportTextureRequest> requests)
+        {
+            var entries = new HashSet<SwatchbinArchiveEntry>();
+
+            foreach (var request in requests)
+            {
+                foreach (string key in BuildViewportTextureLookupKeys(request.Path))
+                    if (_viewportTextureLookup.TryGetValue(key, out var entry))
+                        entries.Add(entry);
+
+                if (request.PathHash != 0 && _viewportTextureHashLookup.TryGetValue(request.PathHash, out var hashedEntry))
+                    entries.Add(hashedEntry);
+            }
+
+            return entries.ToList();
+        }
+
+        private static List<string> CollectGameTexturePathsToPrewarm(IEnumerable<ViewportTextureRequest> requests)
+        {
+            var paths = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+            foreach (var request in requests)
+            {
+                if (!string.IsNullOrWhiteSpace(request.Path))
+                    paths.Add(request.Path);
+            }
 
             return [.. paths];
         }
@@ -781,6 +832,18 @@ namespace ForzaTechStudio.Views
             };
 
             await dialog.ShowAsync();
+        }
+
+        private readonly struct ViewportTextureRequest
+        {
+            public string Path { get; }
+            public uint PathHash { get; }
+
+            public ViewportTextureRequest(string path, uint pathHash)
+            {
+                Path = path;
+                PathHash = pathHash;
+            }
         }
     }
 

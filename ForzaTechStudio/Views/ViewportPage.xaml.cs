@@ -523,7 +523,7 @@ namespace ForzaTechStudio.Views
             else
             {
                 ClearMultiSelection();
-                ViewModel.SelectedNode = null!;
+                ViewModel.SelectedNode = null;
                 UpdateHighlight((IViewerNode?)null);
             }
         }

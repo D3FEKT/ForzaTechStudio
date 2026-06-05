@@ -25,6 +25,7 @@ namespace ForzaTechStudio.Views
         private SDX.Color4? _manufacturerCarPaintColor;
         private bool _isUpdatingManufacturerColorSelection;
         private readonly ConcurrentDictionary<(ModelBinNode ModelBin, short MaterialId), MaterialBlob?> _viewportAssignedMaterialCache = new();
+        private readonly ConcurrentDictionary<ViewportMaterialCacheKey, ViewportCachedMaterial> _viewportMaterialCache = new();
 
         private static readonly HashSet<uint> ViewportDiffuseColorHashes = new()
         {
@@ -123,11 +124,29 @@ namespace ForzaTechStudio.Views
 
         private PhongMaterial CreateViewportMaterial(ForzaGeometryData data, ModelBinNode? modelBin, out bool isTransparent, bool loadTextures = true)
         {
-            var materialBlob = ResolveAssignedMaterial(data, modelBin);
-            var fallbackDiffuse = CreateFallbackDiffuseColor(data?.Name);
-            var state = BuildViewportMaterialState(data, materialBlob, fallbackDiffuse, loadTextures);
-            isTransparent = state.IsTransparent;
+            var key = CreateViewportMaterialCacheKey(data, modelBin, loadTextures);
+            var cached = _viewportMaterialCache.GetOrAdd(key, _ =>
+            {
+                var materialBlob = ResolveAssignedMaterial(data, modelBin);
+                var fallbackDiffuse = CreateFallbackDiffuseColor(data?.Name);
+                var state = BuildViewportMaterialState(data, materialBlob, fallbackDiffuse, loadTextures);
+                return new ViewportCachedMaterial(CreatePhongMaterial(state), state.IsTransparent);
+            });
 
+            isTransparent = cached.IsTransparent;
+            return cached.Material;
+        }
+
+        private void ApplyViewportMaterial(MeshGeometryModel3D meshModel, ForzaGeometryData data, ModelBinNode? modelBin)
+        {
+            var material = CreateViewportMaterial(data, modelBin, out bool isTransparent);
+            if (!ReferenceEquals(meshModel.Material, material))
+                meshModel.Material = material;
+            meshModel.IsTransparent = isTransparent;
+        }
+
+        private static PhongMaterial CreatePhongMaterial(ViewportRuntimeMaterialState state)
+        {
             var material = new PhongMaterial
             {
                 DiffuseColor = state.DiffuseColor,
@@ -153,10 +172,37 @@ namespace ForzaTechStudio.Views
             return material;
         }
 
-        private void ApplyViewportMaterial(MeshGeometryModel3D meshModel, ForzaGeometryData data, ModelBinNode? modelBin)
+        private ViewportMaterialCacheKey CreateViewportMaterialCacheKey(ForzaGeometryData data, ModelBinNode? modelBin, bool loadTextures)
         {
-            meshModel.Material = CreateViewportMaterial(data, modelBin, out bool isTransparent);
-            meshModel.IsTransparent = isTransparent;
+            bool useSingleColor = SingleColorToggle?.IsChecked == true;
+            string textureSourceKey = _selectedTextureGameSource?.Key ?? string.Empty;
+
+            return new ViewportMaterialCacheKey(
+                modelBin,
+                GetAssignedMaterialId(data),
+                data?.Name ?? string.Empty,
+                data?.MaterialName ?? string.Empty,
+                data?.SourceMesh?.IsTransparent == true,
+                useSingleColor,
+                QuantizeMaterialFloat(_singleColor.Red),
+                QuantizeMaterialFloat(_singleColor.Green),
+                QuantizeMaterialFloat(_singleColor.Blue),
+                QuantizeMaterialFloat(_sceneOpacity),
+                _selectedManufacturerColorItem?.Key ?? string.Empty,
+                loadTextures,
+                _useLocalViewportTextures,
+                _useLibraryViewportTextures,
+                textureSourceKey);
+        }
+
+        private void InvalidateViewportMaterialCache()
+        {
+            _viewportMaterialCache.Clear();
+        }
+
+        private static int QuantizeMaterialFloat(float value)
+        {
+            return (int)MathF.Round(Clamp01(value) * 10000f);
         }
 
         private Vector2 ResolveViewportMaterialUvTiling(ForzaGeometryData data, ModelBinNode? modelBin)
@@ -762,6 +808,7 @@ namespace ForzaTechStudio.Views
             _manufacturerCarPaintColor = _selectedManufacturerColorItem.ToColor4();
             ResetManufacturerColorBtn.IsEnabled = true;
             ManufacturerColorStatusText.Text = $"Selected {_selectedManufacturerColorItem.DisplayName}.";
+            InvalidateViewportMaterialCache();
             UpdateMeshColors(SingleColorToggle?.IsChecked ?? false);
         }
 
@@ -781,7 +828,37 @@ namespace ForzaTechStudio.Views
             ManufacturerColorStatusText.Text = ManufacturerColorItems.Count > 0
                 ? $"{ManufacturerColorItems.Count} manufacturer color(s) loaded."
                 : "No manufacturercolors.bin found in the loaded car zip.";
+            InvalidateViewportMaterialCache();
             UpdateMeshColors(SingleColorToggle?.IsChecked ?? false);
+        }
+
+        private readonly record struct ViewportMaterialCacheKey(
+            ModelBinNode? ModelBin,
+            short MaterialId,
+            string GeometryName,
+            string MaterialName,
+            bool SourceTransparent,
+            bool UseSingleColor,
+            int SingleColorRed,
+            int SingleColorGreen,
+            int SingleColorBlue,
+            int SceneOpacity,
+            string ManufacturerColorKey,
+            bool LoadTextures,
+            bool UseLocalTextures,
+            bool UseLibraryTextures,
+            string TextureSourceKey);
+
+        private sealed class ViewportCachedMaterial
+        {
+            public PhongMaterial Material { get; }
+            public bool IsTransparent { get; }
+
+            public ViewportCachedMaterial(PhongMaterial material, bool isTransparent)
+            {
+                Material = material;
+                IsTransparent = isTransparent;
+            }
         }
 
         private readonly struct ViewportRuntimeMaterialState

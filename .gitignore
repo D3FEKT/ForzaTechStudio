@@ -437,3 +437,5 @@ FodyWeavers.xsd
 /RE
 /.github
 
+/.vscode/tasks.json
+*.py

@@ -46,19 +46,24 @@ namespace ForzaTechStudio.Views
         private void SetTabNodeVisible(IViewerNode node, bool tabVisible)
         {
             var vis = tabVisible && node.IsChecked != false ? Visibility.Visible : Visibility.Collapsed;
+            bool isVisible = vis == Visibility.Visible;
 
             if (_renderMap.TryGetValue(node, out var model))
-                model.Visibility = vis;
+                SetRenderElementVisible(model, isVisible);
 
             if (node is DamageMeshNode dmg && _damageRenderMap.TryGetValue(dmg, out var dmgModel))
-                dmgModel.Visibility = vis;
+                SetRenderElementVisible(dmgModel, isVisible);
 
             if (node is LightGroupNode lg && _lightDamageRenderMap.TryGetValue(lg, out var lgDmg))
-                lgDmg.Visibility = vis;
+                SetRenderElementVisible(lgDmg, isVisible);
 
             if (node is SkeletonNode skel && _skeletonRenderMap.TryGetValue(skel, out var skelElems))
                 foreach (var el in skelElems)
-                    el.Visibility = vis;
+                    SetRenderElementVisible(el, isVisible);
+
+            if (node is CarbinModelNode carbinModel && _carbinRenderMap.TryGetValue(carbinModel, out var carbinElems))
+                foreach (var el in carbinElems)
+                    SetRenderElementVisible(el, isVisible);
 
             foreach (var child in node.Children)
                 SetTabNodeVisible(child, tabVisible);

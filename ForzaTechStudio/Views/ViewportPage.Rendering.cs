@@ -28,6 +28,15 @@ namespace ForzaTechStudio.Views
         private readonly List<MeshNode> _pendingMeshRenders = new();
         private readonly List<DamageMeshNode> _pendingDamageMeshRenders = new();
 
+        private static void SetRenderElementVisible(Element3D element, bool visible)
+        {
+            var targetVisibility = visible ? Visibility.Visible : Visibility.Collapsed;
+            if (element.Visibility != targetVisibility)
+                element.Visibility = targetVisibility;
+            if (element.IsRendering != visible)
+                element.IsRendering = visible;
+        }
+
         private void RenderMesh(MeshNode node)
         {
             if (ShouldAutoHideProxyModelBin(node.ParentModelBin))
@@ -42,21 +51,29 @@ namespace ForzaTechStudio.Views
                 return;
             }
 
-            if (_renderMap.ContainsKey(node)) return;
+            var modelGroup = _modelGroup;
+            if (modelGroup == null)
+                return;
+
+            if (_renderMap.TryGetValue(node, out var existing))
+            {
+                SetRenderElementVisible(existing, true);
+                return;
+            }
 
             if (node.GeometryData.Positions != null && (node.GeometryData.Indices == null || node.GeometryData.Indices.Length == 0))
             {
                 var model = CreatePoint3D(node.GeometryData);
                 if (model != null)
                 {
-                    _modelGroup.Children.Add(model);
+                    modelGroup.Children.Add(model);
                     _renderMap[node] = model;
                 }
             }
             else
             {
                 var geometry = CreateMesh3D(node.GeometryData, node.ParentModelBin);
-                _modelGroup.Children.Add(geometry);
+                modelGroup.Children.Add(geometry);
                 _renderMap[node] = geometry;
             }
         }
@@ -64,8 +81,14 @@ namespace ForzaTechStudio.Views
         private void HideMesh(MeshNode node)
         {
             if (_renderMap.TryGetValue(node, out var geometry))
+                SetRenderElementVisible(geometry, false);
+        }
+
+        private void ReleaseMesh(MeshNode node)
+        {
+            if (_renderMap.TryGetValue(node, out var geometry))
             {
-                _modelGroup.Children.Remove(geometry);
+                _modelGroup?.Children.Remove(geometry);
                 _renderMap.Remove(node);
             }
         }
@@ -84,18 +107,32 @@ namespace ForzaTechStudio.Views
                 return;
             }
 
-            if (_damageRenderMap.ContainsKey(node)) return;
+            var modelGroup = _modelGroup;
+            if (modelGroup == null)
+                return;
+
+            if (_damageRenderMap.TryGetValue(node, out var existing))
+            {
+                SetRenderElementVisible(existing, true);
+                return;
+            }
 
             var geometry = CreateMesh3D(node.GeometryData, node.ParentModelBin);
-            _modelGroup.Children.Add(geometry);
+            modelGroup.Children.Add(geometry);
             _damageRenderMap[node] = geometry;
         }
 
         private void HideDamageMesh(DamageMeshNode node)
         {
             if (_damageRenderMap.TryGetValue(node, out var geometry))
+                SetRenderElementVisible(geometry, false);
+        }
+
+        private void ReleaseDamageMesh(DamageMeshNode node)
+        {
+            if (_damageRenderMap.TryGetValue(node, out var geometry))
             {
-                _modelGroup.Children.Remove(geometry);
+                _modelGroup?.Children.Remove(geometry);
                 _damageRenderMap.Remove(node);
             }
         }
@@ -106,8 +143,40 @@ namespace ForzaTechStudio.Views
             if (_pendingMeshRenders.Count == 0 && _pendingDamageMeshRenders.Count == 0)
                 return;
 
+            var modelGroup = _modelGroup;
+            if (modelGroup == null)
+                return;
+
+            var pendingMeshes = _pendingMeshRenders.Distinct().ToList();
+            var pendingDamageMeshes = _pendingDamageMeshRenders.Distinct().ToList();
+
+            _pendingMeshRenders.Clear();
+            _pendingDamageMeshRenders.Clear();
+
+            foreach (var node in pendingMeshes)
+            {
+                if (_renderMap.TryGetValue(node, out var existing))
+                {
+                    bool visible = node.IsChecked == true
+                        && !ShouldAutoHideProxyModelBin(node.ParentModelBin)
+                        && !ShouldSuppressOriginalModelBin(node.ParentModelBin);
+                    SetRenderElementVisible(existing, visible);
+                }
+            }
+
+            foreach (var node in pendingDamageMeshes)
+            {
+                if (_damageRenderMap.TryGetValue(node, out var existing))
+                {
+                    bool visible = node.IsChecked == true
+                        && !ShouldAutoHideProxyModelBin(node.ParentModelBin)
+                        && !ShouldSuppressOriginalModelBin(node.ParentModelBin);
+                    SetRenderElementVisible(existing, visible);
+                }
+            }
+
             // (ShouldAutoHideProxy / ShouldSuppressOriginal read scene state)
-            var solidMeshes = _pendingMeshRenders
+            var solidMeshes = pendingMeshes
                 .Where(n => n.GeometryData != null
                          && !_renderMap.ContainsKey(n)
                          && !ShouldAutoHideProxyModelBin(n.ParentModelBin)
@@ -116,7 +185,7 @@ namespace ForzaTechStudio.Views
                               && (n.GeometryData.Indices == null || n.GeometryData.Indices.Length == 0)))
                 .ToList();
 
-            var pointMeshes = _pendingMeshRenders
+            var pointMeshes = pendingMeshes
                 .Where(n => n.GeometryData?.Positions != null
                          && (n.GeometryData.Indices == null || n.GeometryData.Indices.Length == 0)
                          && !_renderMap.ContainsKey(n)
@@ -124,15 +193,12 @@ namespace ForzaTechStudio.Views
                          && !ShouldSuppressOriginalModelBin(n.ParentModelBin))
                 .ToList();
 
-            var dmgMeshes = _pendingDamageMeshRenders
+            var dmgMeshes = pendingDamageMeshes
                 .Where(n => n.GeometryData != null
                          && !_damageRenderMap.ContainsKey(n)
                          && !ShouldAutoHideProxyModelBin(n.ParentModelBin)
                          && !ShouldSuppressOriginalModelBin(n.ParentModelBin))
                 .ToList();
-
-            _pendingMeshRenders.Clear();
-            _pendingDamageMeshRenders.Clear();
 
             // Build all solid mesh geometries in parallel on background threads
             var builtMeshes = new ConcurrentBag<(MeshNode Node, MeshGeometryModel3D Model)>();
@@ -172,7 +238,7 @@ namespace ForzaTechStudio.Views
             {
                 if (!_renderMap.ContainsKey(node))
                 {
-                    _modelGroup.Children.Add(model);
+                    modelGroup.Children.Add(model);
                     _renderMap[node] = model;
                 }
             }
@@ -181,7 +247,7 @@ namespace ForzaTechStudio.Views
             {
                 if (!_damageRenderMap.ContainsKey(node))
                 {
-                    _modelGroup.Children.Add(model);
+                    modelGroup.Children.Add(model);
                     _damageRenderMap[node] = model;
                 }
             }
@@ -193,7 +259,7 @@ namespace ForzaTechStudio.Views
                 var model = CreatePoint3D(node.GeometryData);
                 if (model != null)
                 {
-                    _modelGroup.Children.Add(model);
+                    modelGroup.Children.Add(model);
                     _renderMap[node] = model;
                 }
             }
@@ -203,12 +269,15 @@ namespace ForzaTechStudio.Views
         private void RenderLight(LightGroupNode node)
         {
             if (_renderMap.ContainsKey(node)) return;
+            var modelGroup = _modelGroup;
+            if (modelGroup == null)
+                return;
 
             // Normal-state cone (Pos + Rot)
             var normalCone = CreateLightCone(node, damage: false);
             if (normalCone != null)
             {
-                _modelGroup.Children.Add(normalCone);
+                modelGroup.Children.Add(normalCone);
                 _renderMap[node] = normalCone;
             }
 
@@ -216,21 +285,25 @@ namespace ForzaTechStudio.Views
             var damageCone = CreateLightCone(node, damage: true);
             if (damageCone != null)
             {
-                _modelGroup.Children.Add(damageCone);
+                modelGroup.Children.Add(damageCone);
                 _lightDamageRenderMap[node] = damageCone;
             }
         }
 
         private void HideLight(LightGroupNode node)
         {
+            var modelGroup = _modelGroup;
+            if (modelGroup == null)
+                return;
+
             if (_renderMap.TryGetValue(node, out var model))
             {
-                _modelGroup.Children.Remove(model);
+                modelGroup.Children.Remove(model);
                 _renderMap.Remove(node);
             }
             if (_lightDamageRenderMap.TryGetValue(node, out var damageModel))
             {
-                _modelGroup.Children.Remove(damageModel);
+                modelGroup.Children.Remove(damageModel);
                 _lightDamageRenderMap.Remove(node);
             }
         }
@@ -240,6 +313,9 @@ namespace ForzaTechStudio.Views
         private void RenderSkeleton(SkeletonNode node)
         {
             if (_skeletonRenderMap.ContainsKey(node)) return;
+            var viewport = _viewport;
+            if (viewport == null)
+                return;
 
             var elements = new List<Element3D>();
             var skeleton = node.SkeletonData;
@@ -267,7 +343,7 @@ namespace ForzaTechStudio.Views
                 Color = Color.FromArgb(255, 0, 255, 128),
                 Thickness = 1.5
             };
-            _viewport.Items.Add(boneLines);
+            viewport.Items.Add(boneLines);
             elements.Add(boneLines);
 
             // Create joint spheres at each bone position
@@ -297,7 +373,7 @@ namespace ForzaTechStudio.Views
                         },
                         CullMode = SDX.Direct3D11.CullMode.None
                     };
-                    _viewport.Items.Add(jointModel);
+                    viewport.Items.Add(jointModel);
                     elements.Add(jointModel);
                 }
 
@@ -309,7 +385,7 @@ namespace ForzaTechStudio.Views
                     {
                         foreach (var axisLine in axesLines)
                         {
-                            _viewport.Items.Add(axisLine);
+                            viewport.Items.Add(axisLine);
                             elements.Add(axisLine);
                         }
                     }
@@ -323,8 +399,9 @@ namespace ForzaTechStudio.Views
         {
             if (_skeletonRenderMap.TryGetValue(node, out var elements))
             {
+                var viewport = _viewport;
                 foreach (var elem in elements)
-                    _viewport.Items.Remove(elem);
+                    viewport?.Items.Remove(elem);
                 _skeletonRenderMap.Remove(node);
             }
         }
@@ -693,6 +770,8 @@ namespace ForzaTechStudio.Views
 
         private void UpdateMeshColors(bool useSingleColor)
         {
+            InvalidateViewportMaterialCache();
+
             foreach (var kvp in _renderMap)
             {
                 var node = kvp.Key;
@@ -719,7 +798,7 @@ namespace ForzaTechStudio.Views
 
         private void AutoFitCamera()
         {
-             if (_modelGroup == null || _viewport.Camera is not PerspectiveCamera camera) return;
+             if (_modelGroup == null || _viewport?.Camera is not PerspectiveCamera camera) return;
 
              var totalBounds = new SDX.BoundingBox();
              bool hasBounds = false;
@@ -786,27 +865,34 @@ namespace ForzaTechStudio.Views
             // Collect meshes to focus on: multi-selection, single MeshNode, or ModelBinNode children
             var meshesToFocus = new List<MeshGeometryModel3D>();
 
+            void AddFocusableMesh(MeshNode meshNode)
+            {
+                if (_renderMap.TryGetValue(meshNode, out var elem)
+                    && elem is MeshGeometryModel3D mesh
+                    && mesh.Geometry != null
+                    && mesh.IsRendering
+                    && mesh.Visibility != Visibility.Collapsed)
+                {
+                    meshesToFocus.Add(mesh);
+                }
+            }
+
             if (_multiSelectedMeshes.Count > 0)
             {
                 foreach (var meshNode in _multiSelectedMeshes)
-                {
-                    if (_renderMap.TryGetValue(meshNode, out var elem) && elem is MeshGeometryModel3D m && m.Geometry != null)
-                        meshesToFocus.Add(m);
-                }
+                    AddFocusableMesh(meshNode);
             }
             else if (ViewModel.SelectedNode is MeshNode singleMesh)
             {
-                if (_renderMap.TryGetValue(singleMesh, out var elem) && elem is MeshGeometryModel3D m && m.Geometry != null)
-                    meshesToFocus.Add(m);
+                AddFocusableMesh(singleMesh);
             }
             else if (ViewModel.SelectedNode is ModelBinNode binNode)
             {
                 // Collect all mesh children of this ModelBin
                 foreach (var child in binNode.Children)
                 {
-                    if (child is MeshNode meshChild && _renderMap.TryGetValue(meshChild, out var elem)
-                        && elem is MeshGeometryModel3D m && m.Geometry != null)
-                        meshesToFocus.Add(m);
+                    if (child is MeshNode meshChild)
+                        AddFocusableMesh(meshChild);
                 }
             }
 
@@ -843,20 +929,27 @@ namespace ForzaTechStudio.Views
         private void RenderLocator(LocatorNode node)
         {
             if (_renderMap.ContainsKey(node)) return;
+            var modelGroup = _modelGroup;
+            if (modelGroup == null)
+                return;
 
             var model = CreateLocatorCone(node);
             if (model != null)
             {
-                _modelGroup.Children.Add(model);
+                modelGroup.Children.Add(model);
                 _renderMap[node] = model;
             }
         }
 
         private void HideLocator(LocatorNode node)
         {
+            var modelGroup = _modelGroup;
+            if (modelGroup == null)
+                return;
+
             if (_renderMap.TryGetValue(node, out var model))
             {
-                _modelGroup.Children.Remove(model);
+                modelGroup.Children.Remove(model);
                 _renderMap.Remove(node);
             }
         }
@@ -903,19 +996,27 @@ namespace ForzaTechStudio.Views
         private void RenderAvPin(AvPinNode node)
         {
             if (_renderMap.ContainsKey(node)) return;
+            var modelGroup = _modelGroup;
+            if (modelGroup == null)
+                return;
+
             var model = CreateAvPinCone(node);
             if (model != null)
             {
-                _modelGroup.Children.Add(model);
+                modelGroup.Children.Add(model);
                 _renderMap[node] = model;
             }
         }
 
         private void HideAvPin(AvPinNode node)
         {
+            var modelGroup = _modelGroup;
+            if (modelGroup == null)
+                return;
+
             if (_renderMap.TryGetValue(node, out var model))
             {
-                _modelGroup.Children.Remove(model);
+                modelGroup.Children.Remove(model);
                 _renderMap.Remove(node);
             }
         }

@@ -47,7 +47,7 @@ namespace ForzaTechStudio.Views
         }
 
          
-        private static string GetReloadablePathForRoot(IViewerNode node)
+        private static string? GetReloadablePathForRoot(IViewerNode node)
         {
             return node switch
             {

@@ -15,16 +15,27 @@ namespace ForzaTechStudio.Views
         private readonly Dictionary<CarbinModelNode, List<GeometryModel3D>> _carbinRenderMap = new();
         private readonly Dictionary<GeometryModel3D, CarbinModelNode> _carbinHitMap = new();
         private readonly Dictionary<GeometryModel3D, (ForzaGeometryData Geometry, ModelBinNode ModelBin)> _carbinMaterialContextMap = new();
+        private readonly Dictionary<GeometryModel3D, MeshNode> _carbinSourceMeshMap = new();
+        private readonly Dictionary<CarbinModelNode, ModelBinNode?> _carbinModelBinCache = new();
 
         private void RenderCarbinModel(CarbinModelNode node)
         {
             var modelGroup = _modelGroup;
-            if (modelGroup == null || _carbinRenderMap.ContainsKey(node) || node.Model == null || node.IsChecked != true || !node.UseTransforms)
+            if (modelGroup == null || node.Model == null || node.IsChecked != true || !node.UseTransforms)
                 return;
 
             var modelBin = FindMatchingModelBin(node);
             if (modelBin == null)
                 return;
+
+            if (_carbinRenderMap.TryGetValue(node, out var cachedElements))
+            {
+                foreach (var element in cachedElements)
+                    SetRenderElementVisible(element, true);
+
+                RefreshSuppressedOriginalMeshes(modelBin);
+                return;
+            }
 
             if (!TryResolveCarbinInstanceTransform(node, modelBin, out var instanceTransform))
                 return;
@@ -39,6 +50,7 @@ namespace ForzaTechStudio.Views
                 elements.Add(model);
                 _carbinHitMap[model] = node;
                 _carbinMaterialContextMap[model] = (instanceGeometry, modelBin);
+                _carbinSourceMeshMap[model] = mesh;
             }
 
             if (elements.Count > 0)
@@ -52,11 +64,17 @@ namespace ForzaTechStudio.Views
         {
             var modelBin = FindMatchingModelBin(node);
 
+            if (_carbinRenderMap.TryGetValue(node, out var elements))
+                foreach (var element in elements)
+                    SetRenderElementVisible(element, false);
+
+            RefreshSuppressedOriginalMeshes(modelBin);
+        }
+
+        private void ReleaseCarbinModel(CarbinModelNode node)
+        {
             if (!_carbinRenderMap.TryGetValue(node, out var elements))
-            {
-                RefreshSuppressedOriginalMeshes(modelBin);
                 return;
-            }
 
             var modelGroup = _modelGroup;
             if (modelGroup != null)
@@ -66,17 +84,19 @@ namespace ForzaTechStudio.Views
                     modelGroup.Children.Remove(element);
                     _carbinHitMap.Remove(element);
                     _carbinMaterialContextMap.Remove(element);
+                    _carbinSourceMeshMap.Remove(element);
                 }
             }
 
             _carbinRenderMap.Remove(node);
-            RefreshSuppressedOriginalMeshes(modelBin);
         }
 
         private void RefreshAllCarbinInstances()
         {
+            _carbinModelBinCache.Clear();
+
             foreach (var node in _carbinRenderMap.Keys.ToList())
-                HideCarbinModel(node);
+                ReleaseCarbinModel(node);
 
             foreach (var carbinModel in EnumerateViewerNodes<CarbinModelNode>(ViewModel.Roots))
             {
@@ -94,25 +114,78 @@ namespace ForzaTechStudio.Views
 
             foreach (var carbinModel in EnumerateViewerNodes<CarbinModelNode>(ViewModel.Roots))
             {
+                if (FindMatchingModelBin(carbinModel) != modelBin)
+                    continue;
+
                 if (carbinModel.IsChecked != true || !carbinModel.UseTransforms)
+                {
+                    ReleaseCarbinModel(carbinModel);
+                    RefreshSuppressedOriginalMeshes(modelBin);
+                    continue;
+                }
+
+                if (!HasVisibleCarbinSourceMeshes(modelBin))
                 {
                     HideCarbinModel(carbinModel);
                     continue;
                 }
 
-                if (FindMatchingModelBin(carbinModel) != modelBin)
-                    continue;
-
-                HideCarbinModel(carbinModel);
-                RenderCarbinModel(carbinModel);
+                if (CarbinCacheMatchesVisibleSourceMeshes(carbinModel, modelBin))
+                    RenderCarbinModel(carbinModel);
+                else
+                    RebuildCarbinModel(carbinModel);
             }
+        }
+
+        private void RebuildCarbinModel(CarbinModelNode node)
+        {
+            var modelBin = FindMatchingModelBin(node);
+            ReleaseCarbinModel(node);
+
+            if (node.IsChecked == true && node.UseTransforms)
+                RenderCarbinModel(node);
+            else
+                RefreshSuppressedOriginalMeshes(modelBin);
+        }
+
+        private static bool HasVisibleCarbinSourceMeshes(ModelBinNode modelBin)
+        {
+            return modelBin.Children.OfType<MeshNode>().Any(mesh => mesh.IsChecked == true && mesh.GeometryData != null);
+        }
+
+        private bool CarbinCacheMatchesVisibleSourceMeshes(CarbinModelNode carbinModel, ModelBinNode modelBin)
+        {
+            if (!_carbinRenderMap.TryGetValue(carbinModel, out var elements) || elements.Count == 0)
+                return false;
+
+            var cachedSources = new HashSet<MeshNode>();
+            foreach (var element in elements)
+            {
+                if (!_carbinSourceMeshMap.TryGetValue(element, out var sourceMesh))
+                    return false;
+
+                cachedSources.Add(sourceMesh);
+            }
+
+            var visibleSources = modelBin.Children
+                .OfType<MeshNode>()
+                .Where(mesh => mesh.IsChecked == true && mesh.GeometryData != null)
+                .ToHashSet();
+
+            return cachedSources.SetEquals(visibleSources);
         }
 
         private ModelBinNode? FindMatchingModelBin(CarbinModelNode carbinModel)
         {
+            if (_carbinModelBinCache.TryGetValue(carbinModel, out var cachedModelBin))
+                return cachedModelBin;
+
             string carbinPath = NormalizeModelPath(carbinModel.Model?.Path);
             if (string.IsNullOrEmpty(carbinPath))
+            {
+                _carbinModelBinCache[carbinModel] = null;
                 return null;
+            }
 
             string carbinFileName = GetNormalizedFileName(carbinPath);
             var modelBins = EnumerateViewerNodes<ModelBinNode>(ViewModel.Roots).ToList();
@@ -127,18 +200,22 @@ namespace ForzaTechStudio.Views
 
                     if (normalizedCandidate == carbinPath
                         || normalizedCandidate.EndsWith("/" + carbinPath, StringComparison.OrdinalIgnoreCase)
-                        || carbinPath.EndsWith("/" + normalizedCandidate, StringComparison.OrdinalIgnoreCase))
+                    || carbinPath.EndsWith("/" + normalizedCandidate, StringComparison.OrdinalIgnoreCase))
                     {
+                        _carbinModelBinCache[carbinModel] = modelBin;
                         return modelBin;
                     }
                 }
             }
 
-            return modelBins.FirstOrDefault(modelBin => GetModelBinCandidatePaths(modelBin)
+            var fallback = modelBins.FirstOrDefault(modelBin => GetModelBinCandidatePaths(modelBin)
                 .Select(NormalizeModelPath)
                 .Select(GetNormalizedFileName)
                 .Any(candidateFileName => !string.IsNullOrEmpty(candidateFileName)
                     && candidateFileName == carbinFileName));
+
+            _carbinModelBinCache[carbinModel] = fallback;
+            return fallback;
         }
 
         private bool TryResolveCarbinInstanceTransform(CarbinModelNode carbinModel, ModelBinNode modelBin, out Matrix4x4 instanceTransform)
@@ -250,7 +327,7 @@ namespace ForzaTechStudio.Views
                 {
                     HideMesh(mesh);
                 }
-                else if (mesh.IsChecked == true && !_renderMap.ContainsKey(mesh))
+                else if (mesh.IsChecked == true)
                 {
                     RenderMesh(mesh);
                 }
@@ -262,7 +339,7 @@ namespace ForzaTechStudio.Views
                 {
                     HideDamageMesh(damageMesh);
                 }
-                else if (damageMesh.IsChecked == true && !_damageRenderMap.ContainsKey(damageMesh))
+                else if (damageMesh.IsChecked == true)
                 {
                     RenderDamageMesh(damageMesh);
                 }

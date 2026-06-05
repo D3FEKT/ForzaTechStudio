@@ -84,7 +84,7 @@ namespace ForzaTechStudio.Views
             }
         }
 
-        private LineGeometryModel3D CreateWireframeFromMesh(MeshGeometry3D geo)
+        private LineGeometryModel3D? CreateWireframeFromMesh(MeshGeometry3D geo)
         {
             if (geo.Positions == null || geo.TriangleIndices == null) return null;
 
@@ -151,7 +151,7 @@ namespace ForzaTechStudio.Views
             }
         }
 
-        private LineGeometryModel3D CreateNormalsFromMesh(MeshGeometry3D geo)
+        private LineGeometryModel3D? CreateNormalsFromMesh(MeshGeometry3D geo)
         {
             if (geo.Positions == null || geo.Normals == null) return null;
 
@@ -202,7 +202,7 @@ namespace ForzaTechStudio.Views
             }
         }
 
-        private LineGeometryModel3D CreateBoundingBox(SDX.BoundingBox bounds)
+        private LineGeometryModel3D? CreateBoundingBox(SDX.BoundingBox bounds)
         {
             var min = bounds.Minimum;
             var max = bounds.Maximum;

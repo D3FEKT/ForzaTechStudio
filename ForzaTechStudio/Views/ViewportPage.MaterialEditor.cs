@@ -297,6 +297,9 @@ namespace ForzaTechStudio.Views
         {
             foreach (var key in _viewportAssignedMaterialCache.Keys.Where(key => ReferenceEquals(key.ModelBin, modelBin)).ToList())
                 _viewportAssignedMaterialCache.TryRemove(key, out _);
+
+            foreach (var key in _viewportMaterialCache.Keys.Where(key => ReferenceEquals(key.ModelBin, modelBin)).ToList())
+                _viewportMaterialCache.TryRemove(key, out _);
         }
 
         private void RefreshRenderedMaterialsForModelBin(ModelBinNode modelBin, short? materialId)
