@@ -119,7 +119,14 @@ namespace ForzaTechStudio.Views
             }
             
             bool anyConflict = conflictSX || conflictSY || conflictSZ || conflictRX || conflictRY || conflictRZ || conflictTX || conflictTY || conflictTZ;
-            ConflictingTransformsText.Visibility = anyConflict ? Visibility.Visible : Visibility.Collapsed;
+            if (anyConflict && meshList.Count > 1)
+            {
+                UpdateTransformUIForModelScopeDelta(meshList);
+                return;
+            }
+
+            ClearModelScopeDeltaTransformState();
+            ConflictingTransformsText.Visibility = Visibility.Collapsed;
             
              _isUpdatingUi = true;
              
@@ -138,6 +145,45 @@ namespace ForzaTechStudio.Views
              
              _isUpdatingUi = false;
         }
+
+        private void UpdateTransformUIForModelScopeDelta(IReadOnlyList<MeshNode> meshList)
+        {
+            _isModelScopeDeltaTransformActive = true;
+            _modelScopeDeltaMeshes.Clear();
+            _modelScopeDeltaSnapshots.Clear();
+
+            foreach (var mesh in meshList)
+            {
+                if (mesh.GeometryData?.SourceMesh == null)
+                    continue;
+
+                var blob = mesh.GeometryData.SourceMesh;
+                _modelScopeDeltaMeshes.Add(mesh);
+                _modelScopeDeltaSnapshots[mesh] = (blob.PositionScale, blob.PositionTranslate, mesh.GeometryData.RotationEulerDegrees);
+            }
+
+            _isUpdatingUi = true;
+            ConflictingTransformsText.Visibility = Visibility.Collapsed;
+            ScaleControlsPanel.Visibility = Visibility.Visible;
+            RotationControlsPanel.Visibility = Visibility.Visible;
+            EnableAndSet(ScaleX, "0.00000");
+            EnableAndSet(ScaleY, "0.00000");
+            EnableAndSet(ScaleZ, "0.00000");
+            EnableAndSet(RotX, "0.00000");
+            EnableAndSet(RotY, "0.00000");
+            EnableAndSet(RotZ, "0.00000");
+            EnableAndSet(TransX, "0.00000");
+            EnableAndSet(TransY, "0.00000");
+            EnableAndSet(TransZ, "0.00000");
+            _isUpdatingUi = false;
+        }
+
+        private void ClearModelScopeDeltaTransformState()
+        {
+            _isModelScopeDeltaTransformActive = false;
+            _modelScopeDeltaMeshes.Clear();
+            _modelScopeDeltaSnapshots.Clear();
+        }
         
         private void UpdateField(TextBox box, bool conflict, float val)
         {
@@ -147,6 +193,7 @@ namespace ForzaTechStudio.Views
 
         private void ClearTransformFields()
         {
+            ClearModelScopeDeltaTransformState();
             _isUpdatingUi = true;
             ConflictingTransformsText.Visibility = Visibility.Collapsed;
             ScaleControlsPanel.Visibility = Visibility.Visible;
@@ -1484,6 +1531,136 @@ namespace ForzaTechStudio.Views
 
         // Camera Options handlers
 
+        private void SaveCameraStateFromViewport()
+        {
+            if (_viewport == null)
+                return;
+
+            _savedCameraRotationMode = _viewport.CameraRotationMode;
+            _savedCameraMode = _viewport.CameraMode;
+            _savedRotateAroundMouseDownPoint = _viewport.RotateAroundMouseDownPoint;
+            _savedZoomAroundMouseDownPoint = _viewport.ZoomAroundMouseDownPoint;
+            _savedIsInertiaEnabled = _viewport.IsInertiaEnabled;
+            _savedZoomSensitivity = _viewport.ZoomSensitivity;
+            _savedRotationSensitivity = _viewport.RotationSensitivity;
+            _savedPanSensitivity = _viewport.LeftRightPanSensitivity;
+            _savedCameraInertiaFactor = _viewport.CameraInertiaFactor;
+            _savedZoomDistanceLimitNear = _viewport.ZoomDistanceLimitNear;
+
+            if (_viewport.Camera is PerspectiveCamera pc)
+            {
+                _savedOrthographicMode = false;
+                _savedCameraPosition = pc.Position;
+                _savedCameraLookDirection = pc.LookDirection;
+                _savedCameraUpDirection = pc.UpDirection;
+                _savedFarPlane = pc.FarPlaneDistance;
+                _savedNearPlane = pc.NearPlaneDistance;
+                _savedFieldOfView = pc.FieldOfView;
+            }
+            else if (_viewport.Camera is OrthographicCamera oc)
+            {
+                _savedOrthographicMode = true;
+                _savedCameraPosition = oc.Position;
+                _savedCameraLookDirection = oc.LookDirection;
+                _savedCameraUpDirection = oc.UpDirection;
+                _savedFarPlane = oc.FarPlaneDistance;
+                _savedNearPlane = oc.NearPlaneDistance;
+                _savedOrthographicWidth = oc.Width;
+            }
+        }
+
+        private void RestoreSavedCameraView()
+        {
+            if (!_savedCameraPosition.HasValue || !_savedCameraLookDirection.HasValue || !_savedCameraUpDirection.HasValue)
+                return;
+
+            if (_viewport?.Camera is PerspectiveCamera pc)
+            {
+                pc.Position = _savedCameraPosition.Value;
+                pc.LookDirection = _savedCameraLookDirection.Value;
+                pc.UpDirection = _savedCameraUpDirection.Value;
+                pc.FarPlaneDistance = _savedFarPlane;
+                pc.NearPlaneDistance = _savedNearPlane;
+                pc.FieldOfView = _savedFieldOfView;
+            }
+            else if (_viewport?.Camera is OrthographicCamera oc)
+            {
+                oc.Position = _savedCameraPosition.Value;
+                oc.LookDirection = _savedCameraLookDirection.Value;
+                oc.UpDirection = _savedCameraUpDirection.Value;
+                oc.FarPlaneDistance = _savedFarPlane;
+                oc.NearPlaneDistance = _savedNearPlane;
+                oc.Width = (float)_savedOrthographicWidth;
+            }
+        }
+
+        private void ApplySavedCameraSettingsToViewport()
+        {
+            if (_viewport == null)
+                return;
+
+            _viewport.CameraRotationMode = _savedCameraRotationMode;
+            _viewport.CameraMode = _savedCameraMode;
+            _viewport.RotateAroundMouseDownPoint = _savedRotateAroundMouseDownPoint;
+            _viewport.ZoomAroundMouseDownPoint = _savedZoomAroundMouseDownPoint;
+            _viewport.IsInertiaEnabled = _savedIsInertiaEnabled;
+            _viewport.ZoomSensitivity = _savedZoomSensitivity;
+            _viewport.RotationSensitivity = _savedRotationSensitivity;
+            _viewport.LeftRightPanSensitivity = _savedPanSensitivity;
+            _viewport.UpDownPanSensitivity = _savedPanSensitivity;
+            _viewport.CameraInertiaFactor = _savedCameraInertiaFactor;
+            _viewport.ZoomDistanceLimitNear = _savedZoomDistanceLimitNear;
+
+            ApplyOrthographicMode(_savedOrthographicMode);
+            RestoreSavedCameraView();
+        }
+
+        private void SyncCameraSettingsUiFromState()
+        {
+            _isSyncingCameraSettingsUi = true;
+            try
+            {
+                if (RotModeturntable != null)
+                    RotModeturntable.IsChecked = _savedCameraRotationMode != HelixToolkit.SharpDX.Core.CameraRotationMode.Trackball;
+                if (RotModeTrackball != null)
+                    RotModeTrackball.IsChecked = _savedCameraRotationMode == HelixToolkit.SharpDX.Core.CameraRotationMode.Trackball;
+
+                if (CamModeInspect != null)
+                    CamModeInspect.IsChecked = _savedCameraMode == HelixToolkit.SharpDX.Core.CameraMode.Inspect;
+                if (CamModeWalkAround != null)
+                    CamModeWalkAround.IsChecked = _savedCameraMode == HelixToolkit.SharpDX.Core.CameraMode.WalkAround;
+                if (CamModeFixed != null)
+                    CamModeFixed.IsChecked = _savedCameraMode == HelixToolkit.SharpDX.Core.CameraMode.FixedPosition;
+
+                if (RotateAroundMouseDownToggle != null) RotateAroundMouseDownToggle.IsChecked = _savedRotateAroundMouseDownPoint;
+                if (ZoomAroundMouseDownToggle != null) ZoomAroundMouseDownToggle.IsChecked = _savedZoomAroundMouseDownPoint;
+                if (InertiaToggle != null) InertiaToggle.IsChecked = _savedIsInertiaEnabled;
+                if (OrthographicToggle != null) OrthographicToggle.IsChecked = _savedOrthographicMode;
+
+                SetSliderAndLabel(ZoomSensSlider, ZoomSensLabel, _savedZoomSensitivity, "F1");
+                SetSliderAndLabel(RotSensSlider, RotSensLabel, _savedRotationSensitivity, "F1");
+                SetSliderAndLabel(PanSensSlider, PanSensLabel, _savedPanSensitivity, "F1");
+                SetSliderAndLabel(InertiaSlider, InertiaLabel, _savedCameraInertiaFactor, "F2");
+                SetSliderAndLabel(NearPlaneSlider, NearPlaneLabel, _savedNearPlane, "F3");
+                SetSliderAndLabel(FarPlaneSlider, FarPlaneLabel, _savedFarPlane, "F0");
+                SetSliderAndLabel(FovSlider, FovLabel, _savedFieldOfView, "F0", "\u00B0");
+                SetSliderAndLabel(ZoomNearLimitSlider, ZoomNearLimitLabel, _savedZoomDistanceLimitNear, "F3");
+            }
+            finally
+            {
+                _isSyncingCameraSettingsUi = false;
+            }
+        }
+
+        private static void SetSliderAndLabel(Slider slider, TextBlock label, double value, string format, string suffix = "")
+        {
+            if (slider != null)
+                slider.Value = Math.Clamp(value, slider.Minimum, slider.Maximum);
+
+            if (label != null)
+                label.Text = value.ToString(format) + suffix;
+        }
+
         private void FocusOnSelected_Click(object sender, RoutedEventArgs e)
         {
             CameraOptionsBtn?.Flyout?.Hide();
@@ -1498,53 +1675,75 @@ namespace ForzaTechStudio.Views
 
         private void ResetCamera_Click(object sender, RoutedEventArgs e)
         {
-            if (_viewport?.Camera is not PerspectiveCamera cam) return;
-            cam.Position       = new SDX.Vector3(50, 50, 50);
-            cam.LookDirection  = new SDX.Vector3(-50, -50, -50);
-            cam.UpDirection    = new SDX.Vector3(0, 1, 0);
-            cam.FarPlaneDistance  = 50000;
-            cam.NearPlaneDistance = 0.1;
+            _savedCameraPosition = new SDX.Vector3(50, 50, 50);
+            _savedCameraLookDirection = new SDX.Vector3(-50, -50, -50);
+            _savedCameraUpDirection = new SDX.Vector3(0, 1, 0);
+            _savedFarPlane = 50000;
+            _savedNearPlane = 0.1;
+            _savedFieldOfView = 45.0;
+            _savedOrthographicWidth = 100.0;
+            RestoreSavedCameraView();
+            SyncCameraSettingsUiFromState();
         }
 
         private void CameraRotationMode_Changed(object sender, RoutedEventArgs e)
         {
+            if (_isSyncingCameraSettingsUi)
+                return;
+
             if (_viewport == null || sender is not RadioButton rb) return;
             if (rb.Tag is string tag)
+            {
+                _savedCameraRotationMode = tag == "Trackball"
+                    ? HelixToolkit.SharpDX.Core.CameraRotationMode.Trackball
+                    : HelixToolkit.SharpDX.Core.CameraRotationMode.Turntable;
                 _viewport.CameraRotationMode = tag == "Trackball"
                     ? HelixToolkit.SharpDX.Core.CameraRotationMode.Trackball
                     : HelixToolkit.SharpDX.Core.CameraRotationMode.Turntable;
+            }
         }
 
         private void CameraMode_Changed(object sender, RoutedEventArgs e)
         {
+            if (_isSyncingCameraSettingsUi)
+                return;
+
             if (_viewport == null || sender is not RadioButton rb) return;
             if (rb.Tag is string tag)
             {
-                _viewport.CameraMode = tag switch
+                _savedCameraMode = tag switch
                 {
                     "WalkAround"    => HelixToolkit.SharpDX.Core.CameraMode.WalkAround,
                     "FixedPosition" => HelixToolkit.SharpDX.Core.CameraMode.FixedPosition,
                     _               => HelixToolkit.SharpDX.Core.CameraMode.Inspect,
                 };
+                _viewport.CameraMode = _savedCameraMode;
             }
         }
 
         private void CameraToggle_Click(object sender, RoutedEventArgs e)
         {
+            if (_isSyncingCameraSettingsUi)
+                return;
+
             if (_viewport == null || sender is not CheckBox cb) return;
             bool on = cb.IsChecked ?? false;
             switch (cb.Name)
             {
                 case nameof(RotateAroundMouseDownToggle):
+                    _savedRotateAroundMouseDownPoint = on;
                     _viewport.RotateAroundMouseDownPoint = on;
                     break;
                 case nameof(ZoomAroundMouseDownToggle):
+                    _savedZoomAroundMouseDownPoint = on;
                     _viewport.ZoomAroundMouseDownPoint = on;
                     break;
                 case nameof(InertiaToggle):
+                    _savedIsInertiaEnabled = on;
                     _viewport.IsInertiaEnabled = on;
                     break;
                 case nameof(OrthographicToggle):
+                    _savedOrthographicMode = on;
                     ApplyOrthographicMode(on);
                     break;
             }
@@ -1553,10 +1752,13 @@ namespace ForzaTechStudio.Views
         private void ApplyOrthographicMode(bool orthographic)
         {
             if (_viewport == null) return;
+            _savedOrthographicMode = orthographic;
+
             if (orthographic)
             {
                 if (_viewport.Camera is PerspectiveCamera pc)
                 {
+                    _savedFieldOfView = pc.FieldOfView;
                     _viewport.Camera = new OrthographicCamera
                     {
                         Position        = pc.Position,
@@ -1564,7 +1766,9 @@ namespace ForzaTechStudio.Views
                         UpDirection     = pc.UpDirection,
                         FarPlaneDistance  = pc.FarPlaneDistance,
                         NearPlaneDistance = pc.NearPlaneDistance,
-                        Width = (float)pc.LookDirection.Length() * 2,
+                        Width = (float)(_savedOrthographicWidth > 0.001
+                            ? _savedOrthographicWidth
+                            : Math.Max((double)pc.LookDirection.Length() * 2.0, 1.0)),
                         CreateLeftHandSystem = true
                     };
                 }
@@ -1573,6 +1777,7 @@ namespace ForzaTechStudio.Views
             {
                 if (_viewport.Camera is OrthographicCamera oc)
                 {
+                    _savedOrthographicWidth = oc.Width;
                     _viewport.Camera = new PerspectiveCamera
                     {
                         Position        = oc.Position,
@@ -1580,51 +1785,68 @@ namespace ForzaTechStudio.Views
                         UpDirection     = oc.UpDirection,
                         FarPlaneDistance  = oc.FarPlaneDistance,
                         NearPlaneDistance = oc.NearPlaneDistance,
+                        FieldOfView = _savedFieldOfView,
                         CreateLeftHandSystem = true
                     };
                 }
             }
+            RestoreSavedCameraView();
         }
 
         private void CameraSlider_Changed(object sender, Microsoft.UI.Xaml.Controls.Primitives.RangeBaseValueChangedEventArgs e)
         {
+            if (_isSyncingCameraSettingsUi)
+                return;
+
             if (_viewport == null || sender is not Slider sl) return;
             double v = e.NewValue;
             switch (sl.Name)
             {
                 case nameof(ZoomSensSlider):
+                    _savedZoomSensitivity = v;
                     _viewport.ZoomSensitivity = v;
                     if (ZoomSensLabel != null) ZoomSensLabel.Text = v.ToString("F1");
                     break;
                 case nameof(RotSensSlider):
+                    _savedRotationSensitivity = v;
                     _viewport.RotationSensitivity = v;
                     if (RotSensLabel != null) RotSensLabel.Text = v.ToString("F1");
                     break;
                 case nameof(PanSensSlider):
+                    _savedPanSensitivity = v;
                     _viewport.LeftRightPanSensitivity = v;
                     _viewport.UpDownPanSensitivity    = v;
                     if (PanSensLabel != null) PanSensLabel.Text = v.ToString("F1");
                     break;
                 case nameof(InertiaSlider):
+                    _savedCameraInertiaFactor = v;
                     _viewport.CameraInertiaFactor = v;
                     if (InertiaLabel != null) InertiaLabel.Text = v.ToString("F2");
                     break;
                 case nameof(NearPlaneSlider):
+                    _savedNearPlane = v;
                     if (_viewport.Camera is PerspectiveCamera pCamN)
                         pCamN.NearPlaneDistance = v;
+                    else if (_viewport.Camera is OrthographicCamera oCamN)
+                        oCamN.NearPlaneDistance = v;
                     if (NearPlaneLabel != null) NearPlaneLabel.Text = v.ToString("F3");
                     break;
                 case nameof(FarPlaneSlider):
+                    _savedFarPlane = v;
                     if (_viewport.Camera is PerspectiveCamera pCamF)
                         pCamF.FarPlaneDistance = v;
+                    else if (_viewport.Camera is OrthographicCamera oCamF)
+                        oCamF.FarPlaneDistance = v;
                     if (FarPlaneLabel != null) FarPlaneLabel.Text = ((int)v).ToString();
                     break;
                 case nameof(FovSlider):
+                    _savedFieldOfView = v;
                     if (_viewport.Camera is PerspectiveCamera pCamFov)
                         pCamFov.FieldOfView = v;
-                    if (FovLabel != null) FovLabel.Text = $"{(int)v}�";
+                    if (FovLabel != null) FovLabel.Text = $"{(int)v}\u00B0";
                     break;
                 case nameof(ZoomNearLimitSlider):
+                    _savedZoomDistanceLimitNear = v;
                     _viewport.ZoomDistanceLimitNear = v;
                     if (ZoomNearLimitLabel != null) ZoomNearLimitLabel.Text = v.ToString("F3");
                     break;
@@ -1633,7 +1855,15 @@ namespace ForzaTechStudio.Views
 
         private void AutoNearFar_Click(object sender, RoutedEventArgs e)
         {
-            if (_viewport?.Camera is not PerspectiveCamera cam || _modelGroup == null) return;
+            if (_viewport == null || _modelGroup == null) return;
+
+            SDX.Vector3 camPosition;
+            if (_viewport.Camera is PerspectiveCamera pc)
+                camPosition = pc.Position;
+            else if (_viewport.Camera is OrthographicCamera oc)
+                camPosition = oc.Position;
+            else
+                return;
 
             var totalBounds = new SDX.BoundingBox();
             bool hasBounds = false;
@@ -1650,15 +1880,15 @@ namespace ForzaTechStudio.Views
             if (!hasBounds) return;
 
             var center   = (totalBounds.Maximum + totalBounds.Minimum) / 2.0f;
-            var camPos   = cam.Position;
-            var distance = (float)(center - camPos).Length();
+            var distance = (float)(center - camPosition).Length();
             if (distance < 1.0f) distance = 1.0f;
 
             var nearVal = Math.Max(distance * 0.001, 0.01);
             var farVal  = Math.Max(distance * 10, 1000);
 
-            cam.NearPlaneDistance = nearVal;
-            cam.FarPlaneDistance  = farVal;
+            _savedNearPlane = nearVal;
+            _savedFarPlane = farVal;
+            RestoreSavedCameraView();
 
             // Sync sliders if they exist
             if (NearPlaneSlider != null) NearPlaneSlider.Value = Math.Min(nearVal, NearPlaneSlider.Maximum);

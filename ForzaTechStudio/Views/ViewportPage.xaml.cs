@@ -62,6 +62,20 @@ namespace ForzaTechStudio.Views
         private Dictionary<IViewerNode, GeometryModel3D> _renderMap = new();
         private Dictionary<LightGroupNode, GeometryModel3D> _lightDamageRenderMap = new();
         private List<MeshNode> _currentHighlightTargets = new List<MeshNode>();
+        private ViewportTransformGizmo? _transformGizmo;
+        private ViewportGizmoMode _selectedGizmoMode = ViewportGizmoMode.None;
+        private bool _hasTransformSelection = false;
+        private bool _isGizmoDragging = false;
+        private ViewportGizmoHandle _activeGizmoHandle;
+        private MeshTransformAction? _gizmoTransformAction;
+        private readonly List<MeshNode> _gizmoTransformTargets = new();
+        private Vector3 _gizmoPivotWorld;
+        private Vector3 _gizmoDragAxis;
+        private Vector3 _gizmoDragPlaneNormal;
+        private Vector3 _gizmoDragStartPlanePoint;
+        private Vector3 _gizmoDragStartVector;
+        private float _gizmoDragStartAxisParameter;
+        private float _gizmoVisualScale = 1f;
 
         // Multi-selection state (meshes)
         private List<MeshNode> _multiSelectedMeshes = new();
@@ -80,6 +94,23 @@ namespace ForzaTechStudio.Views
         private SDX.Vector3? _savedCameraUpDirection;
         private double _savedFarPlane = 50000;
         private double _savedNearPlane = 0.1;
+        private HelixToolkit.SharpDX.Core.CameraRotationMode _savedCameraRotationMode = HelixToolkit.SharpDX.Core.CameraRotationMode.Turntable;
+        private HelixToolkit.SharpDX.Core.CameraMode _savedCameraMode = HelixToolkit.SharpDX.Core.CameraMode.Inspect;
+        private bool _savedRotateAroundMouseDownPoint = false;
+        private bool _savedZoomAroundMouseDownPoint = false;
+        private bool _savedIsInertiaEnabled = true;
+        private bool _savedOrthographicMode = false;
+        private double _savedZoomSensitivity = 1.0;
+        private double _savedRotationSensitivity = 1.0;
+        private double _savedPanSensitivity = 1.0;
+        private double _savedCameraInertiaFactor = 0.93;
+        private double _savedFieldOfView = 45.0;
+        private double _savedZoomDistanceLimitNear = 0.01;
+        private double _savedOrthographicWidth = 100.0;
+        private bool _isSyncingCameraSettingsUi = false;
+        private bool _isModelScopeDeltaTransformActive = false;
+        private readonly List<MeshNode> _modelScopeDeltaMeshes = new();
+        private readonly Dictionary<MeshNode, (Vector4 Scale, Vector4 Translate, Vector3 Rotation)> _modelScopeDeltaSnapshots = new();
         
         private Dictionary<IViewerNode, TreeViewNode> _treeNodeMap = new();
 
@@ -109,6 +140,7 @@ namespace ForzaTechStudio.Views
             RemoveMeshMaterialParameterCommand = new RelayCommand<ShaderParameter>(RemoveMeshMaterialParameter);
             this.InitializeComponent();
             this.NavigationCacheMode = NavigationCacheMode.Required;
+            this.KeyDown += ViewportPage_KeyDown;
             this.Loaded += Page_Loaded;
             this.Unloaded += Page_Unloaded;
             ViewModel.RequestCloseRoot += ViewModel_RequestCloseRoot;
@@ -125,6 +157,8 @@ namespace ForzaTechStudio.Views
         {
             this.ActualThemeChanged -= ViewportPage_ActualThemeChanged;
 
+            CancelViewportTransformForUnload();
+            CancelActiveGizmoDrag();
             DisposeFileWatch();
             StopStatsOverlay();
             StopAnimTimer();
@@ -132,14 +166,7 @@ namespace ForzaTechStudio.Views
 
             if (_viewport != null)
             {
-                if (_viewport.Camera is PerspectiveCamera cam)
-                {
-                    _savedCameraPosition    = cam.Position;
-                    _savedCameraLookDirection = cam.LookDirection;
-                    _savedCameraUpDirection = cam.UpDirection;
-                    _savedFarPlane  = cam.FarPlaneDistance;
-                    _savedNearPlane = cam.NearPlaneDistance;
-                }
+                SaveCameraStateFromViewport();
 
                 var effectsManager = _viewport.EffectsManager;
 
@@ -154,6 +181,8 @@ namespace ForzaTechStudio.Views
 
                 _viewport     = null;
                 _gridLines    = null;
+                _transformAxisGuide = null;
+                _transformGizmo = null;
             }
         }
 
@@ -168,22 +197,15 @@ namespace ForzaTechStudio.Views
         private void Page_Loaded(object sender, RoutedEventArgs e)
         {
             Initialize3DView();
+            RefreshTransformSelectionAvailability();
             InitFileWatch();
             
             this.ActualThemeChanged += ViewportPage_ActualThemeChanged;
             UpdateViewportTheme();
             
-            if (_savedCameraPosition.HasValue && _savedCameraLookDirection.HasValue && _savedCameraUpDirection.HasValue)
-            {
-                if (_viewport?.Camera is PerspectiveCamera cam)
-                {
-                    cam.Position = _savedCameraPosition.Value;
-                    cam.LookDirection = _savedCameraLookDirection.Value;
-                    cam.UpDirection = _savedCameraUpDirection.Value;
-                    cam.FarPlaneDistance = _savedFarPlane;
-                    cam.NearPlaneDistance = _savedNearPlane;
-                }
-            }
+            RestoreSavedCameraView();
+            ApplySavedCameraSettingsToViewport();
+            SyncCameraSettingsUiFromState();
 
             InitializeStatsOverlay();
             UpdateUndoRedoButtons();
@@ -229,7 +251,8 @@ namespace ForzaTechStudio.Views
                 BackgroundColor = Color.FromArgb(255, 30, 30, 30),
                 ShowCoordinateSystem = true,
                 ShowViewCube = true,
-                EffectsManager = new DefaultEffectsManager()
+                EffectsManager = new DefaultEffectsManager(),
+                IsTabStop = true
             };
             
             //had to use custom cube texture to get the L/R directions to display correct due to lefthandsystem
@@ -245,13 +268,20 @@ namespace ForzaTechStudio.Views
             catch { }
 
             _viewport.OnMouse3DDown += Viewport_OnMouse3DDown;
+            _viewport.KeyDown += ViewportPage_KeyDown;
+            _viewport.PointerMoved += Viewport_PointerMovedForTransform;
+            _viewport.PointerPressed += Viewport_PointerPressedForTransform;
+            _viewport.PointerReleased += Viewport_PointerReleasedForTransform;
+            _viewport.PointerCanceled += Viewport_PointerReleasedForTransform;
 
             _viewport.Camera = new PerspectiveCamera
             {
                 Position = new SDX.Vector3(50, 50, 50),
                 LookDirection = new SDX.Vector3(-50, -50, -50),
                 UpDirection = new SDX.Vector3(0, 1, 0),
-                FarPlaneDistance = 50000,
+                FarPlaneDistance = _savedFarPlane,
+                NearPlaneDistance = _savedNearPlane,
+                FieldOfView = _savedFieldOfView,
                 CreateLeftHandSystem = true
             };
 
@@ -263,6 +293,8 @@ namespace ForzaTechStudio.Views
                 camera.FarPlaneDistance = _savedFarPlane;
                 camera.NearPlaneDistance = _savedNearPlane;
             }
+
+            ApplySavedCameraSettingsToViewport();
 
             if (_modelGroup == null)
             {
@@ -316,6 +348,11 @@ namespace ForzaTechStudio.Views
             };
             _viewport.Items.Add(_lightHighlightModel);
 
+            _viewport.EnableRenderOrder = true;
+            _transformGizmo = new ViewportTransformGizmo();
+            _transformGizmo.SetMode(_selectedGizmoMode);
+            _viewport.Items.Add(_transformGizmo.Root);
+
             DispatcherQueue.TryEnqueue(Microsoft.UI.Dispatching.DispatcherQueuePriority.Normal, () =>
             {
                 if (_viewport != null && !ViewportContainer.Children.Contains(_viewport))
@@ -325,6 +362,20 @@ namespace ForzaTechStudio.Views
 
         private void Viewport_OnMouse3DDown(object? sender, MouseDown3DEventArgs e)
         {
+            if (TryHandleActiveTransformMouse3DDown(e))
+                return;
+
+            if (TryBeginGizmoDrag(e))
+                return;
+
+            if (IsGizmoSelectionModeActive())
+            {
+                if (e.OriginalInputEventArgs is Microsoft.UI.Xaml.Input.PointerRoutedEventArgs routedArgs)
+                    routedArgs.Handled = true;
+
+                return;
+            }
+
             bool isCtrlHeld = false;
             if (e.OriginalInputEventArgs is Microsoft.UI.Xaml.Input.PointerRoutedEventArgs args)
             {
@@ -533,6 +584,7 @@ namespace ForzaTechStudio.Views
             bool wasActive = _isMultiSelectActive || _isMultiLightSelectActive;
             _multiSelectedMeshes.Clear();
             _multiSelectSnapshots.Clear();
+            ClearModelScopeDeltaTransformState();
             _isMultiSelectActive = false;
             _multiSelectedLightGroups.Clear();
             _multiSelectLightSnapshots.Clear();

@@ -150,6 +150,69 @@ namespace ForzaTechStudio.Views
                  return;
              }
 
+             // ModelBin/material/all-mesh conflicting scope delta mode.
+             if (_isModelScopeDeltaTransformActive && _modelScopeDeltaMeshes.Count > 0)
+             {
+                 float dSX = float.TryParse(ScaleX.Text, System.Globalization.NumberStyles.Float,
+                     System.Globalization.CultureInfo.InvariantCulture, out float vdSX) ? vdSX : 0f;
+                 float dSY = float.TryParse(ScaleY.Text, System.Globalization.NumberStyles.Float,
+                     System.Globalization.CultureInfo.InvariantCulture, out float vdSY) ? vdSY : 0f;
+                 float dSZ = float.TryParse(ScaleZ.Text, System.Globalization.NumberStyles.Float,
+                     System.Globalization.CultureInfo.InvariantCulture, out float vdSZ) ? vdSZ : 0f;
+                 float dRX = float.TryParse(RotX.Text, System.Globalization.NumberStyles.Float,
+                     System.Globalization.CultureInfo.InvariantCulture, out float vdRX) ? vdRX : 0f;
+                 float dRY = float.TryParse(RotY.Text, System.Globalization.NumberStyles.Float,
+                     System.Globalization.CultureInfo.InvariantCulture, out float vdRY) ? vdRY : 0f;
+                 float dRZ = float.TryParse(RotZ.Text, System.Globalization.NumberStyles.Float,
+                     System.Globalization.CultureInfo.InvariantCulture, out float vdRZ) ? vdRZ : 0f;
+                 float dTX = float.TryParse(TransX.Text, System.Globalization.NumberStyles.Float,
+                     System.Globalization.CultureInfo.InvariantCulture, out float vdTX) ? vdTX : 0f;
+                 float dTY = float.TryParse(TransY.Text, System.Globalization.NumberStyles.Float,
+                     System.Globalization.CultureInfo.InvariantCulture, out float vdTY) ? vdTY : 0f;
+                 float dTZ = float.TryParse(TransZ.Text, System.Globalization.NumberStyles.Float,
+                     System.Globalization.CultureInfo.InvariantCulture, out float vdTZ) ? vdTZ : 0f;
+
+                 var targetMeshes = _modelScopeDeltaMeshes
+                     .Where(mesh => mesh.GeometryData?.SourceMesh != null && _modelScopeDeltaSnapshots.ContainsKey(mesh))
+                     .Distinct()
+                     .ToList();
+
+                 var scopeUndoAction = BeginTransformAction(targetMeshes, "ModelBin Scope Transform");
+
+                 foreach (var mesh in targetMeshes)
+                 {
+                     if (mesh.GeometryData?.SourceMesh == null) continue;
+                     if (!_modelScopeDeltaSnapshots.TryGetValue(mesh, out var snap)) continue;
+
+                     var meshBlob = mesh.GeometryData.SourceMesh;
+                     float newSX = snap.Scale.X + dSX;
+                     float newSY = snap.Scale.Y + dSY;
+                     float newSZ = snap.Scale.Z + dSZ;
+                     float newRX = snap.Rotation.X + dRX;
+                     float newRY = snap.Rotation.Y + dRY;
+                     float newRZ = snap.Rotation.Z + dRZ;
+                     float newTX = snap.Translate.X + dTX;
+                     float newTY = snap.Translate.Y + dTY;
+                     float newTZ = snap.Translate.Z + dTZ;
+
+                     meshBlob.PositionScale = new Vector4(newSX, newSY, newSZ, snap.Scale.W);
+                     meshBlob.PositionTranslate = new Vector4(newTX, newTY, newTZ, snap.Translate.W);
+                     mesh.GeometryData.RotationEulerDegrees = new Vector3(newRX, newRY, newRZ);
+
+                     bool hasBone = mesh.GeometryData.SourceBone != null &&
+                                    BoneTransformService.IsSignificantBone(mesh.GeometryData.BoneIndex);
+                     if (hasBone)
+                         UpdateMeshRenderingWithBoneTransform(mesh, mesh.GeometryData.BoneTransform);
+                     else
+                         UpdateMeshRendering(mesh, newSX, newSY, newSZ, newTX, newTY, newTZ);
+                 }
+
+                 CommitTransformAction(scopeUndoAction);
+                 RefreshHighlight();
+                 RefreshOverlays();
+                 return;
+             }
+
              if (ModelBinSelector.SelectedItem is not ModelBinNode modelBin) return;
              var meshScope = MeshSelector.SelectedItem as MeshScopeItem;
              if (meshScope == null) return;

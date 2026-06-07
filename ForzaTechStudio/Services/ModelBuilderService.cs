@@ -13,11 +13,11 @@ namespace ForzaTechStudio.Services
 {
     public class ObjectBuildData
     {
-        public ProcessedGeometry Geometry { get; set; }
-        public string MaterialName { get; set; }
-        public MaterialBlob MaterialBlob { get; set; }
-        public string ObjectName { get; set; }
-        public string MaterialRelativePath { get; set; }
+        public ProcessedGeometry Geometry { get; set; } = null!;
+        public string MaterialName { get; set; } = "Default";
+        public MaterialBlob? MaterialBlob { get; set; }
+        public string ObjectName { get; set; } = "Model";
+        public string? MaterialRelativePath { get; set; }
 
         public bool IsOpaque { get; set; } = true;
         public bool IsDecal { get; set; }
@@ -32,8 +32,8 @@ namespace ForzaTechStudio.Services
     {
         public int ElementCount { get; set; }
         public int Stride { get; set; }
-        public string NormalFormat { get; set; }
-        public string TangentFormat { get; set; }
+        public string NormalFormat { get; set; } = string.Empty;
+        public string TangentFormat { get; set; } = string.Empty;
         public int TexcoordCount { get; set; }
         public int TangentCount { get; set; }
         public bool HasColor { get; set; }
@@ -41,6 +41,10 @@ namespace ForzaTechStudio.Services
 
     public class ModelBuilderService
     {
+        private const string GamePathPrefix = @"Game:\";
+        private const string MaterialLibraryRelativePrefix = @"Media\cars\_library\materials\";
+        private const string MaterialLibraryGamePathPrefix = GamePathPrefix + MaterialLibraryRelativePrefix;
+
         private readonly GeometryProcessingService _geometryService;
 
         public ModelBuilderService()
@@ -70,7 +74,8 @@ namespace ForzaTechStudio.Services
 
         public Bundle CreateBundleFromObjects(List<ObjectBuildData> objects, ForzaGameTarget target = ForzaGameTarget.FH5)
         {
-            if (objects == null || objects.Count == 0) return null;
+            if (objects == null || objects.Count == 0)
+                throw new ArgumentException("At least one object is required.", nameof(objects));
 
             // Get the correct version numbers for the target game
             var (targetBundleVer, targetModlVer, targetMeshVer, targetVlayVer) =
@@ -415,8 +420,8 @@ namespace ForzaTechStudio.Services
             public int TexcoordCount;
             public int TangentCount;
             public bool HasColor;
-            public string NormalFormatName;
-            public string TangentFormatName;
+            public string NormalFormatName = string.Empty;
+            public string TangentFormatName = string.Empty;
 
             // DXGI formats for vertex encoding
             public DXGI_FORMAT NormalFormat;
@@ -647,18 +652,7 @@ namespace ForzaTechStudio.Services
             };
             
             // Construct the material path using the relative path if available
-            string materialPath;
-            if (!string.IsNullOrEmpty(relativePath))
-            {
-                materialPath = $"Game:\\Media\\cars\\_library\\materials\\{relativePath}";
-            }
-            else
-            {
-                // Fallback 
-                materialPath = $"Game:\\Media\\cars\\_library\\materials\\{materialName ?? "error"}.materialbin";
-            }
-            
-            matiBlob.Path = materialPath;
+            matiBlob.Path = BuildMaterialLibraryGamePath(materialName, relativePath);
             
             // Add Name metadata
             matiBlob.Metadatas.Add(new NameMetadata 
@@ -697,6 +691,42 @@ namespace ForzaTechStudio.Services
             });
             
             return materialBlob;
+        }
+
+        public static string BuildMaterialLibraryGamePath(string? materialName, string? relativePath = null)
+        {
+            string path = string.IsNullOrWhiteSpace(relativePath)
+                ? (string.IsNullOrWhiteSpace(materialName) ? "error" : materialName.Trim())
+                : relativePath.Trim();
+
+            path = path.Replace('/', '\\').TrimStart('\\');
+
+            if (path.StartsWith(GamePathPrefix, StringComparison.OrdinalIgnoreCase))
+            {
+                string gameRelativePath = path.Substring(GamePathPrefix.Length).TrimStart('\\');
+                if (gameRelativePath.StartsWith(MaterialLibraryRelativePrefix, StringComparison.OrdinalIgnoreCase))
+                {
+                    string materialRelativePath = gameRelativePath.Substring(MaterialLibraryRelativePrefix.Length);
+                    return MaterialLibraryGamePathPrefix + EnsureMaterialbinExtension(materialRelativePath);
+                }
+
+                return EnsureMaterialbinExtension(path);
+            }
+
+            if (path.StartsWith(MaterialLibraryRelativePrefix, StringComparison.OrdinalIgnoreCase))
+            {
+                path = path.Substring(MaterialLibraryRelativePrefix.Length);
+            }
+
+            return MaterialLibraryGamePathPrefix + EnsureMaterialbinExtension(path);
+        }
+
+        private static string EnsureMaterialbinExtension(string path)
+        {
+            path = path.TrimStart('\\');
+            return path.EndsWith(".materialbin", StringComparison.OrdinalIgnoreCase)
+                ? path
+                : $"{path}.materialbin";
         }
 
         private MaterialBlob CloneMaterialBlob(MaterialBlob source)

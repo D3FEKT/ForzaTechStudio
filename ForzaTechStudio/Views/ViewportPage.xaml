@@ -16,6 +16,14 @@
 
     <Page.KeyboardAccelerators>
         <KeyboardAccelerator Modifiers="Control" Key="A" Invoked="SelectAllVisibleMeshes_Invoked"/>
+        <KeyboardAccelerator Key="G" Invoked="TransformKeyboardAccelerator_Invoked"/>
+        <KeyboardAccelerator Key="R" Invoked="TransformKeyboardAccelerator_Invoked"/>
+        <KeyboardAccelerator Key="S" Invoked="TransformKeyboardAccelerator_Invoked"/>
+        <KeyboardAccelerator Key="X" Invoked="TransformKeyboardAccelerator_Invoked"/>
+        <KeyboardAccelerator Key="Y" Invoked="TransformKeyboardAccelerator_Invoked"/>
+        <KeyboardAccelerator Key="Z" Invoked="TransformKeyboardAccelerator_Invoked"/>
+        <KeyboardAccelerator Key="Escape" Invoked="TransformKeyboardAccelerator_Invoked"/>
+        <KeyboardAccelerator Key="Enter" Invoked="TransformKeyboardAccelerator_Invoked"/>
     </Page.KeyboardAccelerators>
 
     <Page.Resources>
@@ -260,8 +268,8 @@
                                            Margin="0,0,0,0"/>
 
                                 <TextBlock x:Name="ConflictingTransformsText" 
-                                           Text="Conflicting transform values" 
-                                           Foreground="Red" 
+                                           Text="" 
+                                           Foreground="{ThemeResource TextFillColorSecondaryBrush}" 
                                            FontSize="11" 
                                            HorizontalAlignment="Center" 
                                            Visibility="Collapsed"
@@ -1661,30 +1669,53 @@
             </Button>
         </Border>
 
-        <!-- Command Bar (spans full page width) -->
-        <CommandBar Grid.Row="0" Grid.ColumnSpan="3"
-                    DefaultLabelPosition="Right"
-                    Background="{ThemeResource LayerFillColorDefaultBrush}">
-            <CommandBar.Resources>
+        <!-- Compact two-row command area (spans full page width) -->
+        <Grid Grid.Row="0" Grid.ColumnSpan="3"
+              Background="{ThemeResource LayerFillColorDefaultBrush}"
+              MinHeight="78">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="Auto"/>
+                <ColumnDefinition Width="*"/>
+            </Grid.ColumnDefinitions>
+            <Grid.Resources>
                 <Style TargetType="AppBarButton" BasedOn="{StaticResource AppBarButtonRevealLabelsOnRightStyle}">
-                    <Setter Property="FontSize" Value="11"/>
+                    <Setter Property="FontSize" Value="10"/>
                     <Setter Property="MinWidth" Value="0"/>
                     <Setter Property="Padding" Value="4,0"/>
+                    <Setter Property="Height" Value="36"/>
                 </Style>
                 <Style TargetType="AppBarToggleButton" BasedOn="{StaticResource AppBarToggleButtonRevealLabelsOnRightStyle}">
-                    <Setter Property="FontSize" Value="11"/>
+                    <Setter Property="FontSize" Value="10"/>
                     <Setter Property="MinWidth" Value="0"/>
                     <Setter Property="Padding" Value="4,0"/>
+                    <Setter Property="Height" Value="36"/>
                 </Style>
-            </CommandBar.Resources>
-            <CommandBar.Content>
-                <Border VerticalAlignment="Stretch" Padding="8,0,12,0">
-                    <TextBlock Text="3D Viewer"
-                               FontSize="28"
-                               FontWeight="SemiBold"
-                               VerticalAlignment="Center"/>
-                </Border>
-            </CommandBar.Content>
+            </Grid.Resources>
+
+            <Border Grid.Column="0"
+                    VerticalAlignment="Stretch"
+                    Padding="8,0,12,0">
+                <TextBlock Text="3D Viewer"
+                           FontSize="22"
+                           FontWeight="SemiBold"
+                           VerticalAlignment="Center"/>
+            </Border>
+
+            <Grid Grid.Column="1" RowSpacing="0">
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="38"/>
+                    <RowDefinition Height="38"/>
+                </Grid.RowDefinitions>
+
+                <CommandBar Grid.Row="0"
+                            DefaultLabelPosition="Right"
+                            ClosedDisplayMode="Compact"
+                            Height="38"
+                            MinHeight="0"
+                            Padding="0"
+                            Margin="0"
+                            HorizontalAlignment="Stretch"
+                            Background="Transparent">
 
             <!-- File: Open / Save / Save As -->
             <AppBarButton Click="OpenFiles_Click"
@@ -1817,7 +1848,17 @@
                 </AppBarButton.KeyboardAccelerators>
             </AppBarButton>
 
-            <AppBarSeparator/>
+                </CommandBar>
+
+                <CommandBar Grid.Row="1"
+                            DefaultLabelPosition="Right"
+                            ClosedDisplayMode="Compact"
+                            Height="38"
+                            MinHeight="0"
+                            Padding="0"
+                            Margin="0"
+                            HorizontalAlignment="Stretch"
+                            Background="Transparent">
 
             <!-- Export -->
             <AppBarButton Label="Export" ToolTipService.ToolTip="Export model">
@@ -2374,13 +2415,74 @@
                 </AppBarButton.Flyout>
             </AppBarButton>
 
-        </CommandBar>
+                </CommandBar>
+            </Grid>
+        </Grid>
 
         <!-- Right Panel - 3D Viewport -->
         <Grid Grid.Row="1" Grid.Column="2" Background="{ThemeResource LayerFillColorDefaultBrush}">
             <!-- 3D Viewport -->
             <Grid x:Name="ViewportContainer" Background="{ThemeResource LayerFillColorDefaultBrush}"
                   IsTabStop="True">
+                <!-- Transform mode overlay -->
+                <StackPanel x:Name="ViewportTransformOverlay"
+                            Orientation="Horizontal"
+                            Spacing="4"
+                            HorizontalAlignment="Left"
+                            VerticalAlignment="Top"
+                            Margin="8"
+                            Canvas.ZIndex="4">
+                    <Button x:Name="MoveTransformButton"
+                            Width="28"
+                            Height="28"
+                            MinWidth="28"
+                            MinHeight="28"
+                            IsEnabled="False"
+                            Padding="0"
+                            Style="{StaticResource SubtleButtonStyle}"
+                            Click="MoveTransformButton_Click"
+                            ToolTipService.ToolTip="Move (G)">
+                        <FontIcon Glyph="&#xE7C2;" FontSize="13"/>
+                    </Button>
+                    <Button x:Name="RotateTransformButton"
+                            Width="28"
+                            Height="28"
+                            MinWidth="28"
+                            MinHeight="28"
+                            IsEnabled="False"
+                            Padding="0"
+                            Style="{StaticResource SubtleButtonStyle}"
+                            Click="RotateTransformButton_Click"
+                            ToolTipService.ToolTip="Rotate (R)">
+                        <FontIcon Glyph="&#xE72C;" FontSize="13"/>
+                    </Button>
+                    <Button x:Name="ScaleTransformButton"
+                            Width="28"
+                            Height="28"
+                            MinWidth="28"
+                            MinHeight="28"
+                            IsEnabled="False"
+                            Padding="0"
+                            Style="{StaticResource SubtleButtonStyle}"
+                            Click="ScaleTransformButton_Click"
+                            ToolTipService.ToolTip="Scale (S)">
+                        <FontIcon Glyph="&#xE8B9;" FontSize="13"/>
+                    </Button>
+                    <Border x:Name="TransformHotkeyStatusBadge"
+                            Background="#80000000"
+                            CornerRadius="3"
+                            Padding="6,2"
+                            Margin="4,0,0,0"
+                            VerticalAlignment="Center"
+                            Visibility="Collapsed">
+                        <TextBlock x:Name="TransformHotkeyStatusText"
+                                   Text=""
+                                   Foreground="White"
+                                   FontSize="11"
+                                   Opacity="0.88"/>
+                    </Border>
+                </StackPanel>
+
                 <!-- Stats Overlay -->
                 <Border x:Name="StatsOverlay"
                         Background="#80000000"

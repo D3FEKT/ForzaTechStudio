@@ -683,6 +683,7 @@ namespace ForzaTechStudio.Views
             if (meshList.Count == 0)
             {
                 _highlightModel.Visibility = Visibility.Collapsed;
+                HideTransformGizmo();
                 return;
             }
 
@@ -716,10 +717,12 @@ namespace ForzaTechStudio.Views
                 mergedGeo.TriangleIndices = ind;
                 _highlightModel.Geometry = mergedGeo;
                 _highlightModel.Visibility = Visibility.Visible;
+                UpdateTransformGizmoForTargets(meshList);
             }
             else
             {
                  _highlightModel.Visibility = Visibility.Collapsed;
+                 HideTransformGizmo();
             }
         }
 
@@ -763,6 +766,7 @@ namespace ForzaTechStudio.Views
         private void UpdateHighlightForDamageMesh(DamageMeshNode node)
         {
             if (_highlightModel == null) return;
+            HideTransformGizmo();
             _currentHighlightTargets = new List<MeshNode>();
             _currentLightHighlightTargets = new List<LightGroupNode>();
             if (_lightHighlightModel != null)
@@ -789,6 +793,7 @@ namespace ForzaTechStudio.Views
         private void UpdateHighlightForLightGroups(IEnumerable<LightGroupNode> groups)
         {
             if (_lightHighlightModel == null) return;
+            HideTransformGizmo();
 
             var groupList = groups?.ToList() ?? new List<LightGroupNode>();
             _currentLightHighlightTargets = groupList;
@@ -835,6 +840,7 @@ namespace ForzaTechStudio.Views
         private void UpdateHighlightForCarbinModel(CarbinModelNode node)
         {
             if (_highlightModel == null) return;
+            HideTransformGizmo();
 
             _currentHighlightTargets = new List<MeshNode>();
             _currentLightHighlightTargets = new List<LightGroupNode>();
