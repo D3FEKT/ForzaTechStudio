@@ -1085,7 +1085,10 @@ namespace ForzaTechStudio.ViewModels
 
                         var compactedPositions = new Vector3[usedVertexIndices.Count];
                         var compactedNormals = new Vector3[usedVertexIndices.Count];
-                        var compactedUVs = new Vector2[usedVertexIndices.Count];
+                        int uvChannelCount = rawScene.UVChannels?.Length ?? 0;
+                        var compactedUVChannels = new Vector2[uvChannelCount][];
+                        for (int c = 0; c < uvChannelCount; c++)
+                            compactedUVChannels[c] = new Vector2[usedVertexIndices.Count];
                         var compactedTangents = new Vector4[usedVertexIndices.Count];
 
                         for (int i = 0; i < usedVertexIndices.Count; i++)
@@ -1093,7 +1096,11 @@ namespace ForzaTechStudio.ViewModels
                             int oldIdx = usedVertexIndices[i];
                             compactedPositions[i] = rawScene.Positions[oldIdx];
                             compactedNormals[i] = oldIdx < rawScene.Normals.Length ? rawScene.Normals[oldIdx] : Vector3.UnitY;
-                            compactedUVs[i] = oldIdx < rawScene.UVs.Length ? rawScene.UVs[oldIdx] : Vector2.Zero;
+                            for (int c = 0; c < uvChannelCount; c++)
+                            {
+                                var srcChannel = rawScene.UVChannels[c];
+                                compactedUVChannels[c][i] = oldIdx < srcChannel.Length ? srcChannel[oldIdx] : Vector2.Zero;
+                            }
                             compactedTangents[i] = oldIdx < rawScene.Tangents.Length ? rawScene.Tangents[oldIdx] : new Vector4(1, 0, 0, 1);
                         }
 
@@ -1143,7 +1150,7 @@ namespace ForzaTechStudio.ViewModels
                             Name = group.Name,
                             Positions = compactedPositions,
                             Normals = finalNormals,
-                            UVs = compactedUVs,
+                            UVChannels = compactedUVChannels,
                             Tangents = compactedTangents,
                             Indices = remappedIndices
                         };

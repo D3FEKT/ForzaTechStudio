@@ -1249,178 +1249,19 @@ namespace ForzaTechStudio.Views
 
         private async void SaveCurrentModel_Click(object sender, RoutedEventArgs e)
         {
-             var selectedSaveNodes = GetSelectedSaveFileNodes();
-             if (selectedSaveNodes.Count > 1)
-             {
-                 await SaveSelectedFileNodesAsync(selectedSaveNodes, saveAsFolder: false);
-                 return;
-             }
+            var viewportSelectionNodes = GetViewportMultiSelectionSaveFileNodes();
+            if (ShouldShowViewportSaveFlyout() && viewportSelectionNodes.Count > 0)
+            {
+                ShowSaveCurrentOrSelectedFlyout(viewportSelectionNodes);
+                return;
+            }
 
-             // Check if it's a LightGroupNode
-             if (ModelBinSelector.SelectedItem is LightGroupNode lightGroup)
-             {
-                 await SaveLightGroup(lightGroup);
-                 return;
-             }
-             
-             // Check if it's a LightsBinNode
-             if (ModelBinSelector.SelectedItem is LightsBinNode lightsBin)
-             {
-                 await SaveSelectedFileNodesAsync(new IViewerNode[] { lightsBin }, saveAsFolder: false);
-                 return;
-             }
-             
-             if (ModelBinSelector.SelectedItem is not ModelBinNode modelBin)
-             {
-                 await ShowError("No valid model or lights file selected to save.");
-                 return;
-             }
-
-             try
-             {
-                 IsLoading = true;
-                 LoadingStatus = "Saving changes...";
-
-                 // Bake any rotation transforms into vertex data before saving
-                 BakeRotationsIntoVertexData(modelBin);
-
-                 // Check if it's from a ZIP file
-                 if (!string.IsNullOrEmpty(modelBin.SourceZipPath) && !string.IsNullOrEmpty(modelBin.ZipEntryName))
-                 {
-                     // Save back to ZIP
-                     bool convertLods = ConvertLodsToLod0Toggle?.IsChecked == true;
-                     await Task.Run(() =>
-                     {
-                         var lodOriginals = PatchLodConversionForSave(modelBin.Bundle, convertLods);
-                         try
-                         {
-                             using var ms = new MemoryStream();
-                             modelBin.Bundle.SerializeConverted(ms);
-                             var bytes = ms.ToArray();
-                             ZipArchiveHelper.ReplaceEntry(modelBin.SourceZipPath, modelBin.ZipEntryName, bytes);
-                         }
-                         finally
-                         {
-                             RevertLodConversionAfterSave(lodOriginals);
-                         }
-                     });
-
-                     var dialog = new ContentDialog
-                     {
-                         Title = "Success",
-                         Content = $"Updated entry '{modelBin.ZipEntryName}' inside ZIP archive.\n\nModel and skeleton saved.",
-                         CloseButtonText = "OK",
-                         XamlRoot = this.XamlRoot
-                     };
-                     await dialog.ShowAsync();
-                 }
-                 // Check if it's a standalone file with a known path
-                 else if (!string.IsNullOrEmpty(modelBin.FilePath) && File.Exists(modelBin.FilePath))
-                 {
-                     // Save over the current file
-                     bool convertLods = ConvertLodsToLod0Toggle?.IsChecked == true;
-                     await Task.Run(() =>
-                     {
-                         var lodOriginals = PatchLodConversionForSave(modelBin.Bundle, convertLods);
-                         try
-                         {
-                             using var fs = File.Create(modelBin.FilePath);
-                             modelBin.Bundle.SerializeConverted(fs);
-                         }
-                         finally
-                         {
-                             RevertLodConversionAfterSave(lodOriginals);
-                         }
-                     });
-
-                     var dialog = new ContentDialog
-                     {
-                         Title = "Success",
-                         Content = $"Model saved successfully to:\n{Path.GetFileName(modelBin.FilePath)}\n\nModel and skeleton saved.",
-                         CloseButtonText = "OK",
-                         XamlRoot = this.XamlRoot
-                     };
-                     await dialog.ShowAsync();
-                 }
-                 else
-                 {
-                     // No known file path - use Save As behavior
-                     await SaveModelBinAs(modelBin);
-                 }
-             }
-             catch (Exception ex)
-             {
-                 await ShowError($"Failed to save model.\n\nError: {ex.Message}");
-             }
-             finally
-             {
-                 IsLoading = false;
-                 LoadingStatus = "";
-             }
+            await SaveCurrentAsync(saveAs: false);
         }
 
         private async void SaveCurrentModelAs_Click(object sender, RoutedEventArgs e)
         {
-             var selectedSaveNodes = GetSelectedSaveFileNodes();
-             if (selectedSaveNodes.Count > 1)
-             {
-                 await SaveSelectedFileNodesAsync(selectedSaveNodes, saveAsFolder: true);
-                 return;
-             }
-
-             // Check if it's a LightGroupNode
-             if (ModelBinSelector.SelectedItem is LightGroupNode lightGroup)
-             {
-                 // For light groups, save the entire lights.bin file as
-                 var parent = lightGroup.Parent;
-                 while (parent != null && !(parent is LightsBinNode))
-                 {
-                     parent = parent.Parent;
-                 }
-
-                 if (parent is LightsBinNode lightsBin)
-                 {
-                     await SaveLightsBinAs(lightsBin);
-                 }
-                 else
-                 {
-                     await ShowError("Cannot find parent lights.bin file.");
-                 }
-                 return;
-             }
-             
-             // Check if it's a LightsBinNode
-             if (ModelBinSelector.SelectedItem is LightsBinNode lightsBinNode)
-             {
-                 await SaveLightsBinAs(lightsBinNode);
-                 return;
-             }
-             
-             if (ModelBinSelector.SelectedItem is not ModelBinNode modelBin)
-             {
-                 await ShowError("No valid model or lights file selected to save.");
-                 return;
-             }
-
-             try
-             {
-                 IsLoading = true;
-                 LoadingStatus = "Saving changes...";
-
-                 // Bake any rotation transforms into vertex data before saving
-                 BakeRotationsIntoVertexData(modelBin);
-
-                 await SaveModelBinAs(modelBin);
-             }
-             catch (Exception ex)
-             {
-                 await ShowError($"Failed to save model.\n\nError: {ex.Message}");
-             }
-             finally
-             {
-                 IsLoading = false;
-                 LoadingStatus = "";
-             }
+            await SaveCurrentAsync(saveAs: true);
         }
 
         private async Task SaveModelBinAs(ModelBinNode modelBin)

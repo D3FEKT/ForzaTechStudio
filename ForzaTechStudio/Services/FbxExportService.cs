@@ -55,8 +55,7 @@ namespace ForzaTechStudio.Services
             long MatNodeId(int mi)      => 900_000L + mi;
             long TexNodeId(int mi)      => 950_000L + mi;
 
-            var axisScale = opt.GetAxisScaleMatrix();
-            bool hasAxisScale = opt.HasAxisScale;
+            var exportTransform = GetFbxExportTransform(opt);
             var bones = CollectBones(models, mbNodeId, opt);
 
             var now = DateTime.UtcNow;
@@ -143,7 +142,7 @@ namespace ForzaTechStudio.Services
             {
                 var (_, _, meshName, data) = allMeshes[fi];
                 string sn = SanitiseName(meshName);
-                AsciiWriteGeometry(sb, MeshGeoId(fi), sn, data, opt, axisScale, hasAxisScale);
+                AsciiWriteGeometry(sb, MeshGeoId(fi), sn, data, opt, exportTransform);
                 AsciiWriteMeshModel(sb, MeshModelId(fi), sn);
             }
 
@@ -181,7 +180,7 @@ namespace ForzaTechStudio.Services
                 sb.AppendLine("\t}");
             }
 
-            AsciiWriteBones(sb, bones, axisScale);
+            AsciiWriteBones(sb, bones, exportTransform);
 
             sb.AppendLine("}");
             sb.AppendLine();
@@ -225,18 +224,21 @@ namespace ForzaTechStudio.Services
 
         // ASCII Geometry node 
 
-        private static void AsciiWriteGeometry(StringBuilder sb, long id, string name, ForzaGeometryData data, ExportOptions opt, Matrix4x4 axisScale, bool hasAxisScale)
+        private static void AsciiWriteGeometry(StringBuilder sb, long id, string name, ForzaGeometryData data, ExportOptions opt, Matrix4x4 exportTransform)
         {
-            var (worldVerts, indices) = ResolveGeometry(data, axisScale, hasAxisScale);
+            var (worldVerts, indices) = ResolveGeometry(data, exportTransform);
             int vc = worldVerts.Length;
-            bool hasN = data.Normals != null && data.Normals.Length == vc;
-            bool hasU = opt.IncludeUVs && data.UVs != null && data.UVs.Length == vc;
-            bool hasColors = opt.IncludeVertexColors && data.Colors != null && data.Colors.Length == vc;
+            var normals = data.Normals;
+            var colors = data.Colors;
+            bool hasN = normals != null && normals.Length == vc;
+            var uvChannels = GetExportUvChannels(data, opt, vc);
+            bool hasColors = opt.IncludeVertexColors && colors != null && colors.Length == vc;
 
             var rot    = data.GetRotationMatrix();
             bool hasRot  = rot != Matrix4x4.Identity;
             bool hasBone = data.BoneTransform != Matrix4x4.Identity;
-            var poly = BuildPolyIdx(indices);
+            var polygonOrder = BuildFbxPolygonVertexOrder(indices);
+            var poly = BuildFbxPolygonVertexIndices(polygonOrder);
 
             sb.AppendLine($"\tGeometry: {id}, \"Geometry::{name}\", \"Mesh\" {{");
 
@@ -260,7 +262,7 @@ namespace ForzaTechStudio.Services
             sb.AppendLine(); sb.AppendLine("\t\t}");
 
             // Normals
-            if (hasN)
+            if (hasN && normals != null)
             {
                 sb.AppendLine("\t\tLayerElementNormal: 0 {");
                 sb.AppendLine("\t\t\tVersion: 102"); sb.AppendLine("\t\t\tName: \"\"");
@@ -269,13 +271,13 @@ namespace ForzaTechStudio.Services
                 sb.AppendLine($"\t\t\tNormals: *{indices.Length * 3} {{");
                 sb.Append("\t\t\t\ta: ");
                 bool first = true;
-                for (int i = 0; i < indices.Length; i++)
+                for (int i = 0; i < polygonOrder.Length; i++)
                 {
                     if (!first) sb.Append(','); first = false;
-                    var n = data.Normals[indices[i]];
+                    var n = normals[polygonOrder[i]];
                     if (hasRot)  n = Vector3.Normalize(Vector3.TransformNormal(n, rot));
                     if (hasBone) n = Vector3.Normalize(Vector3.TransformNormal(n, data.BoneTransform));
-                    if (hasAxisScale) n = Vector3.Normalize(Vector3.TransformNormal(n, axisScale));
+                    n = Vector3.Normalize(Vector3.TransformNormal(n, exportTransform));
                     sb.Append(n.X.ToString("F6", CI)); sb.Append(',');
                     sb.Append(n.Y.ToString("F6", CI)); sb.Append(',');
                     sb.Append(n.Z.ToString("F6", CI));
@@ -284,10 +286,11 @@ namespace ForzaTechStudio.Services
             }
 
             // UVs
-            if (hasU)
+            for (int ui = 0; ui < uvChannels.Count; ui++)
             {
-                sb.AppendLine("\t\tLayerElementUV: 0 {");
-                sb.AppendLine("\t\t\tVersion: 101"); sb.AppendLine("\t\t\tName: \"UVMap\"");
+                var uvChannel = uvChannels[ui];
+                sb.AppendLine($"\t\tLayerElementUV: {ui} {{");
+                sb.AppendLine("\t\t\tVersion: 101"); sb.AppendLine($"\t\t\tName: \"{uvChannel.Name}\"");
                 sb.AppendLine("\t\t\tMappingInformationType: \"ByPolygonVertex\"");
                 sb.AppendLine("\t\t\tReferenceInformationType: \"IndexToDirect\"");
                 sb.AppendLine($"\t\t\tUV: *{vc * 2} {{");
@@ -295,18 +298,18 @@ namespace ForzaTechStudio.Services
                 for (int i = 0; i < vc; i++)
                 {
                     if (i > 0) sb.Append(',');
-                    sb.Append(data.UVs[i].X.ToString("F6", CI)); sb.Append(',');
-                    sb.Append(data.UVs[i].Y.ToString("F6", CI));
+                    sb.Append(uvChannel.UVs[i].X.ToString("F6", CI)); sb.Append(',');
+                    sb.Append(uvChannel.UVs[i].Y.ToString("F6", CI));
                 }
                 sb.AppendLine(); sb.AppendLine("\t\t\t}");
-                sb.AppendLine($"\t\t\tUVIndex: *{indices.Length} {{");
+                sb.AppendLine($"\t\t\tUVIndex: *{polygonOrder.Length} {{");
                 sb.Append("\t\t\t\ta: ");
-                for (int i = 0; i < indices.Length; i++) { if (i > 0) sb.Append(','); sb.Append(indices[i]); }
+                for (int i = 0; i < polygonOrder.Length; i++) { if (i > 0) sb.Append(','); sb.Append(polygonOrder[i]); }
                 sb.AppendLine(); sb.AppendLine("\t\t\t}"); sb.AppendLine("\t\t}");
             }
 
             // Vertex colors
-            if (hasColors)
+            if (hasColors && colors != null)
             {
                 sb.AppendLine("\t\tLayerElementColor: 0 {");
                 sb.AppendLine("\t\t\tVersion: 101"); sb.AppendLine("\t\t\tName: \"VertexColors\"");
@@ -317,16 +320,16 @@ namespace ForzaTechStudio.Services
                 for (int i = 0; i < vc; i++)
                 {
                     if (i > 0) sb.Append(',');
-                    var c = data.Colors[i];
+                    var c = colors[i];
                     sb.Append(c.X.ToString("F6", CI)); sb.Append(',');
                     sb.Append(c.Y.ToString("F6", CI)); sb.Append(',');
                     sb.Append(c.Z.ToString("F6", CI)); sb.Append(',');
                     sb.Append(c.W.ToString("F6", CI));
                 }
                 sb.AppendLine(); sb.AppendLine("\t\t\t}");
-                sb.AppendLine($"\t\t\tColorIndex: *{indices.Length} {{");
+                sb.AppendLine($"\t\t\tColorIndex: *{polygonOrder.Length} {{");
                 sb.Append("\t\t\t\ta: ");
-                for (int i = 0; i < indices.Length; i++) { if (i > 0) sb.Append(','); sb.Append(indices[i]); }
+                for (int i = 0; i < polygonOrder.Length; i++) { if (i > 0) sb.Append(','); sb.Append(polygonOrder[i]); }
                 sb.AppendLine(); sb.AppendLine("\t\t\t}"); sb.AppendLine("\t\t}");
             }
 
@@ -341,7 +344,7 @@ namespace ForzaTechStudio.Services
             // Layer
             sb.AppendLine("\t\tLayer: 0 {"); sb.AppendLine("\t\t\tVersion: 100");
             if (hasN) { sb.AppendLine("\t\t\tLayerElement:  {"); sb.AppendLine("\t\t\t\tType: \"LayerElementNormal\"");   sb.AppendLine("\t\t\t\tTypedIndex: 0"); sb.AppendLine("\t\t\t}"); }
-            if (hasU) { sb.AppendLine("\t\t\tLayerElement:  {"); sb.AppendLine("\t\t\t\tType: \"LayerElementUV\"");        sb.AppendLine("\t\t\t\tTypedIndex: 0"); sb.AppendLine("\t\t\t}"); }
+            for (int ui = 0; ui < uvChannels.Count; ui++) { sb.AppendLine("\t\t\tLayerElement:  {"); sb.AppendLine("\t\t\t\tType: \"LayerElementUV\""); sb.AppendLine($"\t\t\t\tTypedIndex: {ui}"); sb.AppendLine("\t\t\t}"); }
             if (hasColors) { sb.AppendLine("\t\t\tLayerElement:  {"); sb.AppendLine("\t\t\t\tType: \"LayerElementColor\""); sb.AppendLine("\t\t\t\tTypedIndex: 0"); sb.AppendLine("\t\t\t}"); }
             sb.AppendLine("\t\t\tLayerElement:  {"); sb.AppendLine("\t\t\t\tType: \"LayerElementMaterial\""); sb.AppendLine("\t\t\t\tTypedIndex: 0"); sb.AppendLine("\t\t\t}");
             sb.AppendLine("\t\t}");
@@ -388,8 +391,7 @@ namespace ForzaTechStudio.Services
                 long MeshGeoId(int fi)   => 200_001L + fi * 2;
                 long MatNodeId(int mi)   => 900_000L + mi;
                 long TexNodeId(int mi)   => 950_000L + mi;
-                var axisScale = opt.GetAxisScaleMatrix();
-                bool hasAxisScale = opt.HasAxisScale;
+                var exportTransform = GetFbxExportTransform(opt);
                 var bones = CollectBones(models, mbNodeId, opt);
                 var now = DateTime.UtcNow;
 
@@ -478,7 +480,7 @@ namespace ForzaTechStudio.Services
                     {
                         var (_, _, meshName, meshData) = allMeshes[fi];
                         string sn = SanitiseName(meshName);
-                        BinWriteGeometry(objs, MeshGeoId(fi), sn, meshData, opt, axisScale, hasAxisScale);
+                        BinWriteGeometry(objs, MeshGeoId(fi), sn, meshData, opt, exportTransform);
                         BN(objs, "Model", new[] { BP.I64(MeshModelId(fi)), BP.S($"{sn}\x00\x01Model"), BP.S("Mesh") }, m =>
                         {
                             BN(m, "Version", new[] { BP.I32(232) });
@@ -542,7 +544,7 @@ namespace ForzaTechStudio.Services
                                 BP70(p, "Size", "double", "Number", "", BP.D(1.0)));
                             BN(na, "TypeFlags", new[] { BP.S("Skeleton") });
                         });
-                        var (bt, br, bsc) = BoneLcl(b, axisScale);
+                        var (bt, br, bsc) = BoneLcl(b, exportTransform);
                         BN(objs, "Model", new[] { BP.I64(b.Id), BP.S($"{bn}\x00\x01Model"), BP.S("LimbNode") }, m =>
                         {
                             BN(m, "Version", new[] { BP.I32(232) });
@@ -595,24 +597,45 @@ namespace ForzaTechStudio.Services
 
                 // Top-level null sentinel
                 bw.Write(new byte[13]);
+                WriteBinaryFooter(bw, 7400);
             }
 
             File.WriteAllBytes(outputPath, ms.ToArray());
         }
 
+        private static void WriteBinaryFooter(BinaryWriter bw, uint version)
+        {
+            bw.Write(new byte[]
+            {
+                0xFA, 0xBC, 0xAB, 0x09, 0xD0, 0xC8, 0xD4, 0x66,
+                0xB1, 0x76, 0xFB, 0x83, 0x1C, 0xF7, 0x26, 0x7E
+            });
+            bw.Write((uint)0);
+            bw.Write(version);
+            bw.Write(new byte[120]);
+            bw.Write(new byte[]
+            {
+                0xF8, 0x5A, 0x8C, 0x6A, 0xDE, 0xF5, 0xD9, 0x7E,
+                0xEC, 0xE9, 0x0C, 0xE3, 0x75, 0x8F, 0x29, 0x0B
+            });
+        }
+
         // Binary: Geometry node 
 
-        private static void BinWriteGeometry(BinaryWriter bw, long id, string name, ForzaGeometryData data, ExportOptions opt, Matrix4x4 axisScale, bool hasAxisScale)
+        private static void BinWriteGeometry(BinaryWriter bw, long id, string name, ForzaGeometryData data, ExportOptions opt, Matrix4x4 exportTransform)
         {
-            var (worldVerts, indices) = ResolveGeometry(data, axisScale, hasAxisScale);
+            var (worldVerts, indices) = ResolveGeometry(data, exportTransform);
             int vc      = worldVerts.Length;
-            bool hasN   = data.Normals != null && data.Normals.Length == vc;
-            bool hasU   = opt.IncludeUVs && data.UVs != null && data.UVs.Length == vc;
-            bool hasColors = opt.IncludeVertexColors && data.Colors != null && data.Colors.Length == vc;
+            var normals = data.Normals;
+            var colors = data.Colors;
+            bool hasN   = normals != null && normals.Length == vc;
+            var uvChannels = GetExportUvChannels(data, opt, vc);
+            bool hasColors = opt.IncludeVertexColors && colors != null && colors.Length == vc;
             var rot     = data.GetRotationMatrix();
             bool hasRot  = rot != Matrix4x4.Identity;
             bool hasBone = data.BoneTransform != Matrix4x4.Identity;
-            var poly    = BuildPolyIdx(indices);
+            var polygonOrder = BuildFbxPolygonVertexOrder(indices);
+            var poly    = BuildFbxPolygonVertexIndices(polygonOrder);
 
             // Flatten vertex positions
             var vArr = new double[vc * 3];
@@ -629,15 +652,15 @@ namespace ForzaTechStudio.Services
                 BN(geo, "Vertices",           new[] { BP.DA(vArr) });
                 BN(geo, "PolygonVertexIndex", new[] { BP.IA(poly) });
 
-                if (hasN)
+                if (hasN && normals != null)
                 {
-                    var nArr = new double[indices.Length * 3];
-                    for (int i = 0; i < indices.Length; i++)
+                    var nArr = new double[polygonOrder.Length * 3];
+                    for (int i = 0; i < polygonOrder.Length; i++)
                     {
-                        var n = data.Normals[indices[i]];
+                        var n = normals[polygonOrder[i]];
                         if (hasRot)  n = Vector3.Normalize(Vector3.TransformNormal(n, rot));
                         if (hasBone) n = Vector3.Normalize(Vector3.TransformNormal(n, data.BoneTransform));
-                        if (hasAxisScale) n = Vector3.Normalize(Vector3.TransformNormal(n, axisScale));
+                        n = Vector3.Normalize(Vector3.TransformNormal(n, exportTransform));
                         nArr[i * 3] = n.X; nArr[i * 3 + 1] = n.Y; nArr[i * 3 + 2] = n.Z;
                     }
                     BN(geo, "LayerElementNormal", null, ln =>
@@ -650,17 +673,18 @@ namespace ForzaTechStudio.Services
                     });
                 }
 
-                if (hasU)
+                for (int ui = 0; ui < uvChannels.Count; ui++)
                 {
+                    var uvChannel = uvChannels[ui];
                     var uvArr = new double[vc * 2];
-                    var uvIdx = new int[indices.Length];
-                    for (int i = 0; i < vc; i++) { uvArr[i * 2] = data.UVs[i].X; uvArr[i * 2 + 1] = data.UVs[i].Y; }
-                    for (int i = 0; i < indices.Length; i++) uvIdx[i] = indices[i];
+                    var uvIdx = new int[polygonOrder.Length];
+                    for (int i = 0; i < vc; i++) { uvArr[i * 2] = uvChannel.UVs[i].X; uvArr[i * 2 + 1] = uvChannel.UVs[i].Y; }
+                    for (int i = 0; i < polygonOrder.Length; i++) uvIdx[i] = polygonOrder[i];
 
                     BN(geo, "LayerElementUV", null, lu =>
                     {
                         BN(lu, "Version", new[] { BP.I32(101) });
-                        BN(lu, "Name",    new[] { BP.S("UVMap") });
+                        BN(lu, "Name",    new[] { BP.S(uvChannel.Name) });
                         BN(lu, "MappingInformationType",   new[] { BP.S("ByPolygonVertex") });
                         BN(lu, "ReferenceInformationType", new[] { BP.S("IndexToDirect") });
                         BN(lu, "UV",      new[] { BP.DA(uvArr) });
@@ -668,16 +692,16 @@ namespace ForzaTechStudio.Services
                     });
                 }
 
-                if (hasColors)
+                if (hasColors && colors != null)
                 {
                     var cArr = new double[vc * 4];
-                    var cIdx = new int[indices.Length];
+                    var cIdx = new int[polygonOrder.Length];
                     for (int i = 0; i < vc; i++)
                     {
-                        var c = data.Colors[i];
+                        var c = colors[i];
                         cArr[i * 4] = c.X; cArr[i * 4 + 1] = c.Y; cArr[i * 4 + 2] = c.Z; cArr[i * 4 + 3] = c.W;
                     }
-                    for (int i = 0; i < indices.Length; i++) cIdx[i] = indices[i];
+                    for (int i = 0; i < polygonOrder.Length; i++) cIdx[i] = polygonOrder[i];
                     BN(geo, "LayerElementColor", null, lc =>
                     {
                         BN(lc, "Version", new[] { BP.I32(101) });
@@ -702,7 +726,7 @@ namespace ForzaTechStudio.Services
                 {
                     BN(layer, "Version", new[] { BP.I32(100) });
                     if (hasN) BN(layer, "LayerElement", null, le => { BN(le, "Type", new[] { BP.S("LayerElementNormal") });   BN(le, "TypedIndex", new[] { BP.I32(0) }); });
-                    if (hasU) BN(layer, "LayerElement", null, le => { BN(le, "Type", new[] { BP.S("LayerElementUV") });        BN(le, "TypedIndex", new[] { BP.I32(0) }); });
+                    for (int ui = 0; ui < uvChannels.Count; ui++) BN(layer, "LayerElement", null, le => { BN(le, "Type", new[] { BP.S("LayerElementUV") }); BN(le, "TypedIndex", new[] { BP.I32(ui) }); });
                     if (hasColors) BN(layer, "LayerElement", null, le => { BN(le, "Type", new[] { BP.S("LayerElementColor") }); BN(le, "TypedIndex", new[] { BP.I32(0) }); });
                     BN(layer, "LayerElement", null, le => { BN(le, "Type", new[] { BP.S("LayerElementMaterial") }); BN(le, "TypedIndex", new[] { BP.I32(0) }); });
                 });
@@ -846,7 +870,10 @@ namespace ForzaTechStudio.Services
             return ids;
         }
 
-        private static (Vector3[] WorldVerts, int[] Indices) ResolveGeometry(ForzaGeometryData data, Matrix4x4 axisScale, bool hasAxisScale)
+        private static Matrix4x4 GetFbxExportTransform(ExportOptions opt)
+            => Matrix4x4.CreateScale(-1f, 1f, 1f) * opt.GetAxisScaleMatrix();
+
+        private static (Vector3[] WorldVerts, int[] Indices) ResolveGeometry(ForzaGeometryData data, Matrix4x4 exportTransform)
         {
             int vc      = data.RawPositions.Length;
             var scale   = data.SourceMesh?.PositionScale     ?? Vector4.One;
@@ -863,7 +890,7 @@ namespace ForzaTechStudio.Services
                 if (hasRot) s = Vector3.Transform(s, rot);
                 var v = new Vector3(s.X + trans.X, s.Y + trans.Y, s.Z + trans.Z);
                 var world = hasBone ? Vector3.Transform(v, data.BoneTransform) : v;
-                wv[i] = hasAxisScale ? Vector3.Transform(world, axisScale) : world;
+                wv[i] = Vector3.Transform(world, exportTransform);
             }
 
             int[] idx;
@@ -874,11 +901,61 @@ namespace ForzaTechStudio.Services
             return (wv, idx);
         }
 
-        private static int[] BuildPolyIdx(int[] indices)
+        private static List<(int ChannelIndex, string Name, Vector2[] UVs)> GetExportUvChannels(ForzaGeometryData data, ExportOptions opt, int vertexCount)
         {
-            var p = new int[indices.Length];
-            for (int i = 0; i < indices.Length; i++)
-                p[i] = (i % 3 == 2) ? ~indices[i] : indices[i];
+            var channels = new List<(int ChannelIndex, string Name, Vector2[] UVs)>();
+            if (!opt.IncludeUVs)
+                return channels;
+
+            bool IsValid(Vector2[]? uvs) => uvs != null && uvs.Length == vertexCount;
+
+            if (opt.UvMode == ExportUvMode.PrimaryOnly)
+            {
+                if (data.UvChannels != null && data.UvChannels.TryGetValue(0, out var primary) && IsValid(primary))
+                    channels.Add((0, GetUvChannelName(0), primary));
+                else if (IsValid(data.UVs))
+                    channels.Add((0, GetUvChannelName(0), data.UVs));
+                return channels;
+            }
+
+            if (data.UvChannels != null)
+            {
+                foreach (var kv in data.UvChannels.OrderBy(kv => kv.Key))
+                    if (IsValid(kv.Value))
+                        channels.Add((kv.Key, GetUvChannelName(kv.Key), kv.Value));
+            }
+
+            if (channels.Count == 0 && IsValid(data.UVs))
+                channels.Add((0, GetUvChannelName(0), data.UVs));
+
+            return channels;
+        }
+
+        private static string GetUvChannelName(int channelIndex)
+            => channelIndex == 0 ? "UVMap" : $"UVMap_{channelIndex}";
+
+        private static int[] BuildFbxPolygonVertexOrder(int[] indices)
+        {
+            var order = new int[indices.Length];
+            int i = 0;
+            for (; i + 2 < indices.Length; i += 3)
+            {
+                order[i] = indices[i];
+                order[i + 1] = indices[i + 2];
+                order[i + 2] = indices[i + 1];
+            }
+
+            for (; i < indices.Length; i++)
+                order[i] = indices[i];
+
+            return order;
+        }
+
+        private static int[] BuildFbxPolygonVertexIndices(int[] polygonOrder)
+        {
+            var p = new int[polygonOrder.Length];
+            for (int i = 0; i < polygonOrder.Length; i++)
+                p[i] = (i % 3 == 2) ? ~polygonOrder[i] : polygonOrder[i];
             return p;
         }
 
@@ -958,9 +1035,9 @@ namespace ForzaTechStudio.Services
         }
 
         // Local TRS for a bone; root bones fold in the axis/scale conversion
-        private static (Vector3 T, Vector3 R, Vector3 S) BoneLcl(FbxBone b, Matrix4x4 axisScale)
+        private static (Vector3 T, Vector3 R, Vector3 S) BoneLcl(FbxBone b, Matrix4x4 exportTransform)
         {
-            var m = b.IsRoot ? b.Bone.Matrix * axisScale : b.Bone.Matrix;
+            var m = b.IsRoot ? b.Bone.Matrix * exportTransform : b.Bone.Matrix;
             if (!Matrix4x4.Decompose(m, out var scale, out var rot, out var trans))
             {
                 scale = Vector3.One; rot = Quaternion.Identity; trans = m.Translation;
@@ -987,7 +1064,7 @@ namespace ForzaTechStudio.Services
         }
 
         // ASCII bone Model + NodeAttribute nodes
-        private static void AsciiWriteBones(StringBuilder sb, List<FbxBone> bones, Matrix4x4 axisScale)
+        private static void AsciiWriteBones(StringBuilder sb, List<FbxBone> bones, Matrix4x4 exportTransform)
         {
             foreach (var b in bones)
             {
@@ -999,7 +1076,7 @@ namespace ForzaTechStudio.Services
                 sb.AppendLine("\t\tTypeFlags: \"Skeleton\"");
                 sb.AppendLine("\t}");
 
-                var (t, r, s) = BoneLcl(b, axisScale);
+                var (t, r, s) = BoneLcl(b, exportTransform);
                 sb.AppendLine($"\tModel: {b.Id}, \"Model::{bn}\", \"LimbNode\" {{");
                 sb.AppendLine("\t\tVersion: 232");
                 sb.AppendLine("\t\tProperties70:  {");

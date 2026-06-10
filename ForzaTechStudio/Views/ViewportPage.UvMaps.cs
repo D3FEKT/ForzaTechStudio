@@ -51,8 +51,8 @@ namespace ForzaTechStudio.Views
         private bool _uvClosingHandled;
         private Vector2 _uvDragLast;
         private readonly HashSet<int> _uvSelectedFaces = new();
-        private readonly HashSet<MeshNode> _uvDirtyMeshNodes = new();
-        private readonly Dictionary<MeshNode, Vector2[]> _uvBackups = new();
+        private readonly HashSet<UvEditKey> _uvDirtyChannels = new();
+        private readonly Dictionary<UvEditKey, Vector2[]> _uvBackups = new();
         private ScrollViewer? _uvViewerScroll;
         private Slider? _uvZoomSlider;
         private TextBlock? _uvZoomPctText;
@@ -67,6 +67,11 @@ namespace ForzaTechStudio.Views
         private bool _uvPanMoved;
         private Windows.Foundation.Point _uvPanLast;
         private ComboBox? _uvLibraryCombo;
+        private ComboBox? _uvChannelCombo;
+        private int _uvChannelIndex;
+        private bool _uvSyncingChannelCombo;
+
+        private readonly record struct UvEditKey(MeshNode Mesh, int Channel);
 
         private sealed class UvMeshItem
         {
@@ -80,6 +85,13 @@ namespace ForzaTechStudio.Views
         {
             public string Name { get; init; } = string.Empty;
             public SwatchbinArchiveEntry? Entry { get; init; }
+            public override string ToString() => Name;
+        }
+
+        private sealed class UvChannelItem
+        {
+            public int ChannelIndex { get; init; }
+            public string Name => $"UV {ChannelIndex}";
             public override string ToString() => Name;
         }
 
@@ -105,6 +117,20 @@ namespace ForzaTechStudio.Views
                 modelBinCombo.Items.Add(new ComboBoxItem { Content = string.IsNullOrWhiteSpace(mb.FileName) ? mb.Name : mb.FileName, Tag = mb });
 
             var meshCombo = new ComboBox { HorizontalAlignment = HorizontalAlignment.Stretch, PlaceholderText = "Select mesh", IsEnabled = false };
+            var channelLabel = new TextBlock
+            {
+                Text = "UV Channel",
+                FontWeight = Microsoft.UI.Text.FontWeights.SemiBold,
+                Visibility = Visibility.Collapsed
+            };
+            var channelCombo = new ComboBox
+            {
+                HorizontalAlignment = HorizontalAlignment.Stretch,
+                PlaceholderText = "UV channel",
+                IsEnabled = false,
+                Visibility = Visibility.Collapsed
+            };
+            _uvChannelCombo = channelCombo;
 
             var libraryTextures = CollectUvLibraryTextures();
             var libraryCombo = new ComboBox { HorizontalAlignment = HorizontalAlignment.Stretch, PlaceholderText = "Library texture", IsEnabled = libraryTextures.Count > 0 };
@@ -233,6 +259,8 @@ namespace ForzaTechStudio.Views
             controls.Children.Add(modelBinCombo);
             controls.Children.Add(new TextBlock { Text = "Mesh", FontWeight = Microsoft.UI.Text.FontWeights.SemiBold });
             controls.Children.Add(meshCombo);
+            controls.Children.Add(channelLabel);
+            controls.Children.Add(channelCombo);
             controls.Children.Add(new Border { Height = 1, Margin = new Thickness(0, 4, 0, 4), Background = new SolidColorBrush(Color.FromArgb(40, 128, 128, 128)) });
             controls.Children.Add(new TextBlock { Text = "Background Texture", FontWeight = Microsoft.UI.Text.FontWeights.SemiBold });
             controls.Children.Add(libraryCombo);
@@ -268,6 +296,7 @@ namespace ForzaTechStudio.Views
             modelBinCombo.SelectionChanged += (_, _) =>
             {
                 meshCombo.Items.Clear();
+                UpdateUvChannelCombo(null, channelCombo, channelLabel);
                 LoadMeshIntoEditor(null, null);
                 var mb = (modelBinCombo.SelectedItem as ComboBoxItem)?.Tag as ModelBinNode;
                 _uvModelBin = mb;
@@ -283,7 +312,22 @@ namespace ForzaTechStudio.Views
             meshCombo.SelectionChanged += async (_, _) =>
             {
                 var item = meshCombo.SelectedItem as UvMeshItem;
+                UpdateUvChannelCombo(item?.Geometry, channelCombo, channelLabel);
                 await LoadMeshIntoEditorAsync(item?.Node, item?.Geometry);
+            };
+
+            channelCombo.SelectionChanged += async (_, _) =>
+            {
+                if (_uvSyncingChannelCombo)
+                    return;
+
+                if (channelCombo.SelectedItem is UvChannelItem channelItem)
+                    _uvChannelIndex = channelItem.ChannelIndex;
+
+                _uvSelectedFaces.Clear();
+                _uvLastOverlayWidth = 0;
+                _uvLastOverlayHeight = 0;
+                await LoadMeshIntoEditorAsync(_uvMeshNode, _uvGeo);
             };
 
             libraryCombo.SelectionChanged += async (_, _) =>
@@ -372,6 +416,71 @@ namespace ForzaTechStudio.Views
             _ = RenderWireframeAsync(force: true);
         }
 
+        private void UpdateUvChannelCombo(ForzaGeometryData? geo, ComboBox channelCombo, TextBlock channelLabel)
+        {
+            var channels = GetAvailableUvChannels(geo).ToList();
+            _uvSyncingChannelCombo = true;
+            channelCombo.Items.Clear();
+
+            foreach (int channel in channels)
+                channelCombo.Items.Add(new UvChannelItem { ChannelIndex = channel });
+
+            bool showPicker = channels.Count > 1;
+            channelCombo.Visibility = showPicker ? Visibility.Visible : Visibility.Collapsed;
+            channelLabel.Visibility = showPicker ? Visibility.Visible : Visibility.Collapsed;
+            channelCombo.IsEnabled = showPicker;
+
+            _uvChannelIndex = channels.Count > 0 ? channels[0] : 0;
+            if (channelCombo.Items.Count > 0)
+                channelCombo.SelectedIndex = 0;
+
+            _uvSyncingChannelCombo = false;
+        }
+
+        private static IEnumerable<int> GetAvailableUvChannels(ForzaGeometryData? geo)
+        {
+            if (geo?.UvChannels != null)
+            {
+                foreach (var channel in geo.UvChannels
+                    .Where(kv => kv.Value != null && kv.Value.Length > 0)
+                    .Select(kv => kv.Key)
+                    .OrderBy(index => index))
+                {
+                    yield return channel;
+                }
+                yield break;
+            }
+
+            if (geo?.UVs != null && geo.UVs.Length > 0)
+                yield return 0;
+        }
+
+        private static Vector2[]? GetUvArray(ForzaGeometryData? geo, int channelIndex)
+        {
+            if (geo?.UvChannels != null && geo.UvChannels.TryGetValue(channelIndex, out var channelUvs))
+                return channelUvs;
+
+            return channelIndex == 0 ? geo?.UVs : null;
+        }
+
+        private Vector2[]? GetActiveUvArray()
+        {
+            return GetUvArray(_uvGeo, _uvChannelIndex);
+        }
+
+        private UvEditKey? GetActiveUvEditKey()
+        {
+            return _uvMeshNode != null ? new UvEditKey(_uvMeshNode, _uvChannelIndex) : null;
+        }
+
+        private void EnsureActiveUvBackup()
+        {
+            var activeUvs = GetActiveUvArray();
+            var key = GetActiveUvEditKey();
+            if (activeUvs != null && key.HasValue && !_uvBackups.ContainsKey(key.Value))
+                _uvBackups[key.Value] = (Vector2[])activeUvs.Clone();
+        }
+
         private void UvViewerScroll_ViewChanged(object sender, ScrollViewerViewChangedEventArgs e)
         {
             if (_uvViewerScroll == null)
@@ -418,8 +527,7 @@ namespace ForzaTechStudio.Views
             _uvSelectedFaces.Clear();
             _uvDragging = false;
 
-            if (meshNode != null && geo?.UVs != null && !_uvBackups.ContainsKey(meshNode))
-                _uvBackups[meshNode] = (Vector2[])geo.UVs.Clone();
+            EnsureActiveUvBackup();
 
             RebuildSelectionPolygons();
             UpdateUvFaceHighlight3D();
@@ -431,7 +539,8 @@ namespace ForzaTechStudio.Views
 
             if (_uvOverlayImage == null) return;
 
-            if (geo?.UVs == null || geo.UVs.Length == 0)
+            var activeUvs = GetActiveUvArray();
+            if (activeUvs == null || activeUvs.Length == 0)
             {
                 _uvOverlayImage.Source = null;
                 if (_uvStatusText != null && geo != null) _uvStatusText.Text = "Selected mesh has no UV data.";
@@ -445,17 +554,19 @@ namespace ForzaTechStudio.Views
 
         private async Task RenderWireframeAsync(bool force = false)
         {
-            if (_uvOverlayImage == null || _uvGeo?.UVs == null) return;
+            var activeUvs = GetActiveUvArray();
+            if (_uvOverlayImage == null || _uvGeo == null || activeUvs == null) return;
             var geo = _uvGeo;
+            int channelIndex = _uvChannelIndex;
             var (renderWidth, renderHeight) = GetUvOverlayRenderSize();
             if (!force && renderWidth == _uvLastOverlayWidth && renderHeight == _uvLastOverlayHeight && _uvOverlayImage.Source != null)
                 return;
 
             int renderVersion = ++_uvOverlayRenderVersion;
-            byte[] rgba = await Task.Run(() => BuildUvOverlayRgba(geo, renderWidth, renderHeight));
+            byte[] rgba = await Task.Run(() => BuildUvOverlayRgba(geo, channelIndex, renderWidth, renderHeight));
             BitmapImage? bitmap = await RgbaToBitmapImageAsync(rgba, renderWidth, renderHeight);
 
-            if (_uvOverlayImage == null || renderVersion != _uvOverlayRenderVersion || !ReferenceEquals(geo, _uvGeo))
+            if (_uvOverlayImage == null || renderVersion != _uvOverlayRenderVersion || !ReferenceEquals(geo, _uvGeo) || channelIndex != _uvChannelIndex)
                 return;
 
             _uvLastOverlayWidth = renderWidth;
@@ -466,9 +577,11 @@ namespace ForzaTechStudio.Views
         private void UpdateUvStatus()
         {
             if (_uvStatusText == null || _uvGeo == null) return;
+            var activeUvs = GetActiveUvArray();
             int tris = _uvGeo.Indices != null ? _uvGeo.Indices.Length / 3 : 0;
-            string dirty = _uvMeshNode != null && _uvDirtyMeshNodes.Contains(_uvMeshNode) ? " (modified)" : string.Empty;
-            _uvStatusText.Text = $"{_uvGeo.UVs?.Length ?? 0} UVs, {tris} triangles, {_uvSelectedFaces.Count} selected.{dirty}";
+            var key = GetActiveUvEditKey();
+            string dirty = key.HasValue && _uvDirtyChannels.Contains(key.Value) ? " (modified)" : string.Empty;
+            _uvStatusText.Text = $"UV {_uvChannelIndex}: {activeUvs?.Length ?? 0} UVs, {tris} triangles, {_uvSelectedFaces.Count} selected.{dirty}";
         }
 
         private void ShowUvMapsWindow(UIElement content)
@@ -536,7 +649,7 @@ namespace ForzaTechStudio.Views
             var pt = e.GetCurrentPoint(_uvEditorRoot);
             if (!pt.Properties.IsLeftButtonPressed) return;
 
-            if (_uvGeo?.UVs != null && _uvGeo.Indices != null)
+            if (GetActiveUvArray() != null && _uvGeo?.Indices != null)
             {
                 var uv = new Vector2((float)(pt.Position.X / _uvSurfaceWidth), (float)(pt.Position.Y / _uvSurfaceHeight));
                 int face = HitTestFace(uv);
@@ -558,6 +671,7 @@ namespace ForzaTechStudio.Views
                     _uvDragging = true;
                     _uvDragMoved = false;
                     _uvDragLast = uv;
+                    EnsureActiveUvBackup();
                     _uvEditorRoot.CapturePointer(e.Pointer);
                     return;
                 }
@@ -571,7 +685,8 @@ namespace ForzaTechStudio.Views
 
         private void UvEditor_PointerMoved(object sender, PointerRoutedEventArgs e)
         {
-            if (_uvDragging && _uvGeo?.UVs != null && _uvEditorRoot != null)
+            var activeUvs = GetActiveUvArray();
+            if (_uvDragging && activeUvs != null && _uvEditorRoot != null)
             {
                 var pt = e.GetCurrentPoint(_uvEditorRoot);
                 if (!pt.Properties.IsLeftButtonPressed) return;
@@ -580,10 +695,13 @@ namespace ForzaTechStudio.Views
                 _uvDragLast = uv;
                 if (delta == Vector2.Zero) return;
                 foreach (var vi in SelectedVertexIndices())
-                    _uvGeo.UVs[vi] += delta;
+                {
+                    if ((uint)vi < (uint)activeUvs.Length)
+                        activeUvs[vi] += delta;
+                }
                 _uvDragMoved = true;
                 RebuildSelectionPolygons();
-                if (_uvMeshNode != null) RefreshMesh3DTextureCoords(_uvMeshNode);
+                if (_uvMeshNode != null && _uvChannelIndex == 0) RefreshMesh3DTextureCoords(_uvMeshNode);
                 return;
             }
 
@@ -609,7 +727,7 @@ namespace ForzaTechStudio.Views
                 _uvEditorRoot?.ReleasePointerCapture(e.Pointer);
                 if (_uvDragMoved && _uvMeshNode != null)
                 {
-                    _uvDirtyMeshNodes.Add(_uvMeshNode);
+                    _uvDirtyChannels.Add(new UvEditKey(_uvMeshNode, _uvChannelIndex));
                     await RenderWireframeAsync(force: true);
                     UpdateUvStatus();
                 }
@@ -701,7 +819,7 @@ namespace ForzaTechStudio.Views
 
         private int HitTestFace(Vector2 p)
         {
-            var uvs = _uvGeo!.UVs!;
+            var uvs = GetActiveUvArray()!;
             var indices = _uvGeo.Indices!;
             for (int t = 0; t + 2 < indices.Length; t += 3)
             {
@@ -743,10 +861,10 @@ namespace ForzaTechStudio.Views
             if (_uvSelectionCanvas == null) return;
             _uvSelectionCanvas.Children.Clear();
 
-            if (_uvGeo?.UVs == null || _uvGeo.Indices == null || _uvSelectedFaces.Count == 0)
+            var uvs = GetActiveUvArray();
+            if (uvs == null || _uvGeo?.Indices == null || _uvSelectedFaces.Count == 0)
                 return;
 
-            var uvs = _uvGeo.UVs;
             var indices = _uvGeo.Indices;
             var fill = new SolidColorBrush(Color.FromArgb(110, 255, 140, 0));
             var stroke = new SolidColorBrush(Color.FromArgb(255, 255, 140, 0));
@@ -828,14 +946,19 @@ namespace ForzaTechStudio.Views
 
         private void CommitDirtyToBundles()
         {
-            foreach (var meshNode in _uvDirtyMeshNodes)
+            foreach (var key in _uvDirtyChannels)
             {
+                var meshNode = key.Mesh;
                 var geo = meshNode.GeometryData;
                 var bin = meshNode.ParentModelBin;
-                if (geo?.UVs == null || geo.SourceMesh == null || bin?.Bundle == null) continue;
+                var uvs = GetUvArray(geo, key.Channel);
+                if (uvs == null || geo?.SourceMesh == null || bin?.Bundle == null) continue;
 
-                WriteUvsToBundle(bin.Bundle, geo.SourceMesh, geo.UVs, geo.MinVertexIndex);
+                WriteUvsToBundle(bin.Bundle, geo.SourceMesh, uvs, geo.MinVertexIndex, key.Channel);
                 bin.IsDirty = true;
+
+                if (key.Channel == 0)
+                    RefreshMesh3DTextureCoords(meshNode);
             }
         }
 
@@ -844,7 +967,7 @@ namespace ForzaTechStudio.Views
             _uvClosingHandled = true;
             CommitDirtyToBundles();
             _uvBackups.Clear();
-            _uvDirtyMeshNodes.Clear();
+            _uvDirtyChannels.Clear();
             _uvMapsWindow?.Close();
         }
 
@@ -857,21 +980,21 @@ namespace ForzaTechStudio.Views
 
         private async Task UvSaveAsync()
         {
-            if (_uvDirtyMeshNodes.Count == 0)
+            if (_uvDirtyChannels.Count == 0)
             {
                 if (_uvStatusText != null) _uvStatusText.Text = "No UV changes to save.";
                 return;
             }
 
-            var bins = _uvDirtyMeshNodes
-                .Select(m => m.ParentModelBin)
+            var bins = _uvDirtyChannels
+                .Select(key => key.Mesh.ParentModelBin)
                 .Where(b => b != null)
                 .Distinct()
                 .Cast<IViewerNode>()
                 .ToList();
 
             CommitDirtyToBundles();
-            _uvDirtyMeshNodes.Clear();
+            _uvDirtyChannels.Clear();
             _uvBackups.Clear();
 
             await SaveSelectedFileNodesAsync(bins, saveAsFolder: false);
@@ -884,12 +1007,15 @@ namespace ForzaTechStudio.Views
         {
             foreach (var kv in _uvBackups)
             {
-                var geo = kv.Key.GeometryData;
-                if (geo?.UVs == null) continue;
-                Array.Copy(kv.Value, geo.UVs, Math.Min(kv.Value.Length, geo.UVs.Length));
+                var geo = kv.Key.Mesh.GeometryData;
+                var uvs = GetUvArray(geo, kv.Key.Channel);
+                if (uvs == null) continue;
+                Array.Copy(kv.Value, uvs, Math.Min(kv.Value.Length, uvs.Length));
+                if (kv.Key.Channel == 0)
+                    RefreshMesh3DTextureCoords(kv.Key.Mesh);
             }
             _uvBackups.Clear();
-            _uvDirtyMeshNodes.Clear();
+            _uvDirtyChannels.Clear();
         }
 
         private void CleanupUvEditorState()
@@ -904,6 +1030,9 @@ namespace ForzaTechStudio.Views
             _uvSelectionCanvas = null;
             _uvStatusText = null;
             _uvLibraryCombo = null;
+            _uvChannelCombo = null;
+            _uvChannelIndex = 0;
+            _uvSyncingChannelCombo = false;
             _uvViewerScroll = null;
             _uvZoomSlider = null;
             _uvZoomPctText = null;
@@ -926,7 +1055,7 @@ namespace ForzaTechStudio.Views
                 .GetKeyStateForCurrentThread(Windows.System.VirtualKey.Control)
                 .HasFlag(Windows.UI.Core.CoreVirtualKeyStates.Down);
 
-        private static void WriteUvsToBundle(Bundle bundle, MeshBlob mesh, Vector2[] uvs, int minIndex)
+        private static void WriteUvsToBundle(Bundle bundle, MeshBlob mesh, Vector2[] uvs, int minIndex, int semanticIndex)
         {
             var layout = bundle.Blobs.OfType<VertexLayoutBlob>()
                 .FirstOrDefault(l => l.Metadatas.OfType<IdentifierMetadata>().Any(m => (int)m.Id == mesh.VertexLayoutIndex));
@@ -948,7 +1077,7 @@ namespace ForzaTechStudio.Views
                 int off = slotOffsets[slot];
                 string sem = el.SemanticNameIndex >= 0 && el.SemanticNameIndex < layout.SemanticNames.Count
                     ? layout.SemanticNames[el.SemanticNameIndex] : string.Empty;
-                if (sem == "TEXCOORD" && el.SemanticIndex == 0)
+                if (sem == "TEXCOORD" && el.SemanticIndex == semanticIndex)
                 {
                     texEl = el;
                     texOffset = off;
@@ -1097,7 +1226,7 @@ namespace ForzaTechStudio.Views
             }
         }
 
-        private static byte[] BuildUvOverlayRgba(ForzaGeometryData geo, int width, int height)
+        private static byte[] BuildUvOverlayRgba(ForzaGeometryData geo, int channelIndex, int width, int height)
         {
             byte[] buffer = new byte[width * height * 4];
 
@@ -1111,7 +1240,7 @@ namespace ForzaTechStudio.Views
                 DrawLine(buffer, width, height, 0, y, width - 1, y, 160, 160, 160, 130);
             }
 
-            var uvs = geo.UVs;
+            var uvs = GetUvArray(geo, channelIndex);
             var indices = geo.Indices;
             if (uvs == null || uvs.Length == 0)
                 return buffer;

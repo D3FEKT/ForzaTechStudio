@@ -170,7 +170,7 @@ namespace ForzaTechStudio.Services
                 MaterialLib = materialLib,
                 Positions = finalPositions.ToArray(),
                 Normals = finalNormals.ToArray(),
-                UVs = finalUVs.ToArray(),
+                UVChannels = new[] { finalUVs.ToArray() },
                 Tangents = tangents,
                 Colors = colors,
                 Groups = groups

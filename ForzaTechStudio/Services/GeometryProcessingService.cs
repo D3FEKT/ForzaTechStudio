@@ -22,7 +22,7 @@ namespace ForzaTechStudio.Services
         public string Name;
         public Vector3[] Positions;
         public Vector3[] Normals;
-        public Vector2[] UVs;
+        public Vector2[][] UVChannels;  // [channel][vertex]
         public Vector4[] Tangents;
         public int[] Indices;
     }
@@ -75,7 +75,6 @@ namespace ForzaTechStudio.Services
             {
                 Vector3 pos = input.Positions[i];
                 Vector3 norm = (input.Normals != null && i < input.Normals.Length) ? Vector3.Normalize(input.Normals[i]) : Vector3.UnitY;
-                Vector2 uv = (input.UVs != null && i < input.UVs.Length) ? input.UVs[i] : Vector2.Zero;
                 Vector4 tangent = (input.Tangents != null && i < input.Tangents.Length) ? input.Tangents[i] : new Vector4(1, 0, 0, 1);
 
                 // Buffer 0 (Position, 8 bytes, same for all games)
@@ -109,12 +108,22 @@ namespace ForzaTechStudio.Services
                         bw.Write((short)(norm.Z * 32767));
                     }
 
-                    // 2. TEXCOORDs — R16G16_UNORM (4 bytes each), same for all games
-                    ushort u = (ushort)(Math.Clamp(uv.X, 0f, 1f) * 65535.0f);
-                    ushort v = (ushort)(Math.Clamp(1.0f - uv.Y, 0f, 1f) * 65535.0f); // V-Flip
-
+                    // 2. TEXCOORDs — R16G16_UNORM (4 bytes each), same for all games.
+                    // Fill each layout slot from its matching UV channel; slots beyond
+                    // the available channels fall back to the last available channel.
+                    int channelCount = input.UVChannels?.Length ?? 0;
                     for (int k = 0; k < layout.TexcoordCount; k++)
                     {
+                        Vector2 uv = Vector2.Zero;
+                        if (channelCount > 0)
+                        {
+                            int srcChannel = k < channelCount ? k : channelCount - 1;
+                            var channel = input.UVChannels[srcChannel];
+                            if (channel != null && i < channel.Length) uv = channel[i];
+                        }
+
+                        ushort u = (ushort)(Math.Clamp(uv.X, 0f, 1f) * 65535.0f);
+                        ushort v = (ushort)(Math.Clamp(1.0f - uv.Y, 0f, 1f) * 65535.0f); // V-Flip
                         bw.Write(u);
                         bw.Write(v);
                     }

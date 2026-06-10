@@ -20,6 +20,7 @@ namespace ForzaTechStudio.Services
         public Vector3[] Positions;
         public Vector3[] Normals;
         public Vector2[] UVs;
+        public Dictionary<int, Vector2[]> UvChannels;
         public Vector4[] Colors;
         public int[] Indices;
 
@@ -269,7 +270,7 @@ namespace ForzaTechStudio.Services
             var rawPos = new Vector3[vertexCount];
             var posW = new Vector4[vertexCount];
             var normals = new Vector3[vertexCount];
-            var uvs = new Vector2[vertexCount];
+            var uvChannels = new Dictionary<int, Vector2[]>();
             var colors = new Vector4[vertexCount];
             bool hasColors = false;
 
@@ -303,12 +304,15 @@ namespace ForzaTechStudio.Services
                 string semantic = GetSemanticName(layout, item.Desc);
                 if (semantic == "POSITION") continue;
 
+                if (semantic == "TEXCOORD" && !uvChannels.ContainsKey(item.Desc.SemanticIndex))
+                    uvChannels[item.Desc.SemanticIndex] = new Vector2[vertexCount];
+
                 ReadBuffer(bundle, mesh, vbMap, item.Desc, item.Offset, minIndex, vertexCount, (span, i) =>
                 {
                     if (semantic == "NORMAL")
                         normals[i] = ReadNormal(span, (int)item.Desc.Format, posW[i].W);
-                    else if (semantic == "TEXCOORD" && item.Desc.SemanticIndex == 0)
-                        uvs[i] = ReadUV(span, (int)item.Desc.Format);
+                    else if (semantic == "TEXCOORD")
+                        uvChannels[item.Desc.SemanticIndex][i] = ReadUV(span, (int)item.Desc.Format);
                     else if (semantic == "COLOR" && item.Desc.SemanticIndex == 0)
                     {
                         colors[i] = ReadColor(span, (int)item.Desc.Format);
@@ -316,6 +320,8 @@ namespace ForzaTechStudio.Services
                     }
                 });
             }
+
+            uvChannels.TryGetValue(0, out var channel0Uvs);
 
             // TRANSFORM — only compute bone matrix, skip per-vertex transform.
             // The renderer uses RawPositions + PositionScale/Translate + BoneTransform directly,
@@ -343,7 +349,8 @@ namespace ForzaTechStudio.Services
                 MaterialName = matName,
                 Positions = null, // Not pre-computed; renderer uses RawPositions path
                 Normals = normals,
-                UVs = uvs,
+                UVs = channel0Uvs ?? Array.Empty<Vector2>(),
+                UvChannels = uvChannels,
                 Colors = hasColors ? colors : null,
                 Indices = finalIndices,
                 SourceMesh = mesh,

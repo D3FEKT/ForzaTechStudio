@@ -1,38 +1,20 @@
-﻿# Version 0.9.1.9 - Change Log
+﻿# Version 0.9.2.0 - Change Log
 
 
 ## General
-- More bug fixes related to fh6
+- Fixed an issue with broken material paths on modelbin's
 
 ## 3d viewer
-- UI improvements
-- Added UV map display window with live editing
-- Initial carbin support for transform values (would need DB access to get correct scaling)
-- Fixed an issue with saving back to opened zip, now rebuilds it fully
-- Started support of swatchbin support on models and basic material parameters displaying (RGB, glass)
-- Manufacturer colours RGB support onto modelbins
-- Multi file save support
-- Improved loading speed
-- Added export options and general export improvements
-- Changed to pyramids instead of cones on points in the viewport for a cleaner look (Looking at you varsinity)
+- Speed improvements, continuing to optimise
+- UI reworks
+- Fixed an issue with exporting to FBX being flipped
+- Added support for all UV channels in UV editor window and exporting to FBX
+- Added Blender style hotkeys to 3d viewer for free control of position, scale, rotation
+- Added Buttons for in 3d viewer position, scale, rotation + a gizmo for each
+- Fixed an issue causing FH6 modelbins to appear with broken normals after rotation
 
 ## Modelbin Creator
-- Initial support, bugs still expected
-- OBJ and FBX supported for import
-- Load game specific materials from material.zip's or use internal created material library for assignment of mats
-- Supports all LOD's and shadows
-- Single modelbin building with multiple meshes and multi modelbin output
+- Multi UV channel support on FBX import
 
-## Carbin editor
-- Fixed small bug with saving back to file changing parts not touched
-- Support for FH6 material index hash ID's
-- General UI improvements
-- Fixed bug with more than 1 tab opened not displaying correctly
 
-## Manufacturer colours
-- Added support for FH6 version of the format
 
-## BXML editor
-- General UI improvements
-- FH6 manifest support
-- Fixed an issue with converting from xml to bxml

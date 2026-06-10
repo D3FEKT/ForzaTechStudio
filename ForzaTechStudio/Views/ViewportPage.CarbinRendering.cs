@@ -300,6 +300,8 @@ namespace ForzaTechStudio.Views
                 InitialRenderPositions = positions,
                 Normals = normals ?? Array.Empty<Vector3>(),
                 UVs = source.UVs ?? Array.Empty<Vector2>(),
+                UvChannels = source.UvChannels?.ToDictionary(kv => kv.Key, kv => (Vector2[])kv.Value.Clone())
+                    ?? new Dictionary<int, Vector2[]>(),
                 Indices = source.Indices ?? Array.Empty<int>(),
                 SourceMesh = source.SourceMesh,
                 BoneTransform = Matrix4x4.Identity,

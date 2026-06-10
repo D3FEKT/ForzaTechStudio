@@ -1,6 +1,7 @@
 using ForzaTechStudio.Services;
 using ForzaTechStudio.ViewModels.ThreeDViewer;
 using Microsoft.UI.Xaml.Controls;
+using Microsoft.UI.Xaml.Controls.Primitives;
 using System;
 using System.Collections.Generic;
 using System.Diagnostics.CodeAnalysis;
@@ -61,9 +62,7 @@ namespace ForzaTechStudio.Views
                 }
 
                 var missingTargets = payloads
-                    .Where(p => string.IsNullOrEmpty(p.SourceZipPath)
-                             && string.IsNullOrEmpty(p.ZipEntryName)
-                             && (string.IsNullOrEmpty(p.FilePath) || !File.Exists(p.FilePath)))
+                    .Where(p => !HasDirectSaveTarget(p))
                     .ToList();
 
                 if (missingTargets.Count > 0)
@@ -80,7 +79,7 @@ namespace ForzaTechStudio.Views
 
                 await Task.Run(() =>
                 {
-                    foreach (var payload in payloads.Where(p => string.IsNullOrEmpty(p.SourceZipPath)))
+                    foreach (var payload in payloads.Where(p => !HasZipSaveTarget(p)))
                     {
                         File.WriteAllBytes(payload.FilePath!, payload.Bytes);
                     }
@@ -109,6 +108,295 @@ namespace ForzaTechStudio.Views
                 IsLoading = false;
                 LoadingStatus = "";
             }
+        }
+
+        private async Task SaveCurrentAsync(bool saveAs, bool preferViewportMultiSelection = false)
+        {
+            if (saveAs)
+            {
+                var dirty = CollectDirtySaveFileNodes();
+                if (dirty.Count > 1)
+                {
+                    await SaveSelectedFileNodesAsync(dirty, saveAsFolder: true);
+                    return;
+                }
+            }
+
+            var nodes = preferViewportMultiSelection
+                ? GetViewportMultiSelectionSaveFileNodes()
+                : GetCurrentSaveFileNodes();
+
+            if (nodes.Count == 0 && saveAs)
+            {
+                var dirty = CollectDirtySaveFileNodes();
+                if (dirty.Count == 1)
+                    nodes.Add(dirty[0]);
+            }
+
+            if (nodes.Count == 0)
+            {
+                await ShowError("No saveable viewport file is currently selected.");
+                return;
+            }
+
+            if (nodes.Count > 1)
+            {
+                await SaveSelectedFileNodesAsync(nodes, saveAsFolder: saveAs);
+                return;
+            }
+
+            var node = nodes[0];
+            if (saveAs || !HasDirectSaveTarget(node))
+            {
+                await SaveSingleFileNodeAsAsync(node);
+                return;
+            }
+
+            await SaveSelectedFileNodesAsync(nodes, saveAsFolder: false);
+        }
+
+        private void ShowSaveCurrentOrSelectedFlyout(IReadOnlyList<IViewerNode> selectedSaveNodes)
+        {
+            if (SaveBtn == null)
+                return;
+
+            var flyout = new MenuFlyout();
+
+            var saveCurrentItem = new MenuFlyoutItem
+            {
+                Text = "Save Current",
+                Icon = new FontIcon { Glyph = "\uE74E", FontSize = 13 }
+            };
+            saveCurrentItem.Click += async (_, _) => await SaveCurrentAsync(saveAs: false);
+            flyout.Items.Add(saveCurrentItem);
+
+            var saveSelectedItem = new MenuFlyoutItem
+            {
+                Text = "Save Selected",
+                Icon = new FontIcon { Glyph = "\uE8B7", FontSize = 13 },
+                IsEnabled = selectedSaveNodes.Count > 0
+            };
+            saveSelectedItem.Click += async (_, _) => await SaveSelectedFileNodesAsync(selectedSaveNodes, saveAsFolder: false);
+            flyout.Items.Add(saveSelectedItem);
+
+            flyout.ShowAt(SaveBtn);
+        }
+
+        private bool ShouldShowViewportSaveFlyout()
+        {
+            return (_isMultiSelectActive && _multiSelectedMeshes.Count > 1)
+                || (_isMultiLightSelectActive && _multiSelectedLightGroups.Count > 1);
+        }
+
+        private List<IViewerNode> GetViewportMultiSelectionSaveFileNodes()
+        {
+            var result = new List<IViewerNode>();
+            var seen = new HashSet<IViewerNode>();
+
+            if (_isMultiSelectActive)
+            {
+                foreach (var mesh in _multiSelectedMeshes)
+                    AddSaveFileNodes(mesh, result, seen);
+            }
+
+            if (_isMultiLightSelectActive)
+            {
+                foreach (var group in _multiSelectedLightGroups)
+                    AddSaveFileNodes(group, result, seen);
+            }
+
+            return result;
+        }
+
+        private List<IViewerNode> GetCurrentSaveFileNodes()
+        {
+            var result = GetSelectedSaveFileNodes();
+            if (result.Count > 0)
+                return result;
+
+            var seen = new HashSet<IViewerNode>();
+            void AddFromNode(IViewerNode? node)
+            {
+                if (node != null)
+                    AddSaveFileNodes(node, result, seen);
+            }
+
+            AddFromNode(ViewModel.SelectedNode);
+
+            if (ModelBinSelector?.SelectedItem is IViewerNode modelSelection)
+                AddFromNode(modelSelection);
+
+            if (MeshSelector?.SelectedItem is MeshScopeItem meshScope)
+            {
+                if (meshScope.Node != null)
+                    AddFromNode(meshScope.Node);
+                else if (ModelBinSelector?.SelectedItem is ModelBinNode modelBin)
+                    AddFromNode(modelBin);
+            }
+
+            if (DamageMeshSelector?.SelectedItem is IViewerNode damageSelection)
+                AddFromNode(damageSelection);
+            if (LightPartSelector?.SelectedItem is IViewerNode lightSelection)
+                AddFromNode(lightSelection);
+            if (LocatorPartSelector?.SelectedItem is IViewerNode locatorSelection)
+                AddFromNode(locatorSelection);
+            if (CarbinModelSelector?.SelectedItem is IViewerNode carbinSelection)
+                AddFromNode(carbinSelection);
+            if (AvPinSelector?.SelectedItem is IViewerNode avPinSelection)
+                AddFromNode(avPinSelection);
+
+            return result;
+        }
+
+        private async Task SaveSingleFileNodeAsAsync(IViewerNode node)
+        {
+            var savePicker = new FileSavePicker();
+            var hWnd = WinRT.Interop.WindowNative.GetWindowHandle(App.MainWindow);
+            WinRT.Interop.InitializeWithWindow.Initialize(savePicker, hWnd);
+
+            string extension = GetSaveExtension(node);
+            savePicker.SuggestedStartLocation = PickerLocationId.Desktop;
+            savePicker.SuggestedFileName = GetSuggestedSaveAsName(node, extension);
+            savePicker.FileTypeChoices.Add(GetSavePickerLabel(node), new[] { extension });
+
+            var outputFile = await savePicker.PickSaveFileAsync();
+            if (outputFile == null)
+                return;
+
+            try
+            {
+                IsLoading = true;
+                LoadingStatus = "Saving file...";
+
+                var payload = await BuildSavePayloadAsync(node);
+                await Task.Run(() => File.WriteAllBytes(outputFile.Path, payload.Bytes));
+
+                ApplyStandaloneSaveTarget(node, outputFile.Path);
+                MarkNodeSaved(node);
+
+                await ShowSaveSummary("Success", $"Saved {payload.DisplayName} to:\n{outputFile.Name}");
+            }
+            catch (Exception ex)
+            {
+                await ShowError($"Failed to save file.\n\nError: {ex.Message}");
+            }
+            finally
+            {
+                IsLoading = false;
+                LoadingStatus = "";
+            }
+        }
+
+        private static bool HasDirectSaveTarget(IViewerNode node)
+        {
+            return node switch
+            {
+                ModelBinNode modelBin => HasZipSaveTarget(modelBin.SourceZipPath, modelBin.ZipEntryName)
+                    || HasStandaloneSaveTarget(modelBin.FilePath),
+                LightsBinNode lightsBin => HasZipSaveTarget(lightsBin.SourceZipPath, lightsBin.ZipEntryName)
+                    || HasStandaloneSaveTarget(lightsBin.FilePath),
+                LocatorsXmlNode locatorsXml => HasZipSaveTarget(locatorsXml.SourceZipPath, locatorsXml.ZipEntryName)
+                    || HasStandaloneSaveTarget(locatorsXml.FilePath),
+                AvPinsFileNode avPins => HasZipSaveTarget(avPins.SourceZipPath, avPins.ZipEntryName)
+                    || HasStandaloneSaveTarget(avPins.FilePath),
+                CarbinFileNode carbin => HasZipSaveTarget(carbin.SourceZipPath, carbin.ZipEntryName)
+                    || HasStandaloneSaveTarget(carbin.FilePath),
+                _ => false
+            };
+        }
+
+        private static bool HasDirectSaveTarget(ViewportSavePayload payload)
+        {
+            return HasZipSaveTarget(payload) || HasStandaloneSaveTarget(payload.FilePath);
+        }
+
+        private static bool HasZipSaveTarget(ViewportSavePayload payload)
+        {
+            return HasZipSaveTarget(payload.SourceZipPath, payload.ZipEntryName);
+        }
+
+        private static bool HasZipSaveTarget(string? sourceZipPath, string? zipEntryName)
+        {
+            return !string.IsNullOrEmpty(sourceZipPath)
+                && !string.IsNullOrEmpty(zipEntryName)
+                && File.Exists(sourceZipPath);
+        }
+
+        private static bool HasStandaloneSaveTarget(string? filePath)
+        {
+            return !string.IsNullOrEmpty(filePath) && File.Exists(filePath);
+        }
+
+        private static void ApplyStandaloneSaveTarget(IViewerNode node, string filePath)
+        {
+            switch (node)
+            {
+                case ModelBinNode modelBin:
+                    modelBin.FilePath = filePath;
+                    modelBin.FileName = Path.GetFileName(filePath);
+                    modelBin.SourceZipPath = null;
+                    modelBin.ZipEntryName = null;
+                    break;
+                case LightsBinNode lightsBin:
+                    lightsBin.FilePath = filePath;
+                    lightsBin.SourceZipPath = null;
+                    lightsBin.ZipEntryName = null;
+                    break;
+                case LocatorsXmlNode locatorsXml:
+                    locatorsXml.FilePath = filePath;
+                    locatorsXml.SourceZipPath = null;
+                    locatorsXml.ZipEntryName = null;
+                    break;
+                case AvPinsFileNode avPins:
+                    avPins.FilePath = filePath;
+                    avPins.SourceZipPath = null;
+                    avPins.ZipEntryName = null;
+                    break;
+                case CarbinFileNode carbin:
+                    carbin.FilePath = filePath;
+                    carbin.SourceZipPath = null;
+                    carbin.ZipEntryName = null;
+                    break;
+            }
+        }
+
+        private static string GetSaveExtension(IViewerNode node) => node switch
+        {
+            ModelBinNode => ".modelbin",
+            LightsBinNode => ".bin",
+            LocatorsXmlNode => ".xml",
+            AvPinsFileNode => ".avpins",
+            CarbinFileNode => ".carbin",
+            _ => ".bin"
+        };
+
+        private static string GetSavePickerLabel(IViewerNode node) => node switch
+        {
+            ModelBinNode => "Forza Modelbin",
+            LightsBinNode => "Lights Binary",
+            LocatorsXmlNode => "Locator XML",
+            AvPinsFileNode => "Autovista POI File",
+            CarbinFileNode => "Carbin File",
+            _ => "Forza File"
+        };
+
+        private static string GetSuggestedSaveAsName(IViewerNode node, string extension)
+        {
+            string baseName = node switch
+            {
+                ModelBinNode modelBin when !string.IsNullOrWhiteSpace(modelBin.FilePath) => Path.GetFileNameWithoutExtension(modelBin.FilePath),
+                ModelBinNode modelBin when !string.IsNullOrWhiteSpace(modelBin.FileName) => Path.GetFileNameWithoutExtension(modelBin.FileName),
+                LightsBinNode lightsBin when !string.IsNullOrWhiteSpace(lightsBin.FilePath) => Path.GetFileNameWithoutExtension(lightsBin.FilePath),
+                LocatorsXmlNode locatorsXml when !string.IsNullOrWhiteSpace(locatorsXml.FilePath) => Path.GetFileNameWithoutExtension(locatorsXml.FilePath),
+                AvPinsFileNode avPins when !string.IsNullOrWhiteSpace(avPins.FilePath) => Path.GetFileNameWithoutExtension(avPins.FilePath),
+                CarbinFileNode carbin when !string.IsNullOrWhiteSpace(carbin.FilePath) => Path.GetFileNameWithoutExtension(carbin.FilePath),
+                _ => Path.GetFileNameWithoutExtension(node.Name ?? "file")
+            };
+
+            if (string.IsNullOrWhiteSpace(baseName))
+                baseName = "file";
+
+            return EnsureExtension(baseName + "_modified", extension);
         }
 
         private async Task<ViewportSavePayload> BuildSavePayloadAsync(IViewerNode node)
