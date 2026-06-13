@@ -8,6 +8,7 @@ using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Media;
 using Microsoft.UI.Xaml.Media.Imaging;
 using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.IO;
@@ -26,6 +27,8 @@ namespace ForzaTechStudio.Views
         private readonly Dictionary<uint, SwatchbinArchiveEntry> _viewportTextureHashLookup = new();
         private readonly Dictionary<string, TextureModel?> _viewportTextureModelCache = new(StringComparer.OrdinalIgnoreCase);
         private readonly Dictionary<string, SwatchbinArchiveEntry?> _viewportGameTextureEntryCache = new(StringComparer.OrdinalIgnoreCase);
+        private readonly Dictionary<string, ViewportLooseTextureFile> _viewportLooseTextureFiles = new(StringComparer.OrdinalIgnoreCase);
+        private readonly HashSet<string> _viewportTextureModelBuildFailures = new(StringComparer.OrdinalIgnoreCase);
         private bool _viewportTextureLookupDirty = true;
         private bool _isUpdatingTextureGameSelection;
         private ViewportGameTextureSourceItem? _selectedTextureGameSource;
@@ -46,7 +49,31 @@ namespace ForzaTechStudio.Views
             _viewportTextureHashLookup.Clear();
             _viewportTextureModelCache.Clear();
             _viewportGameTextureEntryCache.Clear();
+            _viewportTextureModelBuildFailures.Clear();
             InvalidateViewportMaterialCache();
+        }
+
+        private void RegisterLooseViewportTextureFiles(IEnumerable<ViewportLooseTextureDropFile> textureFiles)
+        {
+            bool changed = false;
+
+            foreach (var textureFile in textureFiles)
+            {
+                string texturePath = textureFile.Path;
+                if (string.IsNullOrWhiteSpace(texturePath) || !File.Exists(texturePath))
+                    continue;
+
+                string fullPath = Path.GetFullPath(texturePath);
+                string logicalPath = string.IsNullOrWhiteSpace(textureFile.LogicalPath)
+                    ? Path.GetFileName(fullPath)
+                    : textureFile.LogicalPath;
+
+                if (_viewportLooseTextureFiles.TryAdd(fullPath, new ViewportLooseTextureFile(fullPath, logicalPath)))
+                    changed = true;
+            }
+
+            if (changed)
+                InvalidateViewportTextureLookup();
         }
 
         private void RefreshViewportTextureLookupFromLoadedRoots()
@@ -55,6 +82,7 @@ namespace ForzaTechStudio.Views
             _viewportTextureLookup.Clear();
             _viewportTextureHashLookup.Clear();
             _viewportTextureModelCache.Clear();
+            _viewportTextureModelBuildFailures.Clear();
             InvalidateViewportMaterialCache();
 
             if (!_useLocalViewportTextures)
@@ -73,6 +101,54 @@ namespace ForzaTechStudio.Views
                 catch (Exception ex)
                 {
                     System.Diagnostics.Debug.WriteLine($"[Viewport/Textures] {zipNode.FilePath}: {ex.Message}");
+                }
+            }
+
+            foreach (var looseTextureFile in _viewportLooseTextureFiles.Values)
+            {
+                if (!File.Exists(looseTextureFile.Path))
+                    continue;
+
+                try
+                {
+                    foreach (var entry in IndexLooseViewportTextureFile(looseTextureFile))
+                        AddViewportTextureLookupEntry(entry);
+                }
+                catch (Exception ex)
+                {
+                    System.Diagnostics.Debug.WriteLine($"[Viewport/Textures] {looseTextureFile.Path}: {ex.Message}");
+                }
+            }
+        }
+
+        private static IEnumerable<SwatchbinArchiveEntry> IndexLooseViewportTextureFile(ViewportLooseTextureFile textureFile)
+        {
+            string extension = Path.GetExtension(textureFile.Path);
+
+            if (extension.Equals(".swatchbin", StringComparison.OrdinalIgnoreCase))
+            {
+                yield return new SwatchbinArchiveEntry
+                {
+                    DisplayName = $"[Folder] {textureFile.LogicalPath}",
+                    SourceArchivePath = textureFile.Path,
+                    LogicalPath = textureFile.LogicalPath,
+                    DataLoader = () => File.ReadAllBytes(textureFile.Path)
+                };
+
+                yield break;
+            }
+
+            if (extension.Equals(".pb", StringComparison.OrdinalIgnoreCase))
+            {
+                using var stream = File.OpenRead(textureFile.Path);
+                foreach (var entry in SwatchbinArchiveService.ExtractTextureBundleEntries(
+                    stream,
+                    textureFile.Path,
+                    textureFile.LogicalPath,
+                    $"[Folder] {textureFile.LogicalPath}",
+                    Path.GetFileName(textureFile.Path)))
+                {
+                    yield return entry;
                 }
             }
         }
@@ -124,8 +200,8 @@ namespace ForzaTechStudio.Views
             }
 
             // Local dicts to accumulate background results; merged into the main caches on UI thread
-            var newTextureModels = new Dictionary<string, TextureModel?>(StringComparer.OrdinalIgnoreCase);
-            var newGameEntries = new Dictionary<string, SwatchbinArchiveEntry?>(StringComparer.OrdinalIgnoreCase);
+            var newTextureModels = new ConcurrentDictionary<string, TextureModel?>(StringComparer.OrdinalIgnoreCase);
+            var newGameEntries = new ConcurrentDictionary<string, SwatchbinArchiveEntry?>(StringComparer.OrdinalIgnoreCase);
             int totalWork = uniqueLocalEntries.Count + gameTexturePaths.Count;
             int completedWork = 0;
 
@@ -133,19 +209,24 @@ namespace ForzaTechStudio.Views
             await Task.Run(() =>
             {
 
-                foreach (var entry in uniqueLocalEntries)
+                var parallelOptions = new ParallelOptions
                 {
-                    if (ct.IsCancellationRequested) return;
+                    CancellationToken = ct,
+                    MaxDegreeOfParallelism = Math.Max(1, Math.Min(Environment.ProcessorCount - 1, 6))
+                };
+
+                Parallel.ForEach(uniqueLocalEntries, parallelOptions, entry =>
+                {
                     try
                     {
                         _ = entry.SwatchbinData; // decompress (SwatchbinArchiveEntry has its own lock)
-                        string modelKey = $"{entry.SourceArchivePath}|{entry.LogicalPath}";
+                        string modelKey = BuildViewportTextureModelCacheKey(entry);
                         newTextureModels[modelKey] = TryBuildTextureModelFromEntry(entry);
                     }
                     catch { /* skip unreadable entries */ }
                     int done = Interlocked.Increment(ref completedWork);
                     DispatcherQueue.TryEnqueue(() => LoadingDetail = $"Loading textures... ({done} / {totalWork})");
-                }
+                });
 
                 if (ct.IsCancellationRequested) return;
 
@@ -171,7 +252,7 @@ namespace ForzaTechStudio.Views
                                     if (loadedEntry != null)
                                     {
                                         try { _ = loadedEntry.SwatchbinData; } catch { }
-                                        string modelKey = $"{loadedEntry.SourceArchivePath}|{loadedEntry.LogicalPath}";
+                                        string modelKey = BuildViewportTextureModelCacheKey(loadedEntry);
                                         if (!newTextureModels.ContainsKey(modelKey))
                                             newTextureModels[modelKey] = TryBuildTextureModelFromEntry(loadedEntry);
                                     }
@@ -194,8 +275,12 @@ namespace ForzaTechStudio.Views
 
 
             foreach (var kvp in newTextureModels)
+            {
                 if (!_viewportTextureModelCache.ContainsKey(kvp.Key))
                     _viewportTextureModelCache[kvp.Key] = kvp.Value;
+                if (kvp.Value == null)
+                    _viewportTextureModelBuildFailures.Add(kvp.Key);
+            }
 
             foreach (var kvp in newGameEntries)
                 if (!_viewportGameTextureEntryCache.ContainsKey(kvp.Key))
@@ -294,7 +379,7 @@ namespace ForzaTechStudio.Views
             try
             {
                 using var stream = new MemoryStream(entry.SwatchbinData);
-                SwatchbinInfo info = _viewportSwatchbinService.LoadSwatchbin(stream);
+                SwatchbinInfo info = new SwatchbinService().LoadSwatchbin(stream);
                 if (info.DdsData == null || info.DdsData.Length == 0)
                     return null;
 
@@ -306,6 +391,11 @@ namespace ForzaTechStudio.Views
                 System.Diagnostics.Debug.WriteLine($"[Viewport/Textures] TryBuildTextureModelFromEntry {entry.DisplayName}: {ex.Message}");
                 return null;
             }
+        }
+
+        private static string BuildViewportTextureModelCacheKey(SwatchbinArchiveEntry entry)
+        {
+            return $"{entry.SourceArchivePath}|{entry.LogicalPath}";
         }
 
         private static IEnumerable<string> BuildViewportTextureLookupKeys(string texturePath)
@@ -611,29 +701,14 @@ namespace ForzaTechStudio.Views
             if (entry == null)
                 return null;
 
-            string cacheKey = $"{entry.SourceArchivePath}|{entry.LogicalPath}";
+            string cacheKey = BuildViewportTextureModelCacheKey(entry);
             if (_viewportTextureModelCache.TryGetValue(cacheKey, out var cachedModel))
                 return cachedModel;
 
-            try
-            {
-                using var stream = new MemoryStream(entry.SwatchbinData);
-                SwatchbinInfo info = _viewportSwatchbinService.LoadSwatchbin(stream);
-                if (info.DdsData == null || info.DdsData.Length == 0)
-                    return _viewportTextureModelCache[cacheKey] = null;
-
-                var textureStream = new MemoryStream(info.DdsData, writable: false);
-                var textureModel = new TextureModel(textureStream, autoCloseStream: true);
-
-                _viewportTextureModelCache[cacheKey] = textureModel;
-                return textureModel;
-            }
-            catch (Exception ex)
-            {
-                System.Diagnostics.Debug.WriteLine($"[Viewport/Textures] Failed to resolve {entry.DisplayName}: {ex.Message}");
-                _viewportTextureModelCache[cacheKey] = null;
+            if (_viewportTextureModelBuildFailures.Contains(cacheKey))
                 return null;
-            }
+
+            return null;
         }
 
         private async void ShowZipTextures_Click(object sender, RoutedEventArgs e)
@@ -845,6 +920,8 @@ namespace ForzaTechStudio.Views
                 PathHash = pathHash;
             }
         }
+
+        private sealed record ViewportLooseTextureFile(string Path, string LogicalPath);
     }
 
     public sealed class ViewportZipTextureItem

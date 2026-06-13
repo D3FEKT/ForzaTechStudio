@@ -56,6 +56,20 @@ namespace ForzaTechStudio.ViewModels
             set => SetProperty(ref _loadedFileName, value);
         }
 
+        private string _loadedArchivePath = "";
+        public string LoadedArchivePath
+        {
+            get => _loadedArchivePath;
+            set => SetProperty(ref _loadedArchivePath, value);
+        }
+
+        private string _loadedArchiveEntryName = "";
+        public string LoadedArchiveEntryName
+        {
+            get => _loadedArchiveEntryName;
+            set => SetProperty(ref _loadedArchiveEntryName, value);
+        }
+
         // Detected Version Info
         private ushort _detectedSceneVersion = 0;
         public ushort DetectedSceneVersion
@@ -217,6 +231,18 @@ namespace ForzaTechStudio.ViewModels
 
         // Non-Upgradable Parts
         public ObservableCollection<CarbinPartEntry> NonUpgradableParts { get; } = new();
+        public ObservableCollection<CarbinModelEntry> FilteredNonUpgradableModels { get; } = new();
+
+        private string _nonUpgradableModelSearchText = "";
+        public string NonUpgradableModelSearchText
+        {
+            get => _nonUpgradableModelSearchText;
+            set
+            {
+                if (SetProperty(ref _nonUpgradableModelSearchText, value ?? string.Empty))
+                    RefreshFilteredNonUpgradableModels(preserveSelection: true);
+            }
+        }
 
         private CarbinPartEntry? _selectedNonUpgradablePart;
         public CarbinPartEntry? SelectedNonUpgradablePart
@@ -229,7 +255,8 @@ namespace ForzaTechStudio.ViewModels
                 {
                     TrackPropertyChanges(value, old);
                     OnPropertyChanged(nameof(HasSelectedNonUpgradablePart));
-                    SelectedNonUpgradableModel = value?.Models.FirstOrDefault();
+                    RefreshFilteredNonUpgradableModels(preserveSelection: false);
+                    SelectedNonUpgradableModel = FilteredNonUpgradableModels.FirstOrDefault();
                 }
             }
         }
@@ -259,6 +286,18 @@ namespace ForzaTechStudio.ViewModels
 
         // Upgradable Parts
         public ObservableCollection<CarbinPartEntry> UpgradableParts { get; } = new();
+        public ObservableCollection<CarbinModelEntry> FilteredUpgradableModels { get; } = new();
+
+        private string _upgradableModelSearchText = "";
+        public string UpgradableModelSearchText
+        {
+            get => _upgradableModelSearchText;
+            set
+            {
+                if (SetProperty(ref _upgradableModelSearchText, value ?? string.Empty))
+                    RefreshFilteredUpgradableModels(preserveSelection: true);
+            }
+        }
 
         private CarbinPartEntry? _selectedUpgradablePart;
         public CarbinPartEntry? SelectedUpgradablePart
@@ -271,7 +310,8 @@ namespace ForzaTechStudio.ViewModels
                 {
                     TrackPropertyChanges(value, old);
                     OnPropertyChanged(nameof(HasSelectedUpgradablePart));
-                    SelectedUpgradableModel = value?.Models.FirstOrDefault();
+                    RefreshFilteredUpgradableModels(preserveSelection: false);
+                    SelectedUpgradableModel = FilteredUpgradableModels.FirstOrDefault();
                     SelectedUpgrade = value?.Upgrades.FirstOrDefault();
                 }
             }
@@ -361,9 +401,15 @@ namespace ForzaTechStudio.ViewModels
 
             NonUpgradableParts.Clear();
             UpgradableParts.Clear();
+            FilteredNonUpgradableModels.Clear();
+            FilteredUpgradableModels.Clear();
 
             LoadedFilePath = "";
             LoadedFileName = "";
+            LoadedArchivePath = "";
+            LoadedArchiveEntryName = "";
+            NonUpgradableModelSearchText = "";
+            UpgradableModelSearchText = "";
             DetectedSceneVersion = 0;
             DetectedModelVersion = 0;
             IsHorizon = true;
@@ -386,6 +432,51 @@ namespace ForzaTechStudio.ViewModels
 
             _lastParsingContext = "";
             _lastFilePosition = 0;
+        }
+
+        private void RefreshFilteredNonUpgradableModels(bool preserveSelection)
+        {
+            var selected = preserveSelection ? SelectedNonUpgradableModel : null;
+            FilteredNonUpgradableModels.Clear();
+
+            if (SelectedNonUpgradablePart != null)
+            {
+                foreach (var model in FilterModels(SelectedNonUpgradablePart.Models, NonUpgradableModelSearchText))
+                    FilteredNonUpgradableModels.Add(model);
+            }
+
+            if (selected != null && FilteredNonUpgradableModels.Contains(selected))
+                SelectedNonUpgradableModel = selected;
+            else if (SelectedNonUpgradableModel != null && !FilteredNonUpgradableModels.Contains(SelectedNonUpgradableModel))
+                SelectedNonUpgradableModel = FilteredNonUpgradableModels.FirstOrDefault();
+        }
+
+        private void RefreshFilteredUpgradableModels(bool preserveSelection)
+        {
+            var selected = preserveSelection ? SelectedUpgradableModel : null;
+            FilteredUpgradableModels.Clear();
+
+            if (SelectedUpgradablePart != null)
+            {
+                foreach (var model in FilterModels(SelectedUpgradablePart.Models, UpgradableModelSearchText))
+                    FilteredUpgradableModels.Add(model);
+            }
+
+            if (selected != null && FilteredUpgradableModels.Contains(selected))
+                SelectedUpgradableModel = selected;
+            else if (SelectedUpgradableModel != null && !FilteredUpgradableModels.Contains(SelectedUpgradableModel))
+                SelectedUpgradableModel = FilteredUpgradableModels.FirstOrDefault();
+        }
+
+        private static System.Collections.Generic.IEnumerable<CarbinModelEntry> FilterModels(System.Collections.Generic.IEnumerable<CarbinModelEntry> models, string query)
+        {
+            if (string.IsNullOrWhiteSpace(query))
+                return models;
+
+            string trimmedQuery = query.Trim();
+            return models.Where(model =>
+                (model.ModelFileName ?? string.Empty).Contains(trimmedQuery, StringComparison.OrdinalIgnoreCase) ||
+                (model.ModelGamePath ?? string.Empty).Contains(trimmedQuery, StringComparison.OrdinalIgnoreCase));
         }
 
         private LODFlags GetLODFlags()

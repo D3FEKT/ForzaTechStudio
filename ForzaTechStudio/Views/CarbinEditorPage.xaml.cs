@@ -12,9 +12,7 @@ namespace ForzaTechStudio.Views
         // Cached references to named controls ? assigned in Loaded because x:Name inside
         // PivotItem content is not directly accessible as a field in the partial class.
         private TextBox? _nonUpgradableSearchBox;
-        private ListView? _nonUpgradableModelsList;
         private TextBox? _upgradableSearchBox;
-        private ListView? _upgradableModelsList;
         // Tracks the model entry that was right-clicked for the context flyout.
         // MenuFlyout is a static resource so its items don't inherit DataContext from the
         // ListViewItem we capture it in the Opening event instead.
@@ -41,9 +39,7 @@ namespace ForzaTechStudio.Views
         private void OnPageLoaded(object sender, RoutedEventArgs e)
         {
             _nonUpgradableSearchBox = this.FindName("NonUpgradableModelSearchBox") as TextBox;
-            _nonUpgradableModelsList = this.FindName("NonUpgradableModelsList") as ListView;
             _upgradableSearchBox = this.FindName("UpgradableModelSearchBox") as TextBox;
-            _upgradableModelsList = this.FindName("UpgradableModelsList") as ListView;
 
             // Sync tab strip selection to active tab
             _isSwitchingTabs = true;
@@ -64,7 +60,19 @@ namespace ForzaTechStudio.Views
                 // Update watcher when the loaded file changes
                 if (!string.IsNullOrEmpty(_watchedFilePath))
                     _fileWatcher?.Unwatch(_watchedFilePath);
-                _watchedFilePath = ViewModel.LoadedFilePath;
+                _watchedFilePath = string.IsNullOrEmpty(ViewModel.LoadedArchivePath)
+                    ? ViewModel.LoadedFilePath
+                    : ViewModel.LoadedArchivePath;
+                if (!string.IsNullOrEmpty(_watchedFilePath))
+                    _fileWatcher?.Watch(_watchedFilePath);
+            }
+            else if (e.PropertyName == nameof(CarbinEditorViewModel.LoadedArchivePath))
+            {
+                if (!string.IsNullOrEmpty(_watchedFilePath))
+                    _fileWatcher?.Unwatch(_watchedFilePath);
+                _watchedFilePath = string.IsNullOrEmpty(ViewModel.LoadedArchivePath)
+                    ? ViewModel.LoadedFilePath
+                    : ViewModel.LoadedArchivePath;
                 if (!string.IsNullOrEmpty(_watchedFilePath))
                     _fileWatcher?.Watch(_watchedFilePath);
             }
@@ -72,54 +80,22 @@ namespace ForzaTechStudio.Views
             {
                 if (_nonUpgradableSearchBox != null)
                     _nonUpgradableSearchBox.Text = "";
-                if (_nonUpgradableModelsList != null)
-                    _nonUpgradableModelsList.ItemsSource = ViewModel.SelectedNonUpgradablePart?.Models;
             }
             else if (e.PropertyName == nameof(CarbinEditorViewModel.SelectedUpgradablePart))
             {
                 if (_upgradableSearchBox != null)
                     _upgradableSearchBox.Text = "";
-                if (_upgradableModelsList != null)
-                    _upgradableModelsList.ItemsSource = ViewModel.SelectedUpgradablePart?.Models;
             }
         }
 
         private void NonUpgradableModelSearchBox_TextChanged(object sender, TextChangedEventArgs e)
         {
-            var part = ViewModel.SelectedNonUpgradablePart;
-            if (part == null || _nonUpgradableModelsList == null) return;
-
-            var query = (sender as TextBox)?.Text ?? "";
-            if (string.IsNullOrEmpty(query))
-            {
-                _nonUpgradableModelsList.ItemsSource = part.Models;
-            }
-            else
-            {
-                _nonUpgradableModelsList.ItemsSource = part.Models
-                    .Where(m => m.ModelFileName.Contains(query, StringComparison.OrdinalIgnoreCase)
-                             || m.ModelGamePath.Contains(query, StringComparison.OrdinalIgnoreCase))
-                    .ToList();
-            }
+            ViewModel.NonUpgradableModelSearchText = (sender as TextBox)?.Text ?? "";
         }
 
         private void UpgradableModelSearchBox_TextChanged(object sender, TextChangedEventArgs e)
         {
-            var part = ViewModel.SelectedUpgradablePart;
-            if (part == null || _upgradableModelsList == null) return;
-
-            var query = (sender as TextBox)?.Text ?? "";
-            if (string.IsNullOrEmpty(query))
-            {
-                _upgradableModelsList.ItemsSource = part.Models;
-            }
-            else
-            {
-                _upgradableModelsList.ItemsSource = part.Models
-                    .Where(m => m.ModelFileName.Contains(query, StringComparison.OrdinalIgnoreCase)
-                             || m.ModelGamePath.Contains(query, StringComparison.OrdinalIgnoreCase))
-                    .ToList();
-            }
+            ViewModel.UpgradableModelSearchText = (sender as TextBox)?.Text ?? "";
         }
 
         private async void OnFileChangedExternally(string path)
@@ -164,6 +140,10 @@ namespace ForzaTechStudio.Views
                 if (file != null && file.Path.EndsWith(".carbin", StringComparison.OrdinalIgnoreCase))
                 {
                     await ViewModel.LoadCarbinFileAsync(file.Path);
+                }
+                else if (file != null && file.Path.EndsWith(".zip", StringComparison.OrdinalIgnoreCase))
+                {
+                    await ViewModel.LoadCarbinZipAsync(file.Path);
                 }
             }
         }

@@ -53,6 +53,12 @@ namespace ForzaTechStudio.Views
 
         private void UpdateTransformUI()
         {
+            if (_isMultiSelectActive && _multiSelectedMeshes.Count > 0)
+            {
+                UpdateTransformUIForMultiSelect();
+                return;
+            }
+
             if (ModelBinSelector.SelectedItem is not ModelBinNode modelBin) 
             {
                 ClearTransformFields();

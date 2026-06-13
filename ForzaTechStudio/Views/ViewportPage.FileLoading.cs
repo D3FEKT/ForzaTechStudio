@@ -17,6 +17,7 @@ using System.Linq;
 using System.Numerics;
 using System.Text;
 using System.Threading.Tasks;
+using Windows.Storage;
 using Windows.Storage.Pickers;
 using SDX = SharpDX;
 using Color = Windows.UI.Color;
@@ -27,6 +28,21 @@ namespace ForzaTechStudio.Views
     public sealed partial class ViewportPage : Page
     {
         private static readonly RecyclableMemoryStreamManager _msManager = new();
+        private static readonly HashSet<string> ViewportLoadableDropExtensions = new(StringComparer.OrdinalIgnoreCase)
+        {
+            ".zip", ".minizip", ".modelbin", ".bin", ".carbin", ".xml", ".avpins", ".gr2", ".gsf"
+        };
+
+        private static readonly HashSet<string> ViewportLooseTextureDropExtensions = new(StringComparer.OrdinalIgnoreCase)
+        {
+            ".swatchbin", ".pb"
+        };
+
+        private sealed record ViewportLooseTextureDropFile(string Path, string LogicalPath);
+        private sealed record ViewportDroppedFiles(
+            List<string> IndividualFiles,
+            List<string> FolderPaths,
+            List<ViewportLooseTextureDropFile> LooseTextureFiles);
 
         private void Page_DragOver(object sender, Microsoft.UI.Xaml.DragEventArgs e)
         {
@@ -59,8 +75,100 @@ namespace ForzaTechStudio.Views
             if (e.DataView.Contains(Windows.ApplicationModel.DataTransfer.StandardDataFormats.StorageItems))
             {
                 var items = await e.DataView.GetStorageItemsAsync();
-                var paths = items.Select(i => i.Path).ToList();
-                await ProcessDroppedFilesAsync(paths);
+                var droppedFiles = await CollectViewportDropFilesAsync(items);
+                RegisterLooseViewportTextureFiles(droppedFiles.LooseTextureFiles);
+
+                var allLoadablePaths = new List<string>(droppedFiles.IndividualFiles);
+                allLoadablePaths.AddRange(droppedFiles.FolderPaths);
+
+                if (allLoadablePaths.Count > 0)
+                {
+                    await ProcessDroppedFilesAsync(allLoadablePaths);
+                }
+                else if (droppedFiles.LooseTextureFiles.Count > 0)
+                {
+                    InvalidateViewportTextureLookup();
+                    RefreshViewportTextureLookupFromLoadedRoots();
+                    _ = StartViewportTextureRefreshAsync();
+                }
+            }
+        }
+
+        private Task<ViewportDroppedFiles> CollectViewportDropFilesAsync(IEnumerable<IStorageItem> items)
+        {
+            var itemPaths = items
+                .Where(item => !string.IsNullOrWhiteSpace(item.Path))
+                .Select(item => (item.Path, IsFolder: item is StorageFolder))
+                .ToList();
+
+            return Task.Run(() =>
+            {
+                var individualFiles = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+                var folderPaths = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+                var looseTextureFiles = new Dictionary<string, ViewportLooseTextureDropFile>(StringComparer.OrdinalIgnoreCase);
+
+                foreach (var item in itemPaths)
+                {
+                    if (item.IsFolder)
+                    {
+                        if (Directory.Exists(item.Path))
+                        {
+                            folderPaths.Add(Path.GetFullPath(item.Path));
+                            // Also collect loose texture files from the folder tree
+                            CollectViewportFolderTextureFiles(item.Path, looseTextureFiles);
+                        }
+                    }
+                    else
+                    {
+                        AddViewportDropFile(item.Path, individualFiles, looseTextureFiles);
+                    }
+                }
+
+                return new ViewportDroppedFiles(
+                    individualFiles.OrderBy(path => path, StringComparer.OrdinalIgnoreCase).ToList(),
+                    folderPaths.OrderBy(path => path, StringComparer.OrdinalIgnoreCase).ToList(),
+                    looseTextureFiles.Values.OrderBy(file => file.Path, StringComparer.OrdinalIgnoreCase).ToList());
+            });
+        }
+
+        private static void CollectViewportFolderTextureFiles(string folderPath, IDictionary<string, ViewportLooseTextureDropFile> looseTextureFiles)
+        {
+            if (string.IsNullOrWhiteSpace(folderPath) || !Directory.Exists(folderPath))
+                return;
+
+            try
+            {
+                foreach (string filePath in Directory.EnumerateFiles(folderPath, "*", SearchOption.AllDirectories))
+                {
+                    string extension = Path.GetExtension(filePath);
+                    if (ViewportLooseTextureDropExtensions.Contains(extension))
+                    {
+                        string fullPath = Path.GetFullPath(filePath);
+                        string logicalPath = Path.GetRelativePath(folderPath, fullPath);
+                        looseTextureFiles.TryAdd(fullPath, new ViewportLooseTextureDropFile(fullPath, logicalPath));
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"[Viewport/Drop] {folderPath}: {ex.Message}");
+            }
+        }
+
+        private static void AddViewportDropFile(string filePath, ISet<string> loadableFiles, IDictionary<string, ViewportLooseTextureDropFile> looseTextureFiles)
+        {
+            if (string.IsNullOrWhiteSpace(filePath) || !File.Exists(filePath))
+                return;
+
+            string extension = Path.GetExtension(filePath);
+            if (ViewportLoadableDropExtensions.Contains(extension))
+            {
+                loadableFiles.Add(Path.GetFullPath(filePath));
+            }
+            else if (ViewportLooseTextureDropExtensions.Contains(extension))
+            {
+                string fullPath = Path.GetFullPath(filePath);
+                looseTextureFiles.TryAdd(fullPath, new ViewportLooseTextureDropFile(fullPath, Path.GetFileName(fullPath)));
             }
         }
 
@@ -70,6 +178,10 @@ namespace ForzaTechStudio.Views
 
             IsLoading = true;
             LoadingStatus = "Processing dropped files...";
+
+            // Separate folder paths from individual file paths
+            var folderPaths = paths.Where(p => Directory.Exists(p)).ToList();
+            var filePaths = paths.Where(p => !Directory.Exists(p)).ToList();
 
             bool l0 = Lod0Item.IsChecked;
             bool l1 = Lod1Item.IsChecked;
@@ -84,11 +196,22 @@ namespace ForzaTechStudio.Views
 
             var loadedNodes = new System.Collections.Generic.List<(ViewerNode Node, string Path)>();
 
+            // Load folder trees first (each folder becomes a single FolderNode root with children)
+            foreach (var folderPath in folderPaths)
+            {
+                LoadingDetail = Path.GetFileName(folderPath);
+                var folderNode = await LoadFolderTree(folderPath);
+                if (folderNode != null)
+                {
+                    loadedNodes.Add((folderNode, folderPath));
+                }
+            }
+
             // XML files must be loaded synchronously on the UI thread
-            var xmlPaths = paths.Where(p => Path.GetExtension(p).Equals(".xml", StringComparison.OrdinalIgnoreCase)).ToList();
-            var avpinsPaths = paths.Where(p => Path.GetExtension(p).Equals(".avpins", StringComparison.OrdinalIgnoreCase)).ToList();
-            var grannyPaths = paths.Where(p => { var ext = Path.GetExtension(p).ToLowerInvariant(); return ext == ".gr2" || ext == ".gsf"; }).ToList();
-            var otherPaths = paths.Where(p => !xmlPaths.Contains(p) && !avpinsPaths.Contains(p) && !grannyPaths.Contains(p)).ToList();
+            var xmlPaths = filePaths.Where(p => Path.GetExtension(p).Equals(".xml", StringComparison.OrdinalIgnoreCase)).ToList();
+            var avpinsPaths = filePaths.Where(p => Path.GetExtension(p).Equals(".avpins", StringComparison.OrdinalIgnoreCase)).ToList();
+            var grannyPaths = filePaths.Where(p => { var ext = Path.GetExtension(p).ToLowerInvariant(); return ext == ".gr2" || ext == ".gsf"; }).ToList();
+            var otherPaths = filePaths.Where(p => !xmlPaths.Contains(p) && !avpinsPaths.Contains(p) && !grannyPaths.Contains(p)).ToList();
 
             foreach (var xmlPath in xmlPaths)
             {
@@ -520,6 +643,25 @@ namespace ForzaTechStudio.Views
             LoadingStatus = "";
             LoadingDetail = "";
         }
+
+        private async void OpenFolder_Click(object sender, RoutedEventArgs e)
+        {
+            var picker = new FolderPicker();
+            var window = App.MainWindow;
+            var hWnd = WinRT.Interop.WindowNative.GetWindowHandle(window);
+            WinRT.Interop.InitializeWithWindow.Initialize(picker, hWnd);
+
+            picker.ViewMode = PickerViewMode.List;
+            picker.SuggestedStartLocation = PickerLocationId.Desktop;
+            picker.FileTypeFilter.Add("*");
+
+            var folder = await picker.PickSingleFolderAsync();
+            if (folder == null || string.IsNullOrWhiteSpace(folder.Path))
+                return;
+
+            // Treat as a single folder drop — reuse ProcessDroppedFilesAsync
+            await ProcessDroppedFilesAsync(new List<string> { folder.Path });
+        }
         
         private LightsBinNode? LoadLightsBin(string name, byte[] data)
         {
@@ -570,6 +712,211 @@ namespace ForzaTechStudio.Views
                 System.Diagnostics.Debug.WriteLine($"Error loading lights: {ex}");
                 return null;
             }
+        }
+
+
+        private async Task<FolderNode?> LoadFolderTree(string folderPath)
+        {
+            if (!Directory.Exists(folderPath))
+                return null;
+
+            var folderNode = new FolderNode { Name = Path.GetFileName(folderPath), FolderPath = folderPath, IsChecked = true };
+            var allFiles = new List<(string FilePath, string RelativeDir)>();
+
+            try
+            {
+                string normalizedRoot = Path.GetFullPath(folderPath).TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar) + Path.DirectorySeparatorChar;
+
+                foreach (string filePath in Directory.EnumerateFiles(folderPath, "*", SearchOption.AllDirectories))
+                {
+                    string extension = Path.GetExtension(filePath);
+                    if (!ViewportLoadableDropExtensions.Contains(extension))
+                    {
+                        // Loose texture files are already collected separately via CollectViewportFolderTextureFiles
+                        continue;
+                    }
+                    string fullPath = Path.GetFullPath(filePath);
+                    string relativePath = fullPath.StartsWith(normalizedRoot, StringComparison.OrdinalIgnoreCase)
+                        ? fullPath.Substring(normalizedRoot.Length)
+                        : Path.GetRelativePath(folderPath, fullPath);
+                    string? relativeDir = Path.GetDirectoryName(relativePath);
+                    allFiles.Add((fullPath, relativeDir ?? string.Empty));
+                }
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"[Viewport/LoadFolder] {folderPath}: {ex.Message}");
+                return null;
+            }
+
+            if (allFiles.Count == 0)
+            {
+                // No loadable files found — still return the folder node so the user sees it
+                return folderNode;
+            }
+
+            // Load files in parallel (XML/Granny on UI thread, others in background)
+            var loadedEntries = new ConcurrentBag<(string FilePath, string RelativeDir, ViewerNode Node)>();
+
+            // XML and Granny/AvPins files must be loaded on the UI thread
+            var uiThreadFiles = allFiles.Where(f =>
+            {
+                var ext = Path.GetExtension(f.FilePath).ToLowerInvariant();
+                return ext == ".xml" || ext == ".avpins" || ext == ".gr2" || ext == ".gsf";
+            }).ToList();
+
+            var bgFiles = allFiles.Except(uiThreadFiles).ToList();
+
+            // Load UI-thread files
+            foreach (var file in uiThreadFiles)
+            {
+                try
+                {
+                    string ext = Path.GetExtension(file.FilePath).ToLowerInvariant();
+                    string fileName = Path.GetFileName(file.FilePath);
+                    ViewerNode? node = null;
+
+                    if (ext == ".xml")
+                    {
+                        node = LoadLocatorsXml(file.FilePath);
+                    }
+                    else if (ext == ".avpins")
+                    {
+                        var data = await File.ReadAllBytesAsync(file.FilePath);
+                        var xmlText = DecodeXmlText(data);
+                        node = LoadAvPins(fileName, xmlText, file.FilePath);
+                    }
+                    else if (ext == ".gr2" || ext == ".gsf")
+                    {
+                        node = LoadGrannyFile(file.FilePath);
+                    }
+
+                    if (node != null)
+                        loadedEntries.Add((file.FilePath, file.RelativeDir, node));
+                }
+                catch (Exception ex)
+                {
+                    System.Diagnostics.Debug.WriteLine($"[Viewport/LoadFolder] {file.FilePath}: {ex}");
+                }
+            }
+
+            // Load background-thread files in parallel
+            await Task.Run(async () =>
+            {
+                ViewerNode.SuppressCheckCascade = true;
+                try
+                {
+                    var parallelOptions = new ParallelOptions { MaxDegreeOfParallelism = Environment.ProcessorCount };
+                    await Parallel.ForEachAsync(bgFiles, parallelOptions, async (file, ct) =>
+                    {
+                        try
+                        {
+                            string ext = Path.GetExtension(file.FilePath).ToLowerInvariant();
+                            string fileName = Path.GetFileName(file.FilePath);
+                            ViewerNode? node = null;
+                            DispatcherQueue.TryEnqueue(() => LoadingDetail = fileName);
+
+                            if (ext == ".zip")
+                            {
+                                node = LoadZip(file.FilePath);
+                            }
+                            else if (ext == ".minizip")
+                            {
+                                node = LoadMiniZip(file.FilePath);
+                            }
+                            else if (ext == ".modelbin")
+                            {
+                                using var fs = new FileStream(file.FilePath, FileMode.Open, FileAccess.Read, FileShare.Read);
+                                node = LoadModelBin(file.FilePath, fs);
+                                if (node != null)
+                                {
+                                    node.Name = fileName;
+                                    if (node is ModelBinNode modelBinNode)
+                                        modelBinNode.FilePath = file.FilePath;
+                                }
+                            }
+                            else if (ext == ".bin")
+                            {
+                                var bytes = await File.ReadAllBytesAsync(file.FilePath, ct);
+                                if (IsLightsBinFile(bytes))
+                                {
+                                    node = LoadLightsBin(fileName, bytes);
+                                    if (node is LightsBinNode lightsBinNode)
+                                        lightsBinNode.FilePath = file.FilePath;
+                                }
+                                else if (fileName.Equals("physicsdefinition.bin", StringComparison.OrdinalIgnoreCase))
+                                {
+                                    node = LoadPhysicsDefinition(fileName, bytes);
+                                }
+                                else if (fileName.Contains("lights", StringComparison.OrdinalIgnoreCase))
+                                {
+                                    node = LoadLightsBin(fileName, bytes);
+                                    if (node is LightsBinNode lightsBinNode)
+                                        lightsBinNode.FilePath = file.FilePath;
+                                }
+                            }
+                            else if (ext == ".carbin")
+                            {
+                                var bytes = await File.ReadAllBytesAsync(file.FilePath, ct);
+                                node = LoadCarbin(fileName, bytes, filePath: file.FilePath);
+                            }
+
+                            if (node != null)
+                                loadedEntries.Add((file.FilePath, file.RelativeDir, node));
+                        }
+                        catch (Exception ex)
+                        {
+                            System.Diagnostics.Debug.WriteLine($"[Viewport/LoadFolder] {file.FilePath}: {ex}");
+                        }
+                    });
+                }
+                finally
+                {
+                    ViewerNode.SuppressCheckCascade = false;
+                }
+            });
+
+            // Build folder hierarchy using the same folderDict pattern as LoadZip
+            var folderDict = new Dictionary<string, ViewerNode>(StringComparer.OrdinalIgnoreCase)
+            {
+                ["."] = folderNode
+            };
+
+            // Sort entries by path for deterministic ordering
+            var sortedEntries = loadedEntries
+                .OrderBy(e => e.RelativeDir, StringComparer.OrdinalIgnoreCase)
+                .ThenBy(e => Path.GetFileName(e.FilePath), StringComparer.OrdinalIgnoreCase);
+
+            foreach (var entry in sortedEntries)
+            {
+                string relDir = string.IsNullOrEmpty(entry.RelativeDir) ? "." : entry.RelativeDir.Replace('\\', '/');
+                var parts = relDir.Split('/', StringSplitOptions.RemoveEmptyEntries);
+
+                ViewerNode currentParent = folderNode;
+                string currentPath = ".";
+
+                for (int i = 0; i < parts.Length; i++)
+                {
+                    string part = parts[i];
+                    string newPath = currentPath + "/" + part;
+
+                    if (!folderDict.TryGetValue(newPath, out var existingFolder))
+                    {
+                        existingFolder = new FolderNode { Name = part, Parent = currentParent, IsChecked = true };
+                        folderDict[newPath] = existingFolder;
+                        currentParent.Children.Add(existingFolder);
+                    }
+
+                    currentParent = existingFolder;
+                    currentPath = newPath;
+                }
+
+                entry.Node.Parent = currentParent;
+                currentParent.Children.Add(entry.Node);
+            }
+
+            folderNode.UpdateCheckStateFromChildren();
+            return folderNode;
         }
 
         private ZipNode? LoadZip(string path)
@@ -657,7 +1004,7 @@ namespace ForzaTechStudio.Views
                                      // Save to temp file to use existing XML parser
                                      string tempPath = Path.GetTempFileName();
                                      File.WriteAllBytes(tempPath, bytes);
-                                     node = LoadLocatorsXml(tempPath);
+                                     node = LoadLocatorsXml(tempPath, fileName);
                                      if (node != null)
                                      {
                                          node.Name = fileName;
@@ -1156,8 +1503,12 @@ namespace ForzaTechStudio.Views
             }
         }
 
-        private LocatorsXmlNode? LoadLocatorsXml(string filePath)
+        private LocatorsXmlNode? LoadLocatorsXml(string filePath, string? displayName = null)
         {
+            string xmlName = string.IsNullOrWhiteSpace(displayName)
+                ? System.IO.Path.GetFileName(filePath)
+                : displayName;
+
             try
             {
                 var parser = new LocatorsXmlParser();
@@ -1165,14 +1516,21 @@ namespace ForzaTechStudio.Views
 
                 if (data.Locators.Count == 0)
                 {
-                    // Surface a visible error so the user knows why nothing appeared
-                    _ = ShowError($"No <Locator> entries found in:\n{System.IO.Path.GetFileName(filePath)}\n\nMake sure the root element contains <Locator> children with a <Name value=\"...\"/> element.");
+                    if (IsLikelyLocatorXmlFile(xmlName))
+                    {
+                        _ = ShowError($"No <Locator> entries found in:\n{xmlName}\n\nMake sure the root element contains <Locator> children with a <Name value=\"...\"/> element.");
+                    }
+                    else
+                    {
+                        System.Diagnostics.Debug.WriteLine($"[Viewport/XML] Skipping unsupported XML: {xmlName}");
+                    }
+
                     return null;
                 }
 
                 var rootNode = new LocatorsXmlNode
                 {
-                    Name = System.IO.Path.GetFileName(filePath),
+                    Name = xmlName,
                     FilePath = filePath,
                     LocatorsData = data,
                     IsChecked = false, // Default to unchecked
@@ -1196,9 +1554,25 @@ namespace ForzaTechStudio.Views
             }
             catch (Exception ex)
             {
-                _ = ShowError($"Failed to open locators XML:\n{System.IO.Path.GetFileName(filePath)}\n\n{ex.Message}");
+                if (IsLikelyLocatorXmlFile(xmlName))
+                {
+                    _ = ShowError($"Failed to open locators XML:\n{xmlName}\n\n{ex.Message}");
+                }
+                else
+                {
+                    System.Diagnostics.Debug.WriteLine($"[Viewport/XML] Skipping unsupported XML {xmlName}: {ex.Message}");
+                }
+
                 return null;
             }
+        }
+
+        private static bool IsLikelyLocatorXmlFile(string? fileName)
+        {
+            if (string.IsNullOrWhiteSpace(fileName))
+                return false;
+
+            return fileName.Contains("locator", StringComparison.OrdinalIgnoreCase);
         }
 
         private AvPinsFileNode? LoadAvPins(

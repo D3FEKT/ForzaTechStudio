@@ -64,12 +64,9 @@ namespace ForzaTechStudio.Views
              if (_isMultiSelectActive && _multiSelectedMeshes.Count > 0)
              {
                  // Parse delta values from the UI fields
-                 float dSX = float.TryParse(ScaleX.Text, System.Globalization.NumberStyles.Float,
-                     System.Globalization.CultureInfo.InvariantCulture, out float vdSX) ? vdSX : 0f;
-                 float dSY = float.TryParse(ScaleY.Text, System.Globalization.NumberStyles.Float,
-                     System.Globalization.CultureInfo.InvariantCulture, out float vdSY) ? vdSY : 0f;
-                 float dSZ = float.TryParse(ScaleZ.Text, System.Globalization.NumberStyles.Float,
-                     System.Globalization.CultureInfo.InvariantCulture, out float vdSZ) ? vdSZ : 0f;
+                 float dSX = ParseMultiSelectScaleDelta(ScaleX.Text);
+                 float dSY = ParseMultiSelectScaleDelta(ScaleY.Text);
+                 float dSZ = ParseMultiSelectScaleDelta(ScaleZ.Text);
                  float dRX = float.TryParse(RotX.Text, System.Globalization.NumberStyles.Float,
                      System.Globalization.CultureInfo.InvariantCulture, out float vdRX) ? vdRX : 0f;
                  float dRY = float.TryParse(RotY.Text, System.Globalization.NumberStyles.Float,
@@ -110,12 +107,9 @@ namespace ForzaTechStudio.Views
                      float newRX = snap.Rotation.X + dRX;
                      float newRY = snap.Rotation.Y + dRY;
                      float newRZ = snap.Rotation.Z + dRZ;
-                     float newTX = snap.Translate.X + dTX;
-                     float newTY = snap.Translate.Y + dTY;
-                     float newTZ = snap.Translate.Z + dTZ;
 
                      meshBlob.PositionScale = new Vector4(newSX, newSY, newSZ, snap.Scale.W);
-                     meshBlob.PositionTranslate = new Vector4(newTX, newTY, newTZ, snap.Translate.W);
+                     meshBlob.PositionTranslate = ApplyWorldTranslationDelta(mesh, snap.Translate, new Vector3(dTX, dTY, dTZ));
                      mesh.GeometryData.RotationEulerDegrees = new Vector3(newRX, newRY, newRZ);
 
                      bool hasBone = mesh.GeometryData.SourceBone != null &&
@@ -123,7 +117,8 @@ namespace ForzaTechStudio.Views
                      if (hasBone)
                          UpdateMeshRenderingWithBoneTransform(mesh, mesh.GeometryData.BoneTransform);
                      else
-                         UpdateMeshRendering(mesh, newSX, newSY, newSZ, newTX, newTY, newTZ);
+                         UpdateMeshRendering(mesh, newSX, newSY, newSZ,
+                             meshBlob.PositionTranslate.X, meshBlob.PositionTranslate.Y, meshBlob.PositionTranslate.Z);
 
                      // Propagate to sibling meshes (other LODs, shadow copies)
                      var siblings = CollectSiblingMeshNodes(mesh, new HashSet<MeshNode>(_multiSelectedMeshes));
@@ -132,7 +127,7 @@ namespace ForzaTechStudio.Views
                          if (sibling.GeometryData?.SourceMesh == null) continue;
                          var sibBlob = sibling.GeometryData.SourceMesh;
                          sibBlob.PositionScale = new Vector4(newSX, newSY, newSZ, sibBlob.PositionScale.W);
-                         sibBlob.PositionTranslate = new Vector4(newTX, newTY, newTZ, sibBlob.PositionTranslate.W);
+                         sibBlob.PositionTranslate = ApplyWorldTranslationDelta(sibling, snap.Translate, new Vector3(dTX, dTY, dTZ));
                          sibling.GeometryData.RotationEulerDegrees = new Vector3(newRX, newRY, newRZ);
 
                          bool sibHasBone = sibling.GeometryData.SourceBone != null &&
@@ -140,7 +135,8 @@ namespace ForzaTechStudio.Views
                          if (sibHasBone)
                              UpdateMeshRenderingWithBoneTransform(sibling, sibling.GeometryData.BoneTransform);
                          else
-                             UpdateMeshRendering(sibling, newSX, newSY, newSZ, newTX, newTY, newTZ);
+                             UpdateMeshRendering(sibling, newSX, newSY, newSZ,
+                                 sibBlob.PositionTranslate.X, sibBlob.PositionTranslate.Y, sibBlob.PositionTranslate.Z);
                      }
                  }
 
@@ -191,12 +187,9 @@ namespace ForzaTechStudio.Views
                      float newRX = snap.Rotation.X + dRX;
                      float newRY = snap.Rotation.Y + dRY;
                      float newRZ = snap.Rotation.Z + dRZ;
-                     float newTX = snap.Translate.X + dTX;
-                     float newTY = snap.Translate.Y + dTY;
-                     float newTZ = snap.Translate.Z + dTZ;
 
                      meshBlob.PositionScale = new Vector4(newSX, newSY, newSZ, snap.Scale.W);
-                     meshBlob.PositionTranslate = new Vector4(newTX, newTY, newTZ, snap.Translate.W);
+                     meshBlob.PositionTranslate = ApplyWorldTranslationDelta(mesh, snap.Translate, new Vector3(dTX, dTY, dTZ));
                      mesh.GeometryData.RotationEulerDegrees = new Vector3(newRX, newRY, newRZ);
 
                      bool hasBone = mesh.GeometryData.SourceBone != null &&
@@ -204,7 +197,8 @@ namespace ForzaTechStudio.Views
                      if (hasBone)
                          UpdateMeshRenderingWithBoneTransform(mesh, mesh.GeometryData.BoneTransform);
                      else
-                         UpdateMeshRendering(mesh, newSX, newSY, newSZ, newTX, newTY, newTZ);
+                         UpdateMeshRendering(mesh, newSX, newSY, newSZ,
+                             meshBlob.PositionTranslate.X, meshBlob.PositionTranslate.Y, meshBlob.PositionTranslate.Z);
                  }
 
                  CommitTransformAction(scopeUndoAction);
@@ -313,7 +307,8 @@ namespace ForzaTechStudio.Views
                  // Update mesh translate if changed
                  if (transChanged)
                  {
-                     meshBlob.PositionTranslate = new Vector4(newTX, newTY, newTZ, currentTrans.W);
+                     var delta = new Vector3(newTX - currentTrans.X, newTY - currentTrans.Y, newTZ - currentTrans.Z);
+                     meshBlob.PositionTranslate = ApplyWorldTranslationDelta(mesh, currentTrans, delta);
                  }
 
                  // Update rendering if any value changed
@@ -327,7 +322,8 @@ namespace ForzaTechStudio.Views
                      else
                      {
                          // NON-BONE MODE: Update rendering with mesh values
-                         UpdateMeshRendering(mesh, newSX, newSY, newSZ, newTX, newTY, newTZ);
+                         UpdateMeshRendering(mesh, newSX, newSY, newSZ,
+                             meshBlob.PositionTranslate.X, meshBlob.PositionTranslate.Y, meshBlob.PositionTranslate.Z);
                      }
                  }
              }
@@ -337,6 +333,17 @@ namespace ForzaTechStudio.Views
              
              RefreshHighlight();
              RefreshOverlays();
+        }
+
+        private static float ParseMultiSelectScaleDelta(string text)
+        {
+            if (!float.TryParse(text, System.Globalization.NumberStyles.Float,
+                    System.Globalization.CultureInfo.InvariantCulture, out float value))
+            {
+                return 0f;
+            }
+
+            return Math.Abs(value - 1f) <= 0.0001f ? 0f : value;
         }
         
         private void UpdateMeshRendering(MeshNode mesh, float sx, float sy, float sz, float tx, float ty, float tz)
@@ -377,18 +384,7 @@ namespace ForzaTechStudio.Views
             
             geometry.Positions = newPositions;
 
-            // Rotate normals to match position rotation
-            if (hasRotation && mesh.GeometryData.Normals != null)
-            {
-                var newNormals = new Vector3Collection(mesh.GeometryData.Normals.Length);
-                for (int i = 0; i < mesh.GeometryData.Normals.Length; i++)
-                {
-                    var rotated = Vector3.TransformNormal(mesh.GeometryData.Normals[i], rotMatrix);
-                    var rn = NormalizeOrDefault(rotated, Vector3.UnitY);
-                    newNormals.Add(new SDX.Vector3(rn.X, rn.Y, rn.Z));
-                }
-                geometry.Normals = newNormals;
-            }
+            UpdateGeometryNormals(geometry, mesh.GeometryData, boneTransform);
 
             geometry.UpdateBounds();
         }
@@ -443,20 +439,78 @@ namespace ForzaTechStudio.Views
             
             geometry.Positions = newPositions;
 
-            // Rotate normals to match position rotation
-            if (hasRotation && mesh.GeometryData.Normals != null)
-            {
-                var newNormals = new Vector3Collection(mesh.GeometryData.Normals.Length);
-                for (int i = 0; i < mesh.GeometryData.Normals.Length; i++)
-                {
-                    var rotated = Vector3.TransformNormal(mesh.GeometryData.Normals[i], rotMatrix);
-                    var rn = NormalizeOrDefault(rotated, Vector3.UnitY);
-                    newNormals.Add(new SDX.Vector3(rn.X, rn.Y, rn.Z));
-                }
-                geometry.Normals = newNormals;
-            }
+            UpdateGeometryNormals(geometry, mesh.GeometryData, newBoneMatrix);
 
             geometry.UpdateBounds();
+        }
+
+        private void UpdateGeometryNormals(MeshGeometry3D geometry, ForzaGeometryData data, Matrix4x4 boneTransform)
+        {
+            if (data.Normals == null)
+                return;
+
+            geometry.Normals = BuildTransformedNormals(data, boneTransform);
+        }
+
+        private Vector3Collection BuildTransformedNormals(ForzaGeometryData data, Matrix4x4 boneTransform)
+        {
+            var normals = new Vector3Collection(data.Normals?.Length ?? 0);
+            if (data.Normals == null)
+                return normals;
+
+            var rotMatrix = data.GetRotationMatrix();
+            bool hasRotation = rotMatrix != Matrix4x4.Identity;
+            bool hasBoneTransform = IsFiniteMatrix(boneTransform) && boneTransform != Matrix4x4.Identity;
+
+            // Pre-compute the inverse-transpose of the bone matrix for correct normal transformation.
+            // Vector3.TransformNormal uses the upper-left 3x3 as-is, which is only correct for
+            // orthogonal matrices (pure rotation). For matrices with any scale, normals must be
+            // transformed by the inverse-transpose to preserve perpendicularity to the surface.
+            Matrix4x4 boneNormalMatrix = Matrix4x4.Identity;
+            if (hasBoneTransform)
+            {
+                if (Matrix4x4.Invert(boneTransform, out var invBone))
+                    boneNormalMatrix = Matrix4x4.Transpose(invBone);
+                else
+                    boneNormalMatrix = boneTransform; // fallback to original if non-invertible
+            }
+
+            foreach (var normal in data.Normals)
+            {
+                var transformed = normal;
+                if (hasRotation)
+                    transformed = Vector3.TransformNormal(transformed, rotMatrix);
+                if (hasBoneTransform)
+                    transformed = Vector3.TransformNormal(transformed, boneNormalMatrix);
+
+                var normalized = NormalizeOrDefault(transformed, Vector3.UnitY);
+                normals.Add(new SDX.Vector3(normalized.X, normalized.Y, normalized.Z));
+            }
+
+            return normals;
+        }
+
+        private Vector3 ConvertWorldTranslationDeltaToMeshLocal(ForzaGeometryData geometry, Vector3 worldDelta)
+        {
+            if (geometry.SourceBone == null ||
+                !BoneTransformService.IsSignificantBone(geometry.BoneIndex) ||
+                !IsFiniteMatrix(geometry.BoneTransform) ||
+                !Matrix4x4.Invert(geometry.BoneTransform, out var inverseBone))
+            {
+                return worldDelta;
+            }
+
+            return Vector3.TransformNormal(worldDelta, inverseBone);
+        }
+
+        private Vector4 ApplyWorldTranslationDelta(MeshNode mesh, Vector4 baseTranslate, Vector3 worldDelta)
+        {
+            var localDelta = ConvertWorldTranslationDeltaToMeshLocal(mesh.GeometryData, worldDelta);
+            return new Vector4(
+                baseTranslate.X + localDelta.X,
+                baseTranslate.Y + localDelta.Y,
+                baseTranslate.Z + localDelta.Z,
+                baseTranslate.W);
         }
 
         // Returns true only if every element of the matrix is a finite (non-NaN, non-Inf) float.
@@ -661,6 +715,11 @@ namespace ForzaTechStudio.Views
                 var rotMatrix = geo.GetRotationMatrix();
                 int vertexCount = geo.RawPositions.Length;
 
+                System.Diagnostics.Debug.WriteLine(
+                    $"[Viewport/Bake] Baking rotation ({geo.RotationEulerDegrees.X:F1}°, {geo.RotationEulerDegrees.Y:F1}°, {geo.RotationEulerDegrees.Z:F1}°) " +
+                    $"for mesh '{meshNode.Name}' ({vertexCount} vertices, normals={geo.Normals?.Length ?? 0}, " +
+                    $"posFormat={geo.SourceMesh.VertexLayoutIndex}, minVertexIndex={geo.MinVertexIndex})");
+
                 // Step 1: Compute rotated-scaled positions (before translate)
                 var rotatedScaled = new Vector3[vertexCount];
                 for (int i = 0; i < vertexCount; i++)
@@ -723,13 +782,20 @@ namespace ForzaTechStudio.Views
                         rotatedNormals[i] = NormalizeOrDefault(Vector3.TransformNormal(geo.Normals[i], rotMatrix), Vector3.UnitY);
                 }
 
-                bool wrote = WritePositionsToVertexBuffer(bundle, meshBlob, layouts, vbMap, newRawPositions, rotatedNormals);
-                if (!wrote) continue; // Skip if we couldn't write (e.g. FLOAT32 format � unlikely but safe)
+                int minVertexIndex = geo.MinVertexIndex;
+                var layout = ResolveVertexLayout(bundle, layouts, meshBlob);
+                bool splitNormalX = layout != null && GetLayoutElements(layout).Any(item =>
+                    item.Semantic == "NORMAL" && item.Format == 37);
+
+                bool wrote = WritePositionsToVertexBuffer(bundle, meshBlob, layout, vbMap, minVertexIndex, newRawPositions,
+                    splitNormalX ? rotatedNormals : null);
+                if (!wrote)
+                {
+                    System.Diagnostics.Debug.WriteLine($"[Viewport/Bake] Position write failed for mesh '{meshNode.Name}' (unsupported format or missing buffer); still baking normals/tangents.");
+                }
 
                 // Step 5b: Write rotated normals/tangents to keep the tangent basis in sync.
-                if (rotatedNormals != null)
-                    WriteNormalsToVertexBuffer(bundle, meshBlob, layouts, vbMap, rotatedNormals);
-                WriteTangentsToVertexBuffer(bundle, meshBlob, layouts, vbMap, rotMatrix, vertexCount);
+                WriteRotatedSurfaceVectorsToVertexBuffers(bundle, meshBlob, layout, vbMap, minVertexIndex, rotMatrix, rotatedNormals, vertexCount, !splitNormalX || wrote);
 
                 // Step 6: Update mesh blob scale/translate
                 meshBlob.PositionScale = new Vector4(newScale.X, newScale.Y, newScale.Z, meshBlob.PositionScale.W);
@@ -746,329 +812,156 @@ namespace ForzaTechStudio.Views
         }
 
         // Writes new SNORM16 positions into the vertex buffer.
-        // Also writes normalX into position.W for format 37. Returns false if the format is unsupported.
+        // Also writes normal X into POSITION.W only for split-normal layouts.
         private bool WritePositionsToVertexBuffer(
             Bundle bundle,
             MeshBlob mesh,
-            VertexLayoutBlob[] layouts,
+            VertexLayoutBlob? layout,
             Dictionary<int, VertexBufferBlob> vbMap,
+            int minVertexIndex,
             Vector3[] newRawPositions,
             Vector3[]? rotatedNormals = null)
         {
-            // Resolve layout (same logic as ModelImporter.ExtractMesh)
-            VertexLayoutBlob? layout = null;
-            var layoutById = bundle.Blobs.OfType<VertexLayoutBlob>()
-                .FirstOrDefault(l => l.Metadatas.OfType<IdentifierMetadata>().Any(m => (int)m.Id == mesh.VertexLayoutIndex));
-            if (layoutById != null)
-                layout = layoutById;
-            else if (mesh.VertexLayoutIndex >= 0 && mesh.VertexLayoutIndex < layouts.Length)
-                layout = layouts[mesh.VertexLayoutIndex];
-            else if (layouts.Length > 0)
-                layout = layouts[0];
-
             if (layout == null) return false;
 
-            // Find the POSITION element
-            D3D12_INPUT_LAYOUT_DESC? posElement = null;
-            int posOffsetInStride = 0;
-            {
-                var slotOffsets = new Dictionary<int, int>();
-                foreach (var element in layout.Elements)
-                {
-                    int slot = element.InputSlot;
-                    if (!slotOffsets.ContainsKey(slot)) slotOffsets[slot] = 0;
-                    string semantic = (element.SemanticNameIndex >= 0 && element.SemanticNameIndex < layout.SemanticNames.Count)
-                        ? layout.SemanticNames[element.SemanticNameIndex] : "UNKNOWN";
-                    if (semantic == "POSITION")
-                    {
-                        posElement = element;
-                        posOffsetInStride = slotOffsets[slot];
-                    }
-                    int fmtSize = (int)element.Format switch { 6 => 12, 10 => 8, 13 => 8, 16 => 8, 24 => 4, 28 => 4, 35 => 4, 37 => 4, _ => 4 };
-                    slotOffsets[slot] += fmtSize;
-                }
-            }
-
-            if (posElement == null) return false;
+            var positionElements = GetLayoutElements(layout).Where(item => item.Semantic == "POSITION").ToList();
+            if (positionElements.Count == 0) return false;
+            var posElement = positionElements[0];
 
             // Only support SNORM16 (format 13) 
-            if ((int)posElement.Format != 13) return false;
+            if (posElement.Format != 13) return false;
 
             // Resolve vertex buffer
-            var usage = mesh.VertexBuffers.FirstOrDefault(v => v.InputSlot == posElement.InputSlot);
-            if (usage == null) return false;
-
-            VertexBufferBlob? vb = null;
-            if (vbMap.TryGetValue(usage.Index, out var vbById))
-                vb = vbById;
-            else if (usage.Index >= 0 && usage.Index < bundle.Blobs.Count)
-                vb = bundle.Blobs[usage.Index] as VertexBufferBlob;
-            if (vb == null) return false;
-
-            // Get mutable data array
-            byte[] data;
-            int baseOffset;
-            if (vb.Header?.GetRawData() != null && vb.Header.GetRawData().Length > 0)
-            {
-                data = vb.Header.GetRawData();
-                baseOffset = 0;
-            }
-            else
-            {
-                data = vb.GetContents();
-                baseOffset = 16; // MODEL_BUFFER_HEADER_SIZE
-            }
-            if (data == null || data.Length == 0) return false;
-
-            long stride = vb.Header?.Stride > 0 ? vb.Header.Stride : usage.Stride;
-            if (stride == 0) stride = 28;
-            long usageOffset = usage.Offset;
-
-            
-            // Recompute minIndex from the index buffer
-            var indexBuffers = bundle.Blobs.OfType<IndexBufferBlob>().ToArray();
-            if (indexBuffers.Length == 0) return false;
-            var globalIndexBuffer = indexBuffers[0];
-            
-            byte[] globalIndexData;
-            int indexBufferOffset;
-            if (globalIndexBuffer.Header?.GetRawData() != null && globalIndexBuffer.Header.GetRawData().Length > 0)
-            {
-                globalIndexData = globalIndexBuffer.Header.GetRawData();
-                indexBufferOffset = 0;
-            }
-            else
-            {
-                globalIndexData = globalIndexBuffer.GetContents();
-                indexBufferOffset = 16;
-            }
-            
-            int indexStride = mesh.Is32BitIndices ? 4 : 2;
-            long startIndexOff = indexBufferOffset + mesh.IndexBufferOffset + (mesh.IndexBufferDrawOffset * indexStride);
-            int minIndex = int.MaxValue;
-            
-            if (globalIndexData != null && startIndexOff + (mesh.IndexCount * indexStride) <= globalIndexData.Length)
-            {
-                var idxSpan = new ReadOnlySpan<byte>(globalIndexData, (int)startIndexOff, mesh.IndexCount * indexStride);
-                for (int i = 0; i < mesh.IndexCount; i++)
-                {
-                    int idx = indexStride == 4
-                        ? BinaryPrimitives.ReadInt32LittleEndian(idxSpan.Slice(i * 4))
-                        : BinaryPrimitives.ReadUInt16LittleEndian(idxSpan.Slice(i * 2));
-                    if (idx < minIndex) minIndex = idx;
-                }
-            }
-            if (minIndex == int.MaxValue) return false;
+            if (!TryResolveWritableElementBuffer(bundle, mesh, vbMap, posElement.Element, out var data, out var baseOffset, out var stride, out var usageOffset))
+                return false;
 
             // Write new SNORM16 positions
             for (int i = 0; i < newRawPositions.Length; i++)
             {
-                long vertexId = minIndex + i + mesh.IndexedVertexOffset;
-                long addr = baseOffset + usageOffset + (vertexId * stride) + posOffsetInStride;
+                long vertexId = minVertexIndex + i + mesh.IndexedVertexOffset;
+                long addr = baseOffset + usageOffset + (vertexId * stride) + posElement.Offset;
 
                 if (addr >= 0 && addr + 8 <= data.Length)
                 {
-                    short snormX = (short)Math.Clamp(MathF.Round(newRawPositions[i].X * 32767f), -32767, 32767);
-                    short snormY = (short)Math.Clamp(MathF.Round(newRawPositions[i].Y * 32767f), -32767, 32767);
-                    short snormZ = (short)Math.Clamp(MathF.Round(newRawPositions[i].Z * 32767f), -32767, 32767);
-
-                    BinaryPrimitives.WriteInt16LittleEndian(data.AsSpan((int)addr), snormX);
-                    BinaryPrimitives.WriteInt16LittleEndian(data.AsSpan((int)addr + 2), snormY);
-                    BinaryPrimitives.WriteInt16LittleEndian(data.AsSpan((int)addr + 4), snormZ);
+                    BinaryPrimitives.WriteInt16LittleEndian(data.AsSpan((int)addr), ToSnorm16(newRawPositions[i].X));
+                    BinaryPrimitives.WriteInt16LittleEndian(data.AsSpan((int)addr + 2), ToSnorm16(newRawPositions[i].Y));
+                    BinaryPrimitives.WriteInt16LittleEndian(data.AsSpan((int)addr + 4), ToSnorm16(newRawPositions[i].Z));
 
                     // Write POSITION.W = normal.X for layouts that split normal X into the position stream.
                     if (rotatedNormals != null && i < rotatedNormals.Length)
-                    {
-                        short snormW = (short)Math.Clamp(MathF.Round(rotatedNormals[i].X * 32767f), -32767, 32767);
-                        BinaryPrimitives.WriteInt16LittleEndian(data.AsSpan((int)addr + 6), snormW);
-                    }
+                        BinaryPrimitives.WriteInt16LittleEndian(data.AsSpan((int)addr + 6), ToSnorm16(rotatedNormals[i].X));
                 }
             }
 
             return true;
         }
 
-        // Writes rotated normals back into the normal vertex buffer.
-        // Supports formats 37 (SNORM16), 10 (half-float), and 24 (R10G10B10A2).
-        private void WriteNormalsToVertexBuffer(
+        private void WriteRotatedSurfaceVectorsToVertexBuffers(
             Bundle bundle,
             MeshBlob mesh,
-            VertexLayoutBlob[] layouts,
+            VertexLayoutBlob? layout,
             Dictionary<int, VertexBufferBlob> vbMap,
-            Vector3[] rotatedNormals)
+            int minVertexIndex,
+            Matrix4x4 rotMatrix,
+            Vector3[]? rotatedNormals,
+            int vertexCount,
+            bool canWriteSplitNormalX)
         {
-            // Resolve layout
-            VertexLayoutBlob? layout = null;
-            var layoutById = bundle.Blobs.OfType<VertexLayoutBlob>()
-                .FirstOrDefault(l => l.Metadatas.OfType<IdentifierMetadata>().Any(m => (int)m.Id == mesh.VertexLayoutIndex));
-            if (layoutById != null)
-                layout = layoutById;
-            else if (mesh.VertexLayoutIndex >= 0 && mesh.VertexLayoutIndex < layouts.Length)
-                layout = layouts[mesh.VertexLayoutIndex];
-            else if (layouts.Length > 0)
-                layout = layouts[0];
-
             if (layout == null) return;
 
-            // Find the NORMAL element in layout
-            D3D12_INPUT_LAYOUT_DESC? normElement = null;
-            int normOffsetInStride = 0;
-            int normalFormat = 0;
+            var surfaceElements = GetLayoutElements(layout)
+                .Where(item => item.Semantic == "NORMAL" || item.Semantic == "TANGENT")
+                .ToList();
+
+            if (surfaceElements.Count == 0)
             {
-                var slotOffsets = new Dictionary<int, int>();
-                foreach (var element in layout.Elements)
+                System.Diagnostics.Debug.WriteLine($"[Viewport/BakeSurface] No NORMAL/TANGENT elements found for mesh (VertexLayoutIndex={mesh.VertexLayoutIndex}).");
+                return;
+            }
+
+            System.Diagnostics.Debug.WriteLine(
+                $"[Viewport/BakeSurface] Found {surfaceElements.Count} surface vector element(s) for mesh (VertexLayoutIndex={mesh.VertexLayoutIndex}): " +
+                string.Join(", ", surfaceElements.Select(item => $"{item.Semantic}{item.SemanticIndex}:fmt={item.Format}")));
+
+            foreach (var item in surfaceElements)
+            {
+                if (!IsWritableSurfaceVectorFormat(item.Format))
                 {
-                    int slot = element.InputSlot;
-                    if (!slotOffsets.ContainsKey(slot)) slotOffsets[slot] = 0;
-                    string semantic = (element.SemanticNameIndex >= 0 && element.SemanticNameIndex < layout.SemanticNames.Count)
-                        ? layout.SemanticNames[element.SemanticNameIndex] : "UNKNOWN";
-                    if (semantic == "NORMAL")
-                    {
-                        normElement = element;
-                        normOffsetInStride = slotOffsets[slot];
-                        normalFormat = (int)element.Format;
-                    }
-                    int fmtSize = (int)element.Format switch { 6 => 12, 10 => 8, 13 => 8, 16 => 8, 24 => 4, 28 => 4, 35 => 4, 37 => 4, _ => 4 };
-                    slotOffsets[slot] += fmtSize;
+                    System.Diagnostics.Debug.WriteLine($"[Viewport/BakeSurface] Unsupported {item.Semantic}{item.SemanticIndex} format {item.Format} for mesh (VertexLayoutIndex={mesh.VertexLayoutIndex}), skipping.");
+                    continue;
                 }
-            }
 
-            if (normElement == null) return;
-            if (normalFormat != 37 && normalFormat != 10 && normalFormat != 24) return;
-
-            // Resolve vertex buffer for the normal's input slot
-            var usage = mesh.VertexBuffers.FirstOrDefault(v => v.InputSlot == normElement.InputSlot);
-            if (usage == null) return;
-
-            VertexBufferBlob? vb = null;
-            if (vbMap.TryGetValue(usage.Index, out var vbById))
-                vb = vbById;
-            else if (usage.Index >= 0 && usage.Index < bundle.Blobs.Count)
-                vb = bundle.Blobs[usage.Index] as VertexBufferBlob;
-            if (vb == null) return;
-
-            byte[] data;
-            int baseOffset;
-            if (vb.Header?.GetRawData() != null && vb.Header.GetRawData().Length > 0)
-            {
-                data = vb.Header.GetRawData();
-                baseOffset = 0;
-            }
-            else
-            {
-                data = vb.GetContents();
-                baseOffset = 16;
-            }
-            if (data == null || data.Length == 0) return;
-
-            long stride = vb.Header?.Stride > 0 ? vb.Header.Stride : usage.Stride;
-            if (stride == 0) stride = 28;
-            long usageOffset = usage.Offset;
-
-            // Recompute minIndex from the index buffer
-            var indexBuffers = bundle.Blobs.OfType<IndexBufferBlob>().ToArray();
-            if (indexBuffers.Length == 0) return;
-            var globalIndexBuffer = indexBuffers[0];
-
-            byte[] globalIndexData;
-            int indexBufferOffset;
-            if (globalIndexBuffer.Header?.GetRawData() != null && globalIndexBuffer.Header.GetRawData().Length > 0)
-            {
-                globalIndexData = globalIndexBuffer.Header.GetRawData();
-                indexBufferOffset = 0;
-            }
-            else
-            {
-                globalIndexData = globalIndexBuffer.GetContents();
-                indexBufferOffset = 16;
-            }
-
-            int indexStride = mesh.Is32BitIndices ? 4 : 2;
-            long startIndexOff = indexBufferOffset + mesh.IndexBufferOffset + (mesh.IndexBufferDrawOffset * indexStride);
-            int minIndex = int.MaxValue;
-
-            if (globalIndexData != null && startIndexOff + (mesh.IndexCount * indexStride) <= globalIndexData.Length)
-            {
-                var idxSpan = new ReadOnlySpan<byte>(globalIndexData, (int)startIndexOff, mesh.IndexCount * indexStride);
-                for (int i = 0; i < mesh.IndexCount; i++)
+                if (item.Semantic == "NORMAL" && item.Format == 37 && !canWriteSplitNormalX)
                 {
-                    int idx = indexStride == 4
-                        ? BinaryPrimitives.ReadInt32LittleEndian(idxSpan.Slice(i * 4))
-                        : BinaryPrimitives.ReadUInt16LittleEndian(idxSpan.Slice(i * 2));
-                    if (idx < minIndex) minIndex = idx;
+                    System.Diagnostics.Debug.WriteLine($"[Viewport/BakeSurface] Skipping split NORMAL{item.SemanticIndex} because POSITION.W could not be updated for mesh (VertexLayoutIndex={mesh.VertexLayoutIndex}).");
+                    continue;
                 }
-            }
-            if (minIndex == int.MaxValue) return;
 
-            // Write normals based on format
-            int elementSize = normalFormat switch { 37 => 4, 10 => 8, 24 => 4, _ => 4 };
+                if (!TryResolveWritableElementBuffer(bundle, mesh, vbMap, item.Element, out var data, out var baseOffset, out var stride, out var usageOffset))
+                    continue;
 
-            for (int i = 0; i < rotatedNormals.Length; i++)
-            {
-                long vertexId = minIndex + i + mesh.IndexedVertexOffset;
-                long addr = baseOffset + usageOffset + (vertexId * stride) + normOffsetInStride;
+                int elementSize = GetVertexFormatSize(item.Format);
 
-                if (addr < 0 || addr + elementSize > data.Length) continue;
-
-                var n = rotatedNormals[i];
-
-                if (normalFormat == 37)
+                for (int i = 0; i < vertexCount; i++)
                 {
-                    // Format 37: SNORM16 RG  stores normal Y and Z (normal X is in position.W)
-                    short snormY = (short)Math.Clamp(MathF.Round(n.Y * 32767f), -32767, 32767);
-                    short snormZ = (short)Math.Clamp(MathF.Round(n.Z * 32767f), -32767, 32767);
-                    BinaryPrimitives.WriteInt16LittleEndian(data.AsSpan((int)addr), snormY);
-                    BinaryPrimitives.WriteInt16LittleEndian(data.AsSpan((int)addr + 2), snormZ);
-                }
-                else if (normalFormat == 10)
-                {
-                    // Format 10: Half-float RGBA  stores normal X, Y, Z as half-floats
-                    ushort hx = BitConverter.HalfToUInt16Bits((Half)n.X);
-                    ushort hy = BitConverter.HalfToUInt16Bits((Half)n.Y);
-                    ushort hz = BitConverter.HalfToUInt16Bits((Half)n.Z);
-                    BinaryPrimitives.WriteUInt16LittleEndian(data.AsSpan((int)addr), hx);
-                    BinaryPrimitives.WriteUInt16LittleEndian(data.AsSpan((int)addr + 2), hy);
-                    BinaryPrimitives.WriteUInt16LittleEndian(data.AsSpan((int)addr + 4), hz);
-                    // Leave bytes 6-7 (W padding) unchanged
-                }
-                else if (normalFormat == 24)
-                {
-                    // Format 24: R10G10B10A2 packed UNORM � encode [-1,1] ? [0,1] ? [0,1023]
-                    uint rx = (uint)Math.Clamp(MathF.Round((n.X * 0.5f + 0.5f) * 1023f), 0, 1023);
-                    uint ry = (uint)Math.Clamp(MathF.Round((n.Y * 0.5f + 0.5f) * 1023f), 0, 1023);
-                    uint rz = (uint)Math.Clamp(MathF.Round((n.Z * 0.5f + 0.5f) * 1023f), 0, 1023);
-                    uint packed = (rx & 0x3FF) | ((ry & 0x3FF) << 10) | ((rz & 0x3FF) << 20);
-                    // Preserve existing A2 bits
-                    uint existing = BinaryPrimitives.ReadUInt32LittleEndian(data.AsSpan((int)addr));
-                    packed |= (existing & 0xC0000000u);
-                    BinaryPrimitives.WriteUInt32LittleEndian(data.AsSpan((int)addr), packed);
+                    long vertexId = minVertexIndex + i + mesh.IndexedVertexOffset;
+                    long addr = baseOffset + usageOffset + (vertexId * stride) + item.Offset;
+
+                    if (addr < 0 || addr + elementSize > data.Length) continue;
+
+                    var span = data.AsSpan((int)addr, elementSize);
+                    var fallback = item.Semantic == "NORMAL" ? Vector3.UnitY : Vector3.UnitX;
+                    if (item.Semantic == "NORMAL" && (rotatedNormals == null || i >= rotatedNormals.Length))
+                        continue;
+
+                    var rotated = item.Semantic == "NORMAL" && rotatedNormals != null && i < rotatedNormals.Length
+                        ? rotatedNormals[i]
+                        : NormalizeOrDefault(Vector3.TransformNormal(ReadSurfaceVector(span, item.Format, fallback), rotMatrix), fallback);
+
+                    if (item.Semantic == "TANGENT" && rotatedNormals != null && i < rotatedNormals.Length)
+                        rotated = OrthonormalizeTangent(rotated, rotatedNormals[i]);
+                    else
+                        rotated = NormalizeOrDefault(rotated, fallback);
+
+                    WriteSurfaceVector(span, item.Format, rotated);
                 }
             }
         }
 
-        // Rotates tangent XYZ data during a save bake. W/handedness is preserved.
-        private void WriteTangentsToVertexBuffer(
-            Bundle bundle,
-            MeshBlob mesh,
-            VertexLayoutBlob[] layouts,
-            Dictionary<int, VertexBufferBlob> vbMap,
-            Matrix4x4 rotMatrix,
-            int vertexCount)
+        private static VertexLayoutBlob? ResolveVertexLayout(Bundle bundle, VertexLayoutBlob[] layouts, MeshBlob mesh)
         {
-            VertexLayoutBlob? layout = null;
             var layoutById = bundle.Blobs.OfType<VertexLayoutBlob>()
                 .FirstOrDefault(l => l.Metadatas.OfType<IdentifierMetadata>().Any(m => (int)m.Id == mesh.VertexLayoutIndex));
             if (layoutById != null)
-                layout = layoutById;
-            else if (mesh.VertexLayoutIndex >= 0 && mesh.VertexLayoutIndex < layouts.Length)
-                layout = layouts[mesh.VertexLayoutIndex];
-            else if (layouts.Length > 0)
-                layout = layouts[0];
+                return layoutById;
+            if (mesh.VertexLayoutIndex >= 0 && mesh.VertexLayoutIndex < layouts.Length)
+                return layouts[mesh.VertexLayoutIndex];
+            return layouts.Length > 0 ? layouts[0] : null;
+        }
 
-            if (layout == null) return;
+        private readonly struct LayoutElementInfo
+        {
+            public LayoutElementInfo(D3D12_INPUT_LAYOUT_DESC element, int offset, string semantic)
+            {
+                Element = element;
+                Offset = offset;
+                Semantic = semantic;
+                SemanticIndex = element.SemanticIndex;
+                Format = (int)element.Format;
+            }
 
-            var tangentElements = new List<(D3D12_INPUT_LAYOUT_DESC Element, int Offset, int Format)>();
+            public D3D12_INPUT_LAYOUT_DESC Element { get; }
+            public int Offset { get; }
+            public string Semantic { get; }
+            public int SemanticIndex { get; }
+            public int Format { get; }
+        }
+
+        private static List<LayoutElementInfo> GetLayoutElements(VertexLayoutBlob layout)
+        {
+            var items = new List<LayoutElementInfo>();
             var slotOffsets = new Dictionary<int, int>();
+
             foreach (var element in layout.Elements)
             {
                 int slot = element.InputSlot;
@@ -1077,121 +970,126 @@ namespace ForzaTechStudio.Views
                 string semantic = (element.SemanticNameIndex >= 0 && element.SemanticNameIndex < layout.SemanticNames.Count)
                     ? layout.SemanticNames[element.SemanticNameIndex]
                     : "UNKNOWN";
-                if (semantic == "TANGENT")
-                    tangentElements.Add((element, slotOffsets[slot], (int)element.Format));
 
+                items.Add(new LayoutElementInfo(element, slotOffsets[slot], semantic));
                 slotOffsets[slot] += GetVertexFormatSize((int)element.Format);
             }
 
-            if (tangentElements.Count == 0) return;
+            return items;
+        }
 
-            var indexBuffers = bundle.Blobs.OfType<IndexBufferBlob>().ToArray();
-            if (indexBuffers.Length == 0) return;
-            var globalIndexBuffer = indexBuffers[0];
+        private static bool TryResolveWritableElementBuffer(
+            Bundle bundle,
+            MeshBlob mesh,
+            Dictionary<int, VertexBufferBlob> vbMap,
+            D3D12_INPUT_LAYOUT_DESC element,
+            out byte[] data,
+            out int baseOffset,
+            out long stride,
+            out long usageOffset)
+        {
+            data = Array.Empty<byte>();
+            baseOffset = 0;
+            stride = 0;
+            usageOffset = 0;
 
-            byte[] globalIndexData;
-            int indexBufferOffset;
-            if (globalIndexBuffer.Header?.GetRawData() != null && globalIndexBuffer.Header.GetRawData().Length > 0)
+            var usage = mesh.VertexBuffers.FirstOrDefault(v => v.InputSlot == element.InputSlot);
+            if (usage == null) return false;
+
+            if (!vbMap.TryGetValue(usage.Index, out var vb) || vb == null)
             {
-                globalIndexData = globalIndexBuffer.Header.GetRawData();
-                indexBufferOffset = 0;
+                if (usage.Index < 0 || usage.Index >= bundle.Blobs.Count)
+                    return false;
+                vb = bundle.Blobs[usage.Index] as VertexBufferBlob;
+                if (vb == null) return false;
+            }
+
+            var rawData = vb.Header?.GetRawData();
+            if (rawData != null && rawData.Length > 0)
+            {
+                data = rawData;
+                baseOffset = 0;
             }
             else
             {
-                globalIndexData = globalIndexBuffer.GetContents();
-                indexBufferOffset = 16;
+                data = vb.GetContents();
+                baseOffset = 16;
             }
 
-            int indexStride = mesh.Is32BitIndices ? 4 : 2;
-            long startIndexOff = indexBufferOffset + mesh.IndexBufferOffset + (mesh.IndexBufferDrawOffset * indexStride);
-            int minIndex = int.MaxValue;
+            if (data == null || data.Length == 0) return false;
 
-            if (globalIndexData != null && startIndexOff + (mesh.IndexCount * indexStride) <= globalIndexData.Length)
+            stride = vb.Header?.Stride > 0 ? vb.Header.Stride : usage.Stride;
+            if (stride == 0) stride = 28;
+            usageOffset = usage.Offset;
+            return true;
+        }
+
+        private static bool IsWritableSurfaceVectorFormat(int format) =>
+            format == 6 || format == 10 || format == 13 || format == 24 || format == 37;
+
+        private static Vector3 ReadSurfaceVector(ReadOnlySpan<byte> span, int format, Vector3 fallback)
+        {
+            return format switch
             {
-                var idxSpan = new ReadOnlySpan<byte>(globalIndexData, (int)startIndexOff, mesh.IndexCount * indexStride);
-                for (int i = 0; i < mesh.IndexCount; i++)
-                {
-                    int idx = indexStride == 4
-                        ? BinaryPrimitives.ReadInt32LittleEndian(idxSpan.Slice(i * 4))
-                        : BinaryPrimitives.ReadUInt16LittleEndian(idxSpan.Slice(i * 2));
-                    if (idx < minIndex) minIndex = idx;
-                }
-            }
-            if (minIndex == int.MaxValue) return;
+                6 => NormalizeOrDefault(new Vector3(
+                    BinaryPrimitives.ReadSingleLittleEndian(span),
+                    BinaryPrimitives.ReadSingleLittleEndian(span.Slice(4)),
+                    BinaryPrimitives.ReadSingleLittleEndian(span.Slice(8))), fallback),
+                10 => NormalizeOrDefault(new Vector3(
+                    (float)BitConverter.UInt16BitsToHalf(BinaryPrimitives.ReadUInt16LittleEndian(span)),
+                    (float)BitConverter.UInt16BitsToHalf(BinaryPrimitives.ReadUInt16LittleEndian(span.Slice(2))),
+                    (float)BitConverter.UInt16BitsToHalf(BinaryPrimitives.ReadUInt16LittleEndian(span.Slice(4)))), fallback),
+                13 => NormalizeOrDefault(new Vector3(
+                    FromSnorm16(BinaryPrimitives.ReadInt16LittleEndian(span)),
+                    FromSnorm16(BinaryPrimitives.ReadInt16LittleEndian(span.Slice(2))),
+                    FromSnorm16(BinaryPrimitives.ReadInt16LittleEndian(span.Slice(4)))), fallback),
+                24 => NormalizeOrDefault(UnpackR10G10B10A2Vector3(BinaryPrimitives.ReadUInt32LittleEndian(span)), fallback),
+                37 => NormalizeOrDefault(new Vector3(0f,
+                    FromSnorm16(BinaryPrimitives.ReadInt16LittleEndian(span)),
+                    FromSnorm16(BinaryPrimitives.ReadInt16LittleEndian(span.Slice(2)))), fallback),
+                _ => fallback
+            };
+        }
 
-            foreach (var tangent in tangentElements)
+        private static void WriteSurfaceVector(Span<byte> span, int format, Vector3 value)
+        {
+            value = NormalizeOrDefault(value, Vector3.UnitY);
+
+            if (format == 6)
             {
-                if (tangent.Format != 10 && tangent.Format != 13 && tangent.Format != 24) continue;
-
-                var usage = mesh.VertexBuffers.FirstOrDefault(v => v.InputSlot == tangent.Element.InputSlot);
-                if (usage == null) continue;
-
-                VertexBufferBlob? vb = null;
-                if (vbMap.TryGetValue(usage.Index, out var vbById))
-                    vb = vbById;
-                else if (usage.Index >= 0 && usage.Index < bundle.Blobs.Count)
-                    vb = bundle.Blobs[usage.Index] as VertexBufferBlob;
-                if (vb == null) continue;
-
-                byte[] data;
-                int baseOffset;
-                if (vb.Header?.GetRawData() != null && vb.Header.GetRawData().Length > 0)
-                {
-                    data = vb.Header.GetRawData();
-                    baseOffset = 0;
-                }
-                else
-                {
-                    data = vb.GetContents();
-                    baseOffset = 16;
-                }
-                if (data == null || data.Length == 0) continue;
-
-                long stride = vb.Header?.Stride > 0 ? vb.Header.Stride : usage.Stride;
-                if (stride == 0) stride = 28;
-                long usageOffset = usage.Offset;
-                int elementSize = GetVertexFormatSize(tangent.Format);
-
-                for (int i = 0; i < vertexCount; i++)
-                {
-                    long vertexId = minIndex + i + mesh.IndexedVertexOffset;
-                    long addr = baseOffset + usageOffset + (vertexId * stride) + tangent.Offset;
-
-                    if (addr < 0 || addr + elementSize > data.Length) continue;
-
-                    if (tangent.Format == 24)
-                    {
-                        uint existing = BinaryPrimitives.ReadUInt32LittleEndian(data.AsSpan((int)addr));
-                        var rotated = NormalizeOrDefault(Vector3.TransformNormal(UnpackR10G10B10A2Vector3(existing), rotMatrix), Vector3.UnitX);
-                        uint packed = PackR10G10B10A2Vector3(rotated, existing & 0xC0000000u);
-                        BinaryPrimitives.WriteUInt32LittleEndian(data.AsSpan((int)addr), packed);
-                    }
-                    else if (tangent.Format == 10)
-                    {
-                        var tangentVector = new Vector3(
-                            (float)BitConverter.UInt16BitsToHalf(BinaryPrimitives.ReadUInt16LittleEndian(data.AsSpan((int)addr))),
-                            (float)BitConverter.UInt16BitsToHalf(BinaryPrimitives.ReadUInt16LittleEndian(data.AsSpan((int)addr + 2))),
-                            (float)BitConverter.UInt16BitsToHalf(BinaryPrimitives.ReadUInt16LittleEndian(data.AsSpan((int)addr + 4))));
-                        var rotated = NormalizeOrDefault(Vector3.TransformNormal(tangentVector, rotMatrix), Vector3.UnitX);
-
-                        BinaryPrimitives.WriteUInt16LittleEndian(data.AsSpan((int)addr), BitConverter.HalfToUInt16Bits((Half)rotated.X));
-                        BinaryPrimitives.WriteUInt16LittleEndian(data.AsSpan((int)addr + 2), BitConverter.HalfToUInt16Bits((Half)rotated.Y));
-                        BinaryPrimitives.WriteUInt16LittleEndian(data.AsSpan((int)addr + 4), BitConverter.HalfToUInt16Bits((Half)rotated.Z));
-                    }
-                    else if (tangent.Format == 13)
-                    {
-                        var tangentVector = new Vector3(
-                            Math.Clamp(BinaryPrimitives.ReadInt16LittleEndian(data.AsSpan((int)addr)) / 32767f, -1f, 1f),
-                            Math.Clamp(BinaryPrimitives.ReadInt16LittleEndian(data.AsSpan((int)addr + 2)) / 32767f, -1f, 1f),
-                            Math.Clamp(BinaryPrimitives.ReadInt16LittleEndian(data.AsSpan((int)addr + 4)) / 32767f, -1f, 1f));
-                        var rotated = NormalizeOrDefault(Vector3.TransformNormal(tangentVector, rotMatrix), Vector3.UnitX);
-
-                        BinaryPrimitives.WriteInt16LittleEndian(data.AsSpan((int)addr), ToSnorm16(rotated.X));
-                        BinaryPrimitives.WriteInt16LittleEndian(data.AsSpan((int)addr + 2), ToSnorm16(rotated.Y));
-                        BinaryPrimitives.WriteInt16LittleEndian(data.AsSpan((int)addr + 4), ToSnorm16(rotated.Z));
-                    }
-                }
+                BinaryPrimitives.WriteSingleLittleEndian(span, value.X);
+                BinaryPrimitives.WriteSingleLittleEndian(span.Slice(4), value.Y);
+                BinaryPrimitives.WriteSingleLittleEndian(span.Slice(8), value.Z);
             }
+            else if (format == 10)
+            {
+                BinaryPrimitives.WriteUInt16LittleEndian(span, BitConverter.HalfToUInt16Bits((Half)value.X));
+                BinaryPrimitives.WriteUInt16LittleEndian(span.Slice(2), BitConverter.HalfToUInt16Bits((Half)value.Y));
+                BinaryPrimitives.WriteUInt16LittleEndian(span.Slice(4), BitConverter.HalfToUInt16Bits((Half)value.Z));
+            }
+            else if (format == 13)
+            {
+                BinaryPrimitives.WriteInt16LittleEndian(span, ToSnorm16(value.X));
+                BinaryPrimitives.WriteInt16LittleEndian(span.Slice(2), ToSnorm16(value.Y));
+                BinaryPrimitives.WriteInt16LittleEndian(span.Slice(4), ToSnorm16(value.Z));
+            }
+            else if (format == 24)
+            {
+                uint existing = BinaryPrimitives.ReadUInt32LittleEndian(span);
+                BinaryPrimitives.WriteUInt32LittleEndian(span, PackR10G10B10A2Vector3(value, existing & 0xC0000000u));
+            }
+            else if (format == 37)
+            {
+                BinaryPrimitives.WriteInt16LittleEndian(span, ToSnorm16(value.Y));
+                BinaryPrimitives.WriteInt16LittleEndian(span.Slice(2), ToSnorm16(value.Z));
+            }
+        }
+
+        private static Vector3 OrthonormalizeTangent(Vector3 tangent, Vector3 normal)
+        {
+            normal = NormalizeOrDefault(normal, Vector3.UnitY);
+            var adjusted = tangent - normal * Vector3.Dot(tangent, normal);
+            return NormalizeOrDefault(adjusted, NormalizeOrDefault(tangent, Vector3.UnitX));
         }
 
         private static int GetVertexFormatSize(int format) =>
@@ -1215,6 +1113,9 @@ namespace ForzaTechStudio.Views
 
         private static short ToSnorm16(float value) =>
             (short)Math.Clamp(MathF.Round(value * 32767f), -32767, 32767);
+
+        private static float FromSnorm16(short value) =>
+            Math.Clamp(value / 32767f, -1f, 1f);
 
         // Temporarily patches LODS-only meshes to become LOD0 for saving.
         // Returns originals so they can be reverted afterwards.

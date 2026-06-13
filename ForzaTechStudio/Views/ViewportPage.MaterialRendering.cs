@@ -23,7 +23,11 @@ namespace ForzaTechStudio.Views
 
         private ViewportManufacturerColorItem? _selectedManufacturerColorItem;
         private SDX.Color4? _manufacturerCarPaintColor;
+        private SDX.Color4? _customManufacturerCarPaintColor;
         private bool _isUpdatingManufacturerColorSelection;
+        private bool _isUpdatingManufacturerCustomColorUi;
+        private Microsoft.UI.Dispatching.DispatcherQueueTimer? _manufacturerColorApplyTimer;
+        private bool _manufacturerColorApplyPending;
         private readonly ConcurrentDictionary<(ModelBinNode ModelBin, short MaterialId), MaterialBlob?> _viewportAssignedMaterialCache = new();
         private readonly ConcurrentDictionary<ViewportMaterialCacheKey, ViewportCachedMaterial> _viewportMaterialCache = new();
 
@@ -188,11 +192,22 @@ namespace ForzaTechStudio.Views
                 QuantizeMaterialFloat(_singleColor.Green),
                 QuantizeMaterialFloat(_singleColor.Blue),
                 QuantizeMaterialFloat(_sceneOpacity),
-                _selectedManufacturerColorItem?.Key ?? string.Empty,
+                GetManufacturerMaterialCacheKey(),
                 loadTextures,
                 _useLocalViewportTextures,
                 _useLibraryViewportTextures,
                 textureSourceKey);
+        }
+
+        private string GetManufacturerMaterialCacheKey()
+        {
+            if (_customManufacturerCarPaintColor.HasValue)
+            {
+                var color = _customManufacturerCarPaintColor.Value;
+                return $"CUSTOM|{QuantizeMaterialFloat(color.Red)}|{QuantizeMaterialFloat(color.Green)}|{QuantizeMaterialFloat(color.Blue)}|{QuantizeMaterialFloat(color.Alpha)}";
+            }
+
+            return _selectedManufacturerColorItem?.Key ?? string.Empty;
         }
 
         private void InvalidateViewportMaterialCache()
@@ -313,6 +328,7 @@ namespace ForzaTechStudio.Views
             if (selectedManufacturerColor.HasValue)
             {
                 var manufacturerColor = selectedManufacturerColor.Value;
+                alpha = Clamp01(alpha * manufacturerColor.Alpha);
                 diffuse = new SDX.Color4(manufacturerColor.Red, manufacturerColor.Green, manufacturerColor.Blue, alpha);
                 emissive = new SDX.Color4(0f, 0f, 0f, 1f);
             }
@@ -365,8 +381,14 @@ namespace ForzaTechStudio.Views
 
         private SDX.Color4? TryGetManufacturerColorForMaterial(bool isManufacturerColorPaint)
         {
+            if (!isManufacturerColorPaint)
+                return null;
+
+            if (_customManufacturerCarPaintColor.HasValue)
+                return _customManufacturerCarPaintColor.Value;
+
             var selectedItem = _selectedManufacturerColorItem;
-            if (selectedItem == null || !isManufacturerColorPaint)
+            if (selectedItem == null)
                 return null;
 
             return selectedItem.ToColor4();
@@ -787,10 +809,12 @@ namespace ForzaTechStudio.Views
 
             bool hasColors = ManufacturerColorItems.Count > 0;
             ManufacturerColorCombo.IsEnabled = hasColors;
-            ResetManufacturerColorBtn.IsEnabled = _selectedManufacturerColorItem != null;
+            ResetManufacturerColorBtn.IsEnabled = _selectedManufacturerColorItem != null || _customManufacturerCarPaintColor.HasValue;
             ManufacturerColorStatusText.Text = hasColors
                 ? $"{ManufacturerColorItems.Count} manufacturer color(s) loaded."
                 : "No manufacturercolors.bin found in the loaded car zip.";
+
+            SyncManufacturerCustomColorControls();
         }
 
         private void ManufacturerColorCombo_SelectionChanged(object sender, SelectionChangedEventArgs e)
@@ -806,6 +830,8 @@ namespace ForzaTechStudio.Views
 
             _selectedManufacturerColorItem = newItem;
             _manufacturerCarPaintColor = _selectedManufacturerColorItem.ToColor4();
+            _customManufacturerCarPaintColor = null;
+            SyncManufacturerCustomColorControls();
             ResetManufacturerColorBtn.IsEnabled = true;
             ManufacturerColorStatusText.Text = $"Selected {_selectedManufacturerColorItem.DisplayName}.";
             InvalidateViewportMaterialCache();
@@ -816,6 +842,10 @@ namespace ForzaTechStudio.Views
         {
             _selectedManufacturerColorItem = null;
             _manufacturerCarPaintColor = null;
+            _customManufacturerCarPaintColor = null;
+            _manufacturerColorApplyPending = false;
+            _manufacturerColorApplyTimer?.Stop();
+            SyncManufacturerCustomColorControls();
 
             if (ManufacturerColorCombo != null)
             {
@@ -830,6 +860,134 @@ namespace ForzaTechStudio.Views
                 : "No manufacturercolors.bin found in the loaded car zip.";
             InvalidateViewportMaterialCache();
             UpdateMeshColors(SingleColorToggle?.IsChecked ?? false);
+        }
+
+        private void ManufacturerCustomColorBox_ValueChanged(NumberBox sender, NumberBoxValueChangedEventArgs args)
+        {
+            if (_isUpdatingManufacturerCustomColorUi)
+                return;
+
+            var color = ReadManufacturerCustomColorFromBoxes();
+            ApplyManufacturerCustomColor(color);
+        }
+
+        private void ManufacturerCustomColorPicker_ColorChanged(ColorPicker sender, ColorChangedEventArgs args)
+        {
+            if (_isUpdatingManufacturerCustomColorUi)
+                return;
+
+            ApplyManufacturerCustomColor(ToColor4(args.NewColor));
+        }
+
+        private void ApplyManufacturerCustomColor(SDX.Color4 color)
+        {
+            _customManufacturerCarPaintColor = color;
+            _selectedManufacturerColorItem = null;
+            _manufacturerCarPaintColor = null;
+
+            if (ManufacturerColorCombo != null)
+            {
+                _isUpdatingManufacturerColorSelection = true;
+                ManufacturerColorCombo.SelectedItem = null;
+                _isUpdatingManufacturerColorSelection = false;
+            }
+
+            SyncManufacturerCustomColorControls();
+            ResetManufacturerColorBtn.IsEnabled = true;
+            ManufacturerColorStatusText.Text = "Using custom RGBA carpaint color.";
+
+            // Debounce heavy render updates 
+            ScheduleManufacturerColorApply();
+        }
+
+        private void FlushManufacturerColorApply()
+        {
+            _manufacturerColorApplyPending = false;
+            _manufacturerColorApplyTimer?.Stop();
+            InvalidateViewportMaterialCache();
+            UpdateMeshColors(SingleColorToggle?.IsChecked ?? false);
+        }
+
+        private void ScheduleManufacturerColorApply()
+        {
+            _manufacturerColorApplyPending = true;
+
+            if (_manufacturerColorApplyTimer == null)
+            {
+                _manufacturerColorApplyTimer = DispatcherQueue.CreateTimer();
+                _manufacturerColorApplyTimer.Interval = TimeSpan.FromMilliseconds(80);
+                _manufacturerColorApplyTimer.IsRepeating = false;
+                _manufacturerColorApplyTimer.Tick += (s, e) =>
+                {
+                    if (_manufacturerColorApplyPending)
+                        FlushManufacturerColorApply();
+                };
+            }
+
+            _manufacturerColorApplyTimer.Stop();
+            _manufacturerColorApplyTimer.Start();
+        }
+
+
+        private void ManufacturerCustomColorFlyout_Closed(object? sender, object e)
+        {
+            if (_manufacturerColorApplyPending)
+                FlushManufacturerColorApply();
+        }
+
+        private SDX.Color4 ReadManufacturerCustomColorFromBoxes()
+        {
+            return new SDX.Color4(
+                (float)(ClampColorChannelBox(ManufacturerColorRedBox?.Value ?? 128) / 255.0),
+                (float)(ClampColorChannelBox(ManufacturerColorGreenBox?.Value ?? 128) / 255.0),
+                (float)(ClampColorChannelBox(ManufacturerColorBlueBox?.Value ?? 128) / 255.0),
+                (float)(ClampColorChannelBox(ManufacturerColorAlphaBox?.Value ?? 255) / 255.0));
+        }
+
+        private void SyncManufacturerCustomColorControls()
+        {
+            if (ManufacturerColorRedBox == null || ManufacturerCustomColorPicker == null)
+                return;
+
+            var color = _customManufacturerCarPaintColor ?? new SDX.Color4(0.5f, 0.5f, 0.5f, 1f);
+            var winColor = ToWinColor(color);
+
+            _isUpdatingManufacturerCustomColorUi = true;
+            try
+            {
+                ManufacturerColorRedBox.Value = Math.Round(color.Red * 255.0);
+                ManufacturerColorGreenBox.Value = Math.Round(color.Green * 255.0);
+                ManufacturerColorBlueBox.Value = Math.Round(color.Blue * 255.0);
+                ManufacturerColorAlphaBox.Value = Math.Round(color.Alpha * 255.0);
+                ManufacturerCustomColorPicker.Color = winColor;
+                ManufacturerCustomColorPreview.Background = new SolidColorBrush(winColor);
+            }
+            finally
+            {
+                _isUpdatingManufacturerCustomColorUi = false;
+            }
+        }
+
+        private static double ClampColorChannelBox(double value)
+        {
+            if (double.IsNaN(value) || double.IsInfinity(value))
+                return 0;
+
+            return Math.Clamp(Math.Round(value), 0, 255);
+        }
+
+        private static SDX.Color4 ToColor4(WinColor color)
+        {
+            return new SDX.Color4(color.R / 255f, color.G / 255f, color.B / 255f, color.A / 255f);
+        }
+
+        private static WinColor ToWinColor(SDX.Color4 color)
+        {
+            return WinColor.FromArgb(
+                (byte)Math.Clamp(Math.Round(Clamp01(color.Alpha) * 255f), 0, 255),
+                (byte)Math.Clamp(Math.Round(Clamp01(color.Red) * 255f), 0, 255),
+                (byte)Math.Clamp(Math.Round(Clamp01(color.Green) * 255f), 0, 255),
+                (byte)Math.Clamp(Math.Round(Clamp01(color.Blue) * 255f), 0, 255));
         }
 
         private readonly record struct ViewportMaterialCacheKey(

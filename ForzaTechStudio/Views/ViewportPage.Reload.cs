@@ -38,7 +38,7 @@ namespace ForzaTechStudio.Views
             if (sender is not Button btn || btn.Tag is not IViewerNode node) return;
 
             var path = GetReloadablePathForRoot(node);
-            if (string.IsNullOrEmpty(path) || !File.Exists(path)) return;
+            if (string.IsNullOrEmpty(path) || !PathExists(path)) return;
 
             // Properly clean up this root before reloading
             ViewModel_RequestCloseRoot(this, node);
@@ -52,6 +52,7 @@ namespace ForzaTechStudio.Views
             return node switch
             {
                 ZipNode z => z.FilePath,
+                FolderNode f => f.FolderPath,
                 ModelBinNode m => m.FilePath,
                 LightsBinNode l => l.FilePath,
                 LocatorsXmlNode x => x.FilePath,
@@ -66,9 +67,14 @@ namespace ForzaTechStudio.Views
             foreach (var r in roots)
             {
                 var p = GetReloadablePathForRoot(r);
-                if (!string.IsNullOrEmpty(p) && File.Exists(p)) list.Add(p);
+                if (!string.IsNullOrEmpty(p) && PathExists(p)) list.Add(p);
             }
             return list;
+        }
+
+        private static bool PathExists(string path)
+        {
+            return File.Exists(path) || Directory.Exists(path);
         }
 
         private static void CloseAnyOpenFlyout(object sender)

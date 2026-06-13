@@ -1741,7 +1741,7 @@
                             Padding="4,0"
                             VerticalAlignment="Center">
 
-            <!-- File: Open / Save / Save As -->
+            <!-- File: Open / Open Folder / Save / Save As -->
             <Button Click="OpenFiles_Click"
                     Style="{StaticResource DenseToolbarButtonStyle}"
                     ToolTipService.ToolTip="Open new files (Ctrl+O)">
@@ -1751,6 +1751,18 @@
                 </StackPanel>
                 <Button.KeyboardAccelerators>
                     <KeyboardAccelerator Modifiers="Control" Key="O"/>
+                </Button.KeyboardAccelerators>
+            </Button>
+
+            <Button Click="OpenFolder_Click"
+                    Style="{StaticResource DenseToolbarButtonStyle}"
+                    ToolTipService.ToolTip="Open a folder and its subfolders (Ctrl+Shift+O)">
+                <StackPanel Orientation="Horizontal" Spacing="3">
+                    <FontIcon Glyph="&#xE838;" FontSize="13"/>
+                    <TextBlock Text="Open Folder" FontSize="10" VerticalAlignment="Center"/>
+                </StackPanel>
+                <Button.KeyboardAccelerators>
+                    <KeyboardAccelerator Modifiers="Control,Shift" Key="O"/>
                 </Button.KeyboardAccelerators>
             </Button>
 
@@ -2013,6 +2025,82 @@
                                                     <TextBlock Text="Use Default Grey"/>
                                                 </StackPanel>
                                             </Button>
+                                            <Border Height="1" Background="{ThemeResource DividerStrokeColorDefaultBrush}"/>
+                                            <TextBlock Text="Custom RGBA" FontWeight="SemiBold" FontSize="13"/>
+                                            <Grid ColumnSpacing="6">
+                                                <Grid.ColumnDefinitions>
+                                                    <ColumnDefinition Width="*"/>
+                                                    <ColumnDefinition Width="*"/>
+                                                    <ColumnDefinition Width="*"/>
+                                                    <ColumnDefinition Width="*"/>
+                                                    <ColumnDefinition Width="40"/>
+                                                </Grid.ColumnDefinitions>
+                                                <NumberBox x:Name="ManufacturerColorRedBox"
+                                                           Header="R"
+                                                           Minimum="0"
+                                                           Maximum="255"
+                                                           SmallChange="1"
+                                                           LargeChange="16"
+                                                           SpinButtonPlacementMode="Compact"
+                                                           ValueChanged="ManufacturerCustomColorBox_ValueChanged"/>
+                                                <NumberBox x:Name="ManufacturerColorGreenBox"
+                                                           Grid.Column="1"
+                                                           Header="G"
+                                                           Minimum="0"
+                                                           Maximum="255"
+                                                           SmallChange="1"
+                                                           LargeChange="16"
+                                                           SpinButtonPlacementMode="Compact"
+                                                           ValueChanged="ManufacturerCustomColorBox_ValueChanged"/>
+                                                <NumberBox x:Name="ManufacturerColorBlueBox"
+                                                           Grid.Column="2"
+                                                           Header="B"
+                                                           Minimum="0"
+                                                           Maximum="255"
+                                                           SmallChange="1"
+                                                           LargeChange="16"
+                                                           SpinButtonPlacementMode="Compact"
+                                                           ValueChanged="ManufacturerCustomColorBox_ValueChanged"/>
+                                                <NumberBox x:Name="ManufacturerColorAlphaBox"
+                                                           Grid.Column="3"
+                                                           Header="A"
+                                                           Minimum="0"
+                                                           Maximum="255"
+                                                           SmallChange="1"
+                                                           LargeChange="16"
+                                                           SpinButtonPlacementMode="Compact"
+                                                           ValueChanged="ManufacturerCustomColorBox_ValueChanged"/>
+                                                <Button Grid.Column="4"
+                                                        Width="36"
+                                                        Height="36"
+                                                        MinWidth="36"
+                                                        Padding="0"
+                                                        VerticalAlignment="Bottom"
+                                                        ToolTipService.ToolTip="Choose custom carpaint color">
+                                                    <Border x:Name="ManufacturerCustomColorPreview"
+                                                            Width="24"
+                                                            Height="24"
+                                                            CornerRadius="3"
+                                                            BorderThickness="1"
+                                                            BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
+                                                            Background="#FF808080"/>
+                                                    <Button.Flyout>
+                                                        <Flyout x:Name="ManufacturerCustomColorFlyout"
+                                                                Placement="BottomEdgeAlignedRight"
+                                                                Closed="ManufacturerCustomColorFlyout_Closed">
+                                                            <ColorPicker x:Name="ManufacturerCustomColorPicker"
+                                                                         ColorChanged="ManufacturerCustomColorPicker_ColorChanged"
+                                                                         ColorSpectrumShape="Ring"
+                                                                         IsMoreButtonVisible="False"
+                                                                         IsColorSliderVisible="True"
+                                                                         IsColorChannelTextInputVisible="False"
+                                                                         IsHexInputVisible="False"
+                                                                         IsAlphaEnabled="True"
+                                                                         Color="#FF808080"/>
+                                                        </Flyout>
+                                                    </Button.Flyout>
+                                                </Button>
+                                            </Grid>
                                         </StackPanel>
                                     </Flyout>
                                 </Button.Flyout>
@@ -2457,7 +2545,7 @@
                                 Style="{StaticResource SubtleButtonStyle}"
                                 Click="RotateTransformButton_Click"
                                 ToolTipService.ToolTip="Rotate (R)">
-                            <FontIcon Glyph="&#xE72C;" FontSize="14"/>
+                            <FontIcon Glyph="&#xE7AD;" FontSize="14"/>
                         </Button>
                         <Button x:Name="ScaleTransformButton"
                                 Width="32"
@@ -2469,7 +2557,7 @@
                                 Style="{StaticResource SubtleButtonStyle}"
                                 Click="ScaleTransformButton_Click"
                                 ToolTipService.ToolTip="Scale (S)">
-                            <FontIcon Glyph="&#xE8B9;" FontSize="14"/>
+                            <FontIcon Glyph="&#xE744;" FontSize="14"/>
                         </Button>
 
                         <Border Style="{StaticResource DenseToolbarSeparatorStyle}" Height="22" Margin="2,0"/>
@@ -2499,8 +2587,10 @@
 
                         <ToggleButton x:Name="SelectionModeToggle"
                                       Style="{StaticResource DenseViewportOverlayToggleButtonStyle}"
+                                      Checked="SelectionModeToggle_Checked"
+                                      Unchecked="SelectionModeToggle_Unchecked"
                                       ToolTipService.ToolTip="Toggle between Mesh and Modelbin selection">
-                            <FontIcon Glyph="&#xE762;" FontSize="14"/>
+                            <FontIcon x:Name="SelectionModeToggleIcon" Glyph="&#xE73E;" FontSize="14"/>
                         </ToggleButton>
                     </StackPanel>
 

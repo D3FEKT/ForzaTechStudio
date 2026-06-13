@@ -2,6 +2,7 @@
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using System;
+using System.Collections.ObjectModel;
 using System.IO;
 using System.Linq;
 using System.Text;
@@ -78,32 +79,76 @@ namespace ForzaTechStudio.ViewModels
             picker.ViewMode = PickerViewMode.List;
             picker.SuggestedStartLocation = PickerLocationId.Desktop;
             picker.FileTypeFilter.Add(".carbin");
+            picker.FileTypeFilter.Add(".zip");
 
             var file = await picker.PickSingleFileAsync();
             if (file == null) return;
 
-            await LoadCarbinFileAsync(file.Path);
+            if (Path.GetExtension(file.Path).Equals(".zip", StringComparison.OrdinalIgnoreCase))
+                await LoadCarbinZipAsync(file.Path);
+            else
+                await LoadCarbinFileAsync(file.Path);
+        }
+
+        public async Task LoadCarbinZipAsync(string zipPath, bool isReload = false, string? entryName = null)
+        {
+            if (!isReload)
+                EnsureTabForLoad();
+
+            IsBusy = true;
+            StatusMessage = "Loading carbin from zip...";
+            ClearAll();
+            _lastParsingContext = "Starting";
+            _lastFilePosition = 0;
+
+            try
+            {
+                var entries = GetCarbinZipEntryNames(zipPath);
+                if (entries.Count == 0)
+                {
+                    StatusMessage = $"No .carbin files found in {Path.GetFileName(zipPath)}.";
+                    return;
+                }
+
+                string? selectedEntryName = entryName;
+                if (string.IsNullOrWhiteSpace(selectedEntryName))
+                {
+                    selectedEntryName = entries.Count == 1
+                        ? entries[0]
+                        : await ShowCarbinZipEntryDialogAsync(zipPath, entries);
+                }
+
+                if (string.IsNullOrWhiteSpace(selectedEntryName))
+                    return;
+
+                byte[] fileBytes = ExtractCarbinZipEntry(zipPath, selectedEntryName);
+                if (!LoadCarbinBytes(fileBytes))
+                    return;
+
+                LoadedFilePath = zipPath;
+                LoadedArchivePath = zipPath;
+                LoadedArchiveEntryName = selectedEntryName;
+                LoadedFileName = Path.GetFileName(selectedEntryName);
+                IsContentVisible = true;
+                StatusMessage = $"Loaded: {LoadedFileName} from {Path.GetFileName(zipPath)} (Scene v{DetectedSceneVersion}, Model v{DetectedModelVersion}, {(IsHorizon ? "Horizon" : "Motorsport")})";
+
+                if (ActiveTab != null) ActiveTab.Name = LoadedFileName;
+            }
+            catch (Exception ex)
+            {
+                StatusMessage = $"Parse error: {ex.Message} | Pos: 0x{_lastFilePosition:X} | {_lastParsingContext}";
+                IsContentVisible = false;
+            }
+            finally
+            {
+                IsBusy = false;
+            }
         }
 
         public async Task LoadCarbinFileAsync(string filePath, bool isReload = false)
         {
             if (!isReload)
-            {
-                // Open in new tab if current tab already has content
-                if (IsContentVisible && ActiveTab != null)
-                {
-                    SaveCurrentStateToTab(ActiveTab);
-                    var newTab = CreateEmptyTab();
-                    Tabs.Add(newTab);
-                    ActiveTab = newTab;
-                }
-                else if (Tabs.Count == 0)
-                {
-                    var firstTab = CreateEmptyTab();
-                    Tabs.Add(firstTab);
-                    ActiveTab = firstTab;
-                }
-            }
+                EnsureTabForLoad();
 
             IsBusy = true;
             StatusMessage = "Loading carbin file...";
@@ -117,16 +162,8 @@ namespace ForzaTechStudio.ViewModels
                 LoadedFileName = Path.GetFileName(filePath);
 
                 byte[] fileBytes = await File.ReadAllBytesAsync(filePath);
-
-                if (fileBytes.Length < 2)
-                {
-                    StatusMessage = $"Error: File is too small ({fileBytes.Length} bytes)";
+                if (!LoadCarbinBytes(fileBytes))
                     return;
-                }
-
-                using var ms = new MemoryStream(fileBytes);
-                using var reader = new BinaryReader(ms, Encoding.UTF8, leaveOpen: false);
-                ParseCarbinFile(reader, fileBytes.Length);
 
                 IsContentVisible = true;
                 StatusMessage = $"Loaded: {LoadedFileName} (Scene v{DetectedSceneVersion}, Model v{DetectedModelVersion}, {(IsHorizon ? "Horizon" : "Motorsport")})"; 
@@ -161,6 +198,20 @@ namespace ForzaTechStudio.ViewModels
         [RelayCommand]
         public async Task ReloadFileAsync()
         {
+            if (!string.IsNullOrEmpty(LoadedArchivePath) && !string.IsNullOrEmpty(LoadedArchiveEntryName))
+            {
+                if (!File.Exists(LoadedArchivePath))
+                {
+                    StatusMessage = "No archive to reload.";
+                    return;
+                }
+
+                var archivePath = LoadedArchivePath;
+                var entryName = LoadedArchiveEntryName;
+                await LoadCarbinZipAsync(archivePath, isReload: true, entryName: entryName);
+                return;
+            }
+
             if (string.IsNullOrEmpty(LoadedFilePath) || !File.Exists(LoadedFilePath))
             {
                 StatusMessage = "No file to reload.";
@@ -239,7 +290,7 @@ namespace ForzaTechStudio.ViewModels
                 return;
             }
 
-            if (string.IsNullOrEmpty(LoadedFilePath))
+            if (string.IsNullOrEmpty(LoadedFilePath) && string.IsNullOrEmpty(LoadedArchivePath))
             {
                 StatusMessage = "No file path available. Use Save As instead.";
                 return;
@@ -256,12 +307,19 @@ namespace ForzaTechStudio.ViewModels
 
                 await Task.Run(() =>
                 {
-                    using var fs = new FileStream(LoadedFilePath, FileMode.Create, FileAccess.Write);
-                    using var writer = new BinaryWriter(fs);
-                    WriteCarbinFile(writer, sceneVersion, modelVersion, isHorizon);
+                    byte[] bytes = WriteCarbinToBytes(sceneVersion, modelVersion, isHorizon);
+
+                    if (!string.IsNullOrEmpty(LoadedArchivePath) && !string.IsNullOrEmpty(LoadedArchiveEntryName))
+                    {
+                        ZipArchiveHelper.ReplaceEntry(LoadedArchivePath, LoadedArchiveEntryName, bytes);
+                    }
+                    else
+                    {
+                        File.WriteAllBytes(LoadedFilePath, bytes);
+                    }
                 });
 
-                FileSaved?.Invoke(LoadedFilePath);
+                FileSaved?.Invoke(string.IsNullOrEmpty(LoadedArchivePath) ? LoadedFilePath : LoadedArchivePath);
                 StatusMessage = $"Saved: {LoadedFileName}";
             }
             catch (Exception ex)
@@ -367,12 +425,14 @@ namespace ForzaTechStudio.ViewModels
                 var part = SelectedNonUpgradablePart;
                 var model = SelectedNonUpgradableModel;
                 var idx = part.Models.IndexOf(model);
+                var filteredIdx = FilteredNonUpgradableModels.IndexOf(model);
                 part.Models.Remove(model);
-                SelectedNonUpgradableModel = part.Models.FirstOrDefault();
+                RefreshFilteredNonUpgradableModels(preserveSelection: false);
+                SelectedNonUpgradableModel = GetNextFilteredModel(FilteredNonUpgradableModels, filteredIdx);
                 StatusMessage = "Model removed.";
                 PushUndo(
-                    () => { part.Models.Insert(Math.Min(idx, part.Models.Count), model); SelectedNonUpgradableModel = model; StatusMessage = "Undo: remove model."; },
-                    () => { part.Models.Remove(model); SelectedNonUpgradableModel = part.Models.FirstOrDefault(); StatusMessage = "Redo: remove model."; });
+                    () => { part.Models.Insert(Math.Min(idx, part.Models.Count), model); RefreshFilteredNonUpgradableModels(preserveSelection: false); SelectedNonUpgradableModel = model; StatusMessage = "Undo: remove model."; },
+                    () => { int redoFilteredIdx = FilteredNonUpgradableModels.IndexOf(model); part.Models.Remove(model); RefreshFilteredNonUpgradableModels(preserveSelection: false); SelectedNonUpgradableModel = GetNextFilteredModel(FilteredNonUpgradableModels, redoFilteredIdx); StatusMessage = "Redo: remove model."; });
             }
         }
 
@@ -505,12 +565,14 @@ namespace ForzaTechStudio.ViewModels
                 var part = SelectedUpgradablePart;
                 var model = SelectedUpgradableModel;
                 var idx = part.Models.IndexOf(model);
+                var filteredIdx = FilteredUpgradableModels.IndexOf(model);
                 part.Models.Remove(model);
-                SelectedUpgradableModel = part.Models.FirstOrDefault();
+                RefreshFilteredUpgradableModels(preserveSelection: false);
+                SelectedUpgradableModel = GetNextFilteredModel(FilteredUpgradableModels, filteredIdx);
                 StatusMessage = "Model removed.";
                 PushUndo(
-                    () => { part.Models.Insert(Math.Min(idx, part.Models.Count), model); SelectedUpgradableModel = model; StatusMessage = "Undo: remove model."; },
-                    () => { part.Models.Remove(model); SelectedUpgradableModel = part.Models.FirstOrDefault(); StatusMessage = "Redo: remove model."; });
+                    () => { part.Models.Insert(Math.Min(idx, part.Models.Count), model); RefreshFilteredUpgradableModels(preserveSelection: false); SelectedUpgradableModel = model; StatusMessage = "Undo: remove model."; },
+                    () => { int redoFilteredIdx = FilteredUpgradableModels.IndexOf(model); part.Models.Remove(model); RefreshFilteredUpgradableModels(preserveSelection: false); SelectedUpgradableModel = GetNextFilteredModel(FilteredUpgradableModels, redoFilteredIdx); StatusMessage = "Redo: remove model."; });
             }
         }
 
@@ -963,6 +1025,7 @@ namespace ForzaTechStudio.ViewModels
 
             int idx = SelectedNonUpgradablePart.Models.IndexOf(SelectedNonUpgradableModel);
             SelectedNonUpgradablePart.Models.Insert(idx + 1, clone);
+            RefreshFilteredNonUpgradableModels(preserveSelection: false);
             SelectedNonUpgradableModel = clone;
             StatusMessage = assignedHorizonId
                 ? $"Duplicated '{clone.ModelFileName}' with Horizon ID {clone.HorizonId}."
@@ -979,6 +1042,7 @@ namespace ForzaTechStudio.ViewModels
 
             int idx = SelectedUpgradablePart.Models.IndexOf(SelectedUpgradableModel);
             SelectedUpgradablePart.Models.Insert(idx + 1, clone);
+            RefreshFilteredUpgradableModels(preserveSelection: false);
             SelectedUpgradableModel = clone;
             StatusMessage = assignedHorizonId
                 ? $"Duplicated '{clone.ModelFileName}' with Horizon ID {clone.HorizonId}."
@@ -1064,10 +1128,18 @@ namespace ForzaTechStudio.ViewModels
                 if (addedCount > 1)
                     StatusMessage = $"Added {addedCount} model(s) to part.";
 
-                if (part == SelectedNonUpgradablePart && SelectedNonUpgradableModel == null)
-                    SelectedNonUpgradableModel = part.Models.FirstOrDefault();
-                else if (part == SelectedUpgradablePart && SelectedUpgradableModel == null)
-                    SelectedUpgradableModel = part.Models.FirstOrDefault();
+                if (part == SelectedNonUpgradablePart)
+                {
+                    RefreshFilteredNonUpgradableModels(preserveSelection: true);
+                    if (SelectedNonUpgradableModel == null)
+                        SelectedNonUpgradableModel = FilteredNonUpgradableModels.FirstOrDefault();
+                }
+                else if (part == SelectedUpgradablePart)
+                {
+                    RefreshFilteredUpgradableModels(preserveSelection: true);
+                    if (SelectedUpgradableModel == null)
+                        SelectedUpgradableModel = FilteredUpgradableModels.FirstOrDefault();
+                }
             }
         }
 
@@ -1283,6 +1355,9 @@ namespace ForzaTechStudio.ViewModels
             if (target == null) return;
 
             // Remove from source
+            int sourceFilteredIdx = isSourceUpgradable
+                ? FilteredUpgradableModels.IndexOf(model)
+                : FilteredNonUpgradableModels.IndexOf(model);
             sourcePart.Models.Remove(model);
 
             // Clear upgrade IDs when moving into a non-upgradable part
@@ -1295,11 +1370,22 @@ namespace ForzaTechStudio.ViewModels
             // Add to destination
             target.Part.Models.Add(model);
 
+            if (target.IsUpgradable && target.Part == SelectedUpgradablePart)
+                RefreshFilteredUpgradableModels(preserveSelection: false);
+            else if (!target.IsUpgradable && target.Part == SelectedNonUpgradablePart)
+                RefreshFilteredNonUpgradableModels(preserveSelection: false);
+
             // Refresh selection in source list
             if (isSourceUpgradable)
-                SelectedUpgradableModel = sourcePart.Models.FirstOrDefault();
+            {
+                RefreshFilteredUpgradableModels(preserveSelection: false);
+                SelectedUpgradableModel = GetNextFilteredModel(FilteredUpgradableModels, sourceFilteredIdx);
+            }
             else
-                SelectedNonUpgradableModel = sourcePart.Models.FirstOrDefault();
+            {
+                RefreshFilteredNonUpgradableModels(preserveSelection: false);
+                SelectedNonUpgradableModel = GetNextFilteredModel(FilteredNonUpgradableModels, sourceFilteredIdx);
+            }
 
             StatusMessage = $"Moved \"{model.ModelFileName}\" to \"{target.Part.PartTypeName}\" ({(target.IsUpgradable ? "Upgradable" : "Standard")}).";
         }
@@ -1330,6 +1416,108 @@ namespace ForzaTechStudio.ViewModels
                     </StackPanel>
                 </DataTemplate>";
             return (Microsoft.UI.Xaml.DataTemplate)Microsoft.UI.Xaml.Markup.XamlReader.Load(xaml);
+        }
+
+        private void EnsureTabForLoad()
+        {
+            if (IsContentVisible && ActiveTab != null)
+            {
+                SaveCurrentStateToTab(ActiveTab);
+                var newTab = CreateEmptyTab();
+                Tabs.Add(newTab);
+                ActiveTab = newTab;
+            }
+            else if (Tabs.Count == 0)
+            {
+                var firstTab = CreateEmptyTab();
+                Tabs.Add(firstTab);
+                ActiveTab = firstTab;
+            }
+        }
+
+        private bool LoadCarbinBytes(byte[] fileBytes)
+        {
+            if (fileBytes.Length < 2)
+            {
+                StatusMessage = $"Error: File is too small ({fileBytes.Length} bytes)";
+                return false;
+            }
+
+            using var ms = new MemoryStream(fileBytes);
+            using var reader = new BinaryReader(ms, Encoding.UTF8, leaveOpen: false);
+            ParseCarbinFile(reader, fileBytes.Length);
+            return true;
+        }
+
+        private byte[] WriteCarbinToBytes(ushort sceneVersion, ushort modelVersion, bool isHorizon)
+        {
+            using var ms = new MemoryStream();
+            using (var writer = new BinaryWriter(ms, Encoding.UTF8, leaveOpen: true))
+            {
+                WriteCarbinFile(writer, sceneVersion, modelVersion, isHorizon);
+            }
+
+            return ms.ToArray();
+        }
+
+        private static System.Collections.Generic.List<string> GetCarbinZipEntryNames(string zipPath)
+        {
+            using var zip = new CustomZipFile(zipPath);
+            return zip.GetEntries()
+                .Where(entry => !entry.IsDirectory && entry.Name.EndsWith(".carbin", StringComparison.OrdinalIgnoreCase))
+                .Select(entry => entry.Name)
+                .OrderBy(name => name, StringComparer.OrdinalIgnoreCase)
+                .ToList();
+        }
+
+        private static byte[] ExtractCarbinZipEntry(string zipPath, string entryName)
+        {
+            using var zip = new CustomZipFile(zipPath);
+            var entry = zip.GetEntries().FirstOrDefault(e =>
+                !e.IsDirectory && string.Equals(e.Name.Replace('\\', '/'), entryName.Replace('\\', '/'), StringComparison.OrdinalIgnoreCase));
+            if (entry == null)
+                throw new FileNotFoundException($"Archive entry not found: {entryName}", entryName);
+
+            return zip.ExtractToMemory(entry);
+        }
+
+        private async Task<string?> ShowCarbinZipEntryDialogAsync(string zipPath, System.Collections.Generic.IReadOnlyList<string> entryNames)
+        {
+            if (App.MainWindow.Content is not FrameworkElement root || root.XamlRoot == null)
+                return entryNames.FirstOrDefault();
+
+            var listView = new ListView
+            {
+                SelectionMode = ListViewSelectionMode.Single,
+                MaxHeight = 420,
+                MinWidth = 520
+            };
+
+            foreach (var entryName in entryNames)
+                listView.Items.Add(entryName);
+            listView.SelectedIndex = 0;
+
+            var dialog = new ContentDialog
+            {
+                Title = $"Open carbin from {Path.GetFileName(zipPath)}",
+                Content = listView,
+                PrimaryButtonText = "Open",
+                CloseButtonText = "Cancel",
+                DefaultButton = ContentDialogButton.Primary,
+                XamlRoot = root.XamlRoot
+            };
+
+            var result = await dialog.ShowAsync();
+            return result == ContentDialogResult.Primary ? listView.SelectedItem as string : null;
+        }
+
+        private static CarbinModelEntry? GetNextFilteredModel(ObservableCollection<CarbinModelEntry> models, int previousIndex)
+        {
+            if (models.Count == 0)
+                return null;
+
+            int nextIndex = previousIndex < 0 ? 0 : Math.Min(previousIndex, models.Count - 1);
+            return models[nextIndex];
         }
     }
 }

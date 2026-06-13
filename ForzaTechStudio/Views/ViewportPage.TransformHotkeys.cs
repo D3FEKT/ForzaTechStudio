@@ -502,6 +502,9 @@ namespace ForzaTechStudio.Views
                 return false;
             }
 
+            if (handle.Mode != _selectedGizmoMode)
+                return false;
+
             if (!TryCreatePointerRay(position, out var rayOrigin, out var rayDirection))
                 return false;
 
@@ -833,11 +836,7 @@ namespace ForzaTechStudio.Views
                 if (entry.Mesh?.GeometryData?.SourceMesh == null)
                     continue;
 
-                entry.Mesh.GeometryData.SourceMesh.PositionTranslate = new Vector4(
-                    entry.OldTranslate.X + delta.X,
-                    entry.OldTranslate.Y + delta.Y,
-                    entry.OldTranslate.Z + delta.Z,
-                    entry.OldTranslate.W);
+                entry.Mesh.GeometryData.SourceMesh.PositionTranslate = ApplyWorldTranslationDelta(entry.Mesh, entry.OldTranslate, delta);
                 RefreshModalTransformMesh(entry.Mesh);
             }
         }
@@ -1065,12 +1064,7 @@ namespace ForzaTechStudio.Views
                 if (entry.Mesh?.GeometryData?.SourceMesh == null)
                     continue;
 
-                var oldTranslate = entry.OldTranslate;
-                entry.Mesh.GeometryData.SourceMesh.PositionTranslate = new Vector4(
-                    oldTranslate.X + delta.X,
-                    oldTranslate.Y + delta.Y,
-                    oldTranslate.Z + delta.Z,
-                    oldTranslate.W);
+                entry.Mesh.GeometryData.SourceMesh.PositionTranslate = ApplyWorldTranslationDelta(entry.Mesh, entry.OldTranslate, delta);
 
                 RefreshModalTransformMesh(entry.Mesh);
             }

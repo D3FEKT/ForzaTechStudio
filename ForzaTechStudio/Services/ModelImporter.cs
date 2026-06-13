@@ -550,6 +550,14 @@ namespace ForzaTechStudio.Services
 
         private static Vector3 ReadNormal(ReadOnlySpan<byte> span, int format, float wFromPos)
         {
+            if (format == 6)
+            {
+                // Format 6: FLOAT32 XYZ
+                float nx = BitConverter.ToSingle(span);
+                float ny = BitConverter.ToSingle(span.Slice(4));
+                float nz = BitConverter.ToSingle(span.Slice(8));
+                return Vector3.Normalize(new Vector3(nx, ny, nz));
+            }
             if (format == 37) 
             {
                 float nx = wFromPos; 

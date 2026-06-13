@@ -139,6 +139,7 @@ namespace ForzaTechStudio.Views
         {
             RemoveMeshMaterialParameterCommand = new RelayCommand<ShaderParameter>(RemoveMeshMaterialParameter);
             this.InitializeComponent();
+            UpdateSelectionModeToggleIcon();
             this.NavigationCacheMode = NavigationCacheMode.Required;
             this.KeyDown += ViewportPage_KeyDown;
             this.Loaded += Page_Loaded;
@@ -146,6 +147,26 @@ namespace ForzaTechStudio.Views
             ViewModel.RequestCloseRoot += ViewModel_RequestCloseRoot;
             ViewModel.PropertyChanged += ViewModel_PropertyChanged;
             ViewModel.Roots.CollectionChanged += Roots_CollectionChanged;
+        }
+
+        private void SelectionModeToggle_Checked(object sender, RoutedEventArgs e)
+        {
+            UpdateSelectionModeToggleIcon();
+        }
+
+        private void SelectionModeToggle_Unchecked(object sender, RoutedEventArgs e)
+        {
+            UpdateSelectionModeToggleIcon();
+        }
+
+        private void UpdateSelectionModeToggleIcon()
+        {
+            if (SelectionModeToggleIcon == null)
+                return;
+
+            SelectionModeToggleIcon.Glyph = SelectionModeToggle?.IsChecked == true
+                ? "\uE762"
+                : "\uE73E";
         }
 
         private void Roots_CollectionChanged(object? sender, NotifyCollectionChangedEventArgs e)

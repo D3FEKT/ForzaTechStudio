@@ -411,7 +411,7 @@
                                     </Grid>
 
                                     <ListView x:Name="NonUpgradableModelsList"
-                                              ItemsSource="{x:Bind ViewModel.SelectedNonUpgradablePart.Models, Mode=OneWay}"
+                                              ItemsSource="{x:Bind ViewModel.FilteredNonUpgradableModels, Mode=OneWay}"
                                               SelectedItem="{x:Bind ViewModel.SelectedNonUpgradableModel, Mode=TwoWay}"
                                               MinHeight="100" MaxHeight="300" BorderThickness="1" BorderBrush="{ThemeResource SurfaceStrokeColorDefaultBrush}" CornerRadius="4">
                                         <ListView.ItemTemplate>
@@ -794,7 +794,7 @@
                                             </StackPanel>
                                         </Grid>
                                         <ListView x:Name="UpgradableModelsList"
-                                                  ItemsSource="{x:Bind ViewModel.SelectedUpgradablePart.Models, Mode=OneWay}"
+                                                  ItemsSource="{x:Bind ViewModel.FilteredUpgradableModels, Mode=OneWay}"
                                                   SelectedItem="{x:Bind ViewModel.SelectedUpgradableModel, Mode=TwoWay}"
                                                   MinHeight="100" MaxHeight="300" BorderThickness="1" BorderBrush="{ThemeResource SurfaceStrokeColorDefaultBrush}" CornerRadius="4">
                                             <ListView.ItemTemplate>

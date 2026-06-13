@@ -567,14 +567,7 @@ namespace ForzaTechStudio.Views
             var normCol = new Vector3Collection();
             if (data.Normals != null)
             {
-                var normRotMatrix = data.GetRotationMatrix();
-                bool hasNormRotation = normRotMatrix != Matrix4x4.Identity;
-                foreach (var n in data.Normals)
-                {
-                    var rotated = hasNormRotation ? Vector3.TransformNormal(n, normRotMatrix) : n;
-                    var rn = NormalizeOrDefault(rotated, Vector3.UnitY);
-                    normCol.Add(new SDX.Vector3(rn.X, rn.Y, rn.Z));
-                }
+                normCol = BuildTransformedNormals(data, boneTransform);
             }
 
             var uvCol = new Vector2Collection();

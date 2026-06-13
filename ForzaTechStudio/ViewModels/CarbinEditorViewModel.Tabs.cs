@@ -19,6 +19,10 @@ namespace ForzaTechStudio.ViewModels
         // Scalar state
         public string FilePath = "";
         public string FileName = "";
+        public string ArchivePath = "";
+        public string ArchiveEntryName = "";
+        public string NonUpgradableModelSearchText = "";
+        public string UpgradableModelSearchText = "";
         public bool IsContentVisible;
         public string StatusMessage = "Waiting..";
         public ushort DetectedSceneVersion;
@@ -93,6 +97,10 @@ namespace ForzaTechStudio.ViewModels
         {
             tab.FilePath = LoadedFilePath;
             tab.FileName = LoadedFileName;
+            tab.ArchivePath = LoadedArchivePath;
+            tab.ArchiveEntryName = LoadedArchiveEntryName;
+            tab.NonUpgradableModelSearchText = NonUpgradableModelSearchText;
+            tab.UpgradableModelSearchText = UpgradableModelSearchText;
             tab.Name = string.IsNullOrEmpty(LoadedFileName) ? "New" : LoadedFileName;
             tab.IsContentVisible = IsContentVisible;
             tab.StatusMessage = StatusMessage;
@@ -208,6 +216,10 @@ namespace ForzaTechStudio.ViewModels
             // Restore scalar state
             LoadedFilePath = tab.FilePath;
             LoadedFileName = tab.FileName;
+            LoadedArchivePath = tab.ArchivePath;
+            LoadedArchiveEntryName = tab.ArchiveEntryName;
+            NonUpgradableModelSearchText = tab.NonUpgradableModelSearchText;
+            UpgradableModelSearchText = tab.UpgradableModelSearchText;
             IsContentVisible = tab.IsContentVisible;
             StatusMessage = tab.StatusMessage;
             DetectedSceneVersion = tab.DetectedSceneVersion;
@@ -234,18 +246,28 @@ namespace ForzaTechStudio.ViewModels
                 ?? NonUpgradableParts.FirstOrDefault();
             if (SelectedNonUpgradablePart != null)
             {
-                SelectedNonUpgradableModel = GetItemAtOrDefault(SelectedNonUpgradablePart.Models, tab.SelectedNonUpgradableModelIndex)
-                    ?? SelectedNonUpgradablePart.Models.FirstOrDefault();
+                RefreshFilteredNonUpgradableModels(preserveSelection: false);
+                SelectedNonUpgradableModel = GetItemAtOrDefault(FilteredNonUpgradableModels, tab.SelectedNonUpgradableModelIndex)
+                    ?? FilteredNonUpgradableModels.FirstOrDefault();
+            }
+            else
+            {
+                RefreshFilteredNonUpgradableModels(preserveSelection: false);
             }
 
             SelectedUpgradablePart = GetItemAtOrDefault(UpgradableParts, tab.SelectedUpgradablePartIndex)
                 ?? UpgradableParts.FirstOrDefault();
             if (SelectedUpgradablePart != null)
             {
-                SelectedUpgradableModel = GetItemAtOrDefault(SelectedUpgradablePart.Models, tab.SelectedUpgradableModelIndex)
-                    ?? SelectedUpgradablePart.Models.FirstOrDefault();
+                RefreshFilteredUpgradableModels(preserveSelection: false);
+                SelectedUpgradableModel = GetItemAtOrDefault(FilteredUpgradableModels, tab.SelectedUpgradableModelIndex)
+                    ?? FilteredUpgradableModels.FirstOrDefault();
                 SelectedUpgrade = GetItemAtOrDefault(SelectedUpgradablePart.Upgrades, tab.SelectedUpgradeIndex)
                     ?? SelectedUpgradablePart.Upgrades.FirstOrDefault();
+            }
+            else
+            {
+                RefreshFilteredUpgradableModels(preserveSelection: false);
             }
 
             // Restore per-tab undo/redo stacks

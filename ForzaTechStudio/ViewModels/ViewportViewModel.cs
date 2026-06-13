@@ -203,6 +203,7 @@ namespace ForzaTechStudio.ViewModels.ThreeDViewer
     public class FolderNode : ViewerNode
     {
         public override NodeType Type => NodeType.Folder;
+        public string FolderPath { get; set; } = string.Empty;
     }
 
     public class ModelBinNode : ViewerNode
