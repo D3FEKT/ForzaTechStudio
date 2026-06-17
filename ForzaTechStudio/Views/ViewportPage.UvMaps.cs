@@ -805,13 +805,18 @@ namespace ForzaTechStudio.Views
         private void RefreshMesh3DTextureCoords(MeshNode meshNode)
         {
             var geo = meshNode.GeometryData;
-            if (geo?.UVs == null || !_renderMap.TryGetValue(meshNode, out var model)
-                || model.Geometry is not MeshGeometry3D mesh3d) return;
+            if (geo == null || !_renderMap.TryGetValue(meshNode, out var model)
+                || model is not MeshGeometryModel3D meshModel || meshModel.Geometry is not MeshGeometry3D mesh3d) return;
+
+            int activeChannel = GetViewportActiveRenderUvChannel(geo, meshNode.ParentModelBin);
+            var activeUvs = GetGeometryUvArray(geo, activeChannel);
+            if (activeUvs == null) return;
+
             var uvTiling = ResolveViewportMaterialUvTiling(geo, meshNode.ParentModelBin);
-            var uvCol = new Vector2Collection(geo.UVs.Length);
-            foreach (var u in geo.UVs)
+            var uvCol = new Vector2Collection(activeUvs.Length);
+            foreach (var u in activeUvs)
             {
-                var t = ApplyViewportUvTransform(geo, u, uvTiling);
+                var t = ApplyViewportUvTransform(geo, activeChannel, u, uvTiling);
                 uvCol.Add(new SDX.Vector2(t.X, t.Y));
             }
             mesh3d.TextureCoordinates = uvCol;
@@ -819,13 +824,15 @@ namespace ForzaTechStudio.Views
 
         private int HitTestFace(Vector2 p)
         {
-            var uvs = GetActiveUvArray()!;
+            var rawUvs = GetActiveUvArray()!;
             var indices = _uvGeo.Indices!;
+            // Use display-transformed UVs so hit testing matches visible wireframe
+            var displayUvs = BuildDisplayTransformedUvs(_uvGeo, _uvChannelIndex, rawUvs);
             for (int t = 0; t + 2 < indices.Length; t += 3)
             {
                 int a = indices[t], b = indices[t + 1], c = indices[t + 2];
-                if (a >= uvs.Length || b >= uvs.Length || c >= uvs.Length) continue;
-                if (PointInTriangle(p, uvs[a], uvs[b], uvs[c]))
+                if (a >= displayUvs.Length || b >= displayUvs.Length || c >= displayUvs.Length) continue;
+                if (PointInTriangle(p, displayUvs[a], displayUvs[b], displayUvs[c]))
                     return t / 3;
             }
             return -1;
@@ -861,11 +868,13 @@ namespace ForzaTechStudio.Views
             if (_uvSelectionCanvas == null) return;
             _uvSelectionCanvas.Children.Clear();
 
-            var uvs = GetActiveUvArray();
-            if (uvs == null || _uvGeo?.Indices == null || _uvSelectedFaces.Count == 0)
+            var rawUvs = GetActiveUvArray();
+            if (rawUvs == null || _uvGeo?.Indices == null || _uvSelectedFaces.Count == 0)
                 return;
 
             var indices = _uvGeo.Indices;
+            // Use display-transformed UVs so selection polygons align with visible wireframe
+            var displayUvs = BuildDisplayTransformedUvs(_uvGeo, _uvChannelIndex, rawUvs);
             var fill = new SolidColorBrush(Color.FromArgb(110, 255, 140, 0));
             var stroke = new SolidColorBrush(Color.FromArgb(255, 255, 140, 0));
 
@@ -880,8 +889,8 @@ namespace ForzaTechStudio.Views
                 for (int k = 0; k < 3; k++)
                 {
                     int vi = indices[b + k];
-                    if (vi >= uvs.Length) { isValidFace = false; break; }
-                    pts.Add(new Windows.Foundation.Point(uvs[vi].X * _uvSurfaceWidth, uvs[vi].Y * _uvSurfaceHeight));
+                    if (vi >= displayUvs.Length) { isValidFace = false; break; }
+                    pts.Add(new Windows.Foundation.Point(displayUvs[vi].X * _uvSurfaceWidth, displayUvs[vi].Y * _uvSurfaceHeight));
                 }
                 if (!isValidFace) continue;
                 poly.Points = pts;
@@ -909,7 +918,7 @@ namespace ForzaTechStudio.Views
         private void UpdateUvFaceHighlight3D()
         {
             if (_uvMeshNode == null || _uvGeo?.Indices == null || _uvSelectedFaces.Count == 0 ||
-                !_renderMap.TryGetValue(_uvMeshNode, out var model) || model.Geometry is not MeshGeometry3D src)
+                !_renderMap.TryGetValue(_uvMeshNode, out var model) || model is not MeshGeometryModel3D meshModel || meshModel.Geometry is not MeshGeometry3D src)
             {
                 if (_uvFaceHighlight != null) _uvFaceHighlight.Visibility = Visibility.Collapsed;
                 return;
@@ -1240,18 +1249,21 @@ namespace ForzaTechStudio.Views
                 DrawLine(buffer, width, height, 0, y, width - 1, y, 160, 160, 160, 130);
             }
 
-            var uvs = GetUvArray(geo, channelIndex);
+            var rawUvs = GetUvArray(geo, channelIndex);
             var indices = geo.Indices;
-            if (uvs == null || uvs.Length == 0)
+            if (rawUvs == null || rawUvs.Length == 0)
                 return buffer;
+
+            // Build display-transformed UVs (read-only copy with channel-specific transform applied)
+            var displayUvs = BuildDisplayTransformedUvs(geo, channelIndex, rawUvs);
 
             void DrawUvEdge(int a, int b)
             {
-                if (a < 0 || b < 0 || a >= uvs.Length || b >= uvs.Length) return;
-                int x0 = (int)Math.Round(uvs[a].X * (width - 1));
-                int y0 = (int)Math.Round(uvs[a].Y * (height - 1));
-                int x1 = (int)Math.Round(uvs[b].X * (width - 1));
-                int y1 = (int)Math.Round(uvs[b].Y * (height - 1));
+                if (a < 0 || b < 0 || a >= displayUvs.Length || b >= displayUvs.Length) return;
+                int x0 = (int)Math.Round(displayUvs[a].X * (width - 1));
+                int y0 = (int)Math.Round(displayUvs[a].Y * (height - 1));
+                int x1 = (int)Math.Round(displayUvs[b].X * (width - 1));
+                int y1 = (int)Math.Round(displayUvs[b].Y * (height - 1));
                 DrawLine(buffer, width, height, x0, y0, x1, y1, 60, 220, 110, 255);
             }
 
@@ -1275,6 +1287,50 @@ namespace ForzaTechStudio.Views
             }
 
             return buffer;
+        }
+
+
+        private static Vector2[] BuildDisplayTransformedUvs(ForzaGeometryData geo, int channelIndex, Vector2[] rawUvs)
+        {
+            var transforms = geo?.SourceMesh?.TexCoordTransforms;
+            bool hasTransform = transforms != null && channelIndex >= 0 && channelIndex < transforms.Length
+                && transforms[channelIndex] != default;
+
+            if (!hasTransform)
+            {
+                // Only apply V-flip for display
+                var flipped = new Vector2[rawUvs.Length];
+                for (int i = 0; i < rawUvs.Length; i++)
+                    flipped[i] = new Vector2(rawUvs[i].X, 1f - rawUvs[i].Y);
+                return flipped;
+            }
+
+            var transform = transforms![channelIndex];
+            // Sanitize
+            if (!float.IsFinite(transform.X) || !float.IsFinite(transform.Y)
+                || !float.IsFinite(transform.Z) || !float.IsFinite(transform.W)
+                || Math.Abs(transform.X) >= 1e6f || Math.Abs(transform.Y) >= 1e6f
+                || Math.Abs(transform.Z) >= 1e6f || Math.Abs(transform.W) >= 1e6f)
+            {
+                var flipped = new Vector2[rawUvs.Length];
+                for (int i = 0; i < rawUvs.Length; i++)
+                    flipped[i] = new Vector2(rawUvs[i].X, 1f - rawUvs[i].Y);
+                return flipped;
+            }
+
+            var transformed = new Vector2[rawUvs.Length];
+            for (int i = 0; i < rawUvs.Length; i++)
+            {
+                float sourceU = rawUvs[i].X;
+                float sourceV = 1f - rawUvs[i].Y;
+                float u = sourceU * transform.Y + transform.X;
+                float v = sourceV * transform.W + transform.Z;
+                transformed[i] = float.IsFinite(u) && float.IsFinite(v)
+                    ? new Vector2(u, v)
+                    : new Vector2(rawUvs[i].X, 1f - rawUvs[i].Y);
+            }
+
+            return transformed;
         }
 
         private static void DrawLine(byte[] buffer, int width, int height, int x0, int y0, int x1, int y1, byte r, byte g, byte b, byte a)

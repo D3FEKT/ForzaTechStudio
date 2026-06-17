@@ -1865,6 +1865,38 @@ namespace ForzaTechStudio.Views
                     PopulateMatrixFields(locatorAction.Node.LocatorEntry.SceneTransform);
                 }
             }
+            else if (action is AvPinTransformAction avPinAction)
+            {
+                RefreshAvPinCone(avPinAction.Node);
+                if (ViewModel.SelectedNode == avPinAction.Node)
+                {
+                    PopulateAvPinFields(avPinAction.Node.PoiData?.Visibility);
+                }
+            }
+            else if (action is LightGroupTransformAction lightAction)
+            {
+                foreach (var entry in lightAction.Entries)
+                {
+                    if (entry.Group == null)
+                        continue;
+
+                    UpdateLightRowNodeLabels(entry.Group);
+                    if (entry.Group.IsChecked != false)
+                    {
+                        HideLight(entry.Group);
+                        RenderLight(entry.Group);
+                    }
+                }
+
+                if (_currentLightHighlightTargets.Count > 0)
+                    UpdateHighlightForLightGroups(_currentLightHighlightTargets);
+
+                if (LightPartSelector.SelectedItem is LightGroupNode selectedGroup &&
+                    lightAction.Entries.Any(entry => entry.Group == selectedGroup))
+                {
+                    UpdateLightTransformUI(selectedGroup);
+                }
+            }
         }
 
         // Records the current transform state of the given meshes before a transform operation begins.
@@ -2051,6 +2083,121 @@ namespace ForzaTechStudio.Views
             Node.LocatorEntry.SceneTransform = NewTransform;
             if (Node.Parent is LocatorsXmlNode xmlRoot)
                 xmlRoot.IsDirty = true;
+        }
+    }
+
+    public class AvPinTransformAction : IUndoAction
+    {
+        public string Description { get; }
+        public AvPinNode Node { get; }
+        public double OldPosX { get; }
+        public double OldPosY { get; }
+        public double OldPosZ { get; }
+        public double OldAxisYaw { get; }
+        public double OldAxisPitch { get; }
+        public double NewPosX { get; set; }
+        public double NewPosY { get; set; }
+        public double NewPosZ { get; set; }
+        public double NewAxisYaw { get; set; }
+        public double NewAxisPitch { get; set; }
+
+        public bool HasChanges => OldPosX != NewPosX || OldPosY != NewPosY || OldPosZ != NewPosZ || OldAxisYaw != NewAxisYaw || OldAxisPitch != NewAxisPitch;
+
+        public AvPinTransformAction(
+            string description,
+            AvPinNode node,
+            double oldPosX,
+            double oldPosY,
+            double oldPosZ,
+            double oldAxisYaw,
+            double oldAxisPitch)
+        {
+            Description = description;
+            Node = node;
+            OldPosX = oldPosX;
+            OldPosY = oldPosY;
+            OldPosZ = oldPosZ;
+            OldAxisYaw = oldAxisYaw;
+            OldAxisPitch = oldAxisPitch;
+        }
+
+        public void Undo()
+        {
+            Apply(OldPosX, OldPosY, OldPosZ, OldAxisYaw, OldAxisPitch);
+        }
+
+        public void Redo()
+        {
+            Apply(NewPosX, NewPosY, NewPosZ, NewAxisYaw, NewAxisPitch);
+        }
+
+        private void Apply(double posX, double posY, double posZ, double axisYaw, double axisPitch)
+        {
+            var visibility = Node.PoiData?.Visibility;
+            if (visibility == null)
+                return;
+
+            visibility.PosX = posX;
+            visibility.PosY = posY;
+            visibility.PosZ = posZ;
+            visibility.AxisYaw = axisYaw;
+            visibility.AxisPitch = axisPitch;
+
+            if (Node.Parent is AvPinsFileNode fileNode)
+                fileNode.IsDirty = true;
+        }
+    }
+
+    public class LightGroupTransformEntry
+    {
+        public LightGroupNode? Group { get; set; }
+        public Vector4 OldPos { get; set; }
+        public Vector4 OldRot { get; set; }
+        public Vector4 OldDamagePos { get; set; }
+        public Vector4 OldDamageRot { get; set; }
+        public Vector4 NewPos { get; set; }
+        public Vector4 NewRot { get; set; }
+        public Vector4 NewDamagePos { get; set; }
+        public Vector4 NewDamageRot { get; set; }
+
+        public bool HasChanges => OldPos != NewPos || OldRot != NewRot || OldDamagePos != NewDamagePos || OldDamageRot != NewDamageRot;
+    }
+
+    public class LightGroupTransformAction : IUndoAction
+    {
+        public string Description { get; }
+        public List<LightGroupTransformEntry> Entries { get; }
+
+        public LightGroupTransformAction(string description, List<LightGroupTransformEntry> entries)
+        {
+            Description = description;
+            Entries = entries;
+        }
+
+        public void Undo()
+        {
+            foreach (var entry in Entries)
+                Apply(entry, entry.OldPos, entry.OldRot, entry.OldDamagePos, entry.OldDamageRot);
+        }
+
+        public void Redo()
+        {
+            foreach (var entry in Entries)
+                Apply(entry, entry.NewPos, entry.NewRot, entry.NewDamagePos, entry.NewDamageRot);
+        }
+
+        private static void Apply(LightGroupTransformEntry entry, Vector4 pos, Vector4 rot, Vector4 damagePos, Vector4 damageRot)
+        {
+            if (entry.Group?.GroupData == null)
+                return;
+
+            entry.Group.GroupData.Pos = pos;
+            entry.Group.GroupData.Rot = rot;
+            entry.Group.GroupData.DamagePos = damagePos;
+            entry.Group.GroupData.DamageRot = damageRot;
+
+            if (entry.Group.Parent is LightsBinNode lightsBin)
+                lightsBin.IsDirty = true;
         }
     }
 }

@@ -2,10 +2,12 @@
 using HelixToolkit.SharpDX.Core;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
+using Microsoft.UI.Xaml.Input;
 using System;
 using System.Collections.Generic;
 using System.ComponentModel;
 using System.Linq;
+using Windows.UI.Core;
 
 namespace ForzaTechStudio.Views
 {
@@ -331,22 +333,201 @@ namespace ForzaTechStudio.Views
 
         private void ViewModel_RequestCloseRoot(object? sender, IViewerNode root)
         {
+            var closingNodes = CollectSubtreeNodes(root);
+            bool removedActiveSelection = closingNodes.Contains(ViewModel.SelectedNode);
+
+            ClearClosedRootSelections(closingNodes);
+            ClearClosedRootUiReferences(closingNodes);
+            ClearClosedRootPendingWork(closingNodes);
+            ClearClosedRootAnimationReferences(closingNodes);
             _carbinModelBinCache.Clear();
 
             if (_treeNodeMap.TryGetValue(root, out var treeNode))
             {
-                 FileTree.RootNodes.Remove(treeNode);
-                 CleanupNodeRecusrive(root);
+                FileTree.RootNodes.Remove(treeNode);
             }
+
+            CleanupNodeRecusrive(root);
+            DetachClosedSubtree(root);
+            PruneClosedRootFromTabs(root);
 
             InvalidateViewportTextureLookup();
             _viewportAssignedMaterialCache.Clear();
             InvalidateViewportMaterialCache();
             DispatcherQueue.TryEnqueue(() =>
             {
+                RefreshModelList();
+                if (removedActiveSelection)
+                    ClearSelectionVisuals();
                 RefreshManufacturerColorsFromLoadedRoots();
                 UpdateMeshColors(SingleColorToggle?.IsChecked ?? false);
             });
+        }
+
+        private HashSet<IViewerNode> CollectSubtreeNodes(IViewerNode root)
+        {
+            var nodes = new HashSet<IViewerNode>();
+            CollectSubtreeNodesRecursive(root, nodes);
+            return nodes;
+        }
+
+        private void CollectSubtreeNodesRecursive(IViewerNode node, HashSet<IViewerNode> nodes)
+        {
+            if (!nodes.Add(node))
+                return;
+
+            foreach (var child in node.Children)
+                CollectSubtreeNodesRecursive(child, nodes);
+        }
+
+        private void ClearClosedRootSelections(HashSet<IViewerNode> closingNodes)
+        {
+            if (closingNodes.Contains(ViewModel.SelectedNode))
+                ViewModel.SelectedNode = null;
+
+            foreach (var item in FileTree.SelectedItems.ToList())
+            {
+                if (item is IViewerNode node && closingNodes.Contains(node))
+                    FileTree.SelectedItems.Remove(item);
+            }
+
+            foreach (var node in closingNodes)
+                node.IsSelected = false;
+
+            _multiSelectedMeshes.RemoveAll(mesh => closingNodes.Contains(mesh));
+            foreach (var mesh in _multiSelectSnapshots.Keys.Where(closingNodes.Contains).ToList())
+                _multiSelectSnapshots.Remove(mesh);
+            _multiSelectedLightGroups.RemoveAll(group => closingNodes.Contains(group));
+            foreach (var group in _multiSelectLightSnapshots.Keys.Where(closingNodes.Contains).ToList())
+                _multiSelectLightSnapshots.Remove(group);
+
+            _currentHighlightTargets = _currentHighlightTargets.Where(mesh => !closingNodes.Contains(mesh)).ToList();
+            _currentLightHighlightTargets = _currentLightHighlightTargets.Where(group => !closingNodes.Contains(group)).ToList();
+
+            _modelScopeDeltaMeshes.RemoveAll(mesh => closingNodes.Contains(mesh));
+            foreach (var mesh in _modelScopeDeltaSnapshots.Keys.Where(closingNodes.Contains).ToList())
+                _modelScopeDeltaSnapshots.Remove(mesh);
+
+            _isMultiSelectActive = _multiSelectedMeshes.Count > 1;
+            _isMultiLightSelectActive = _multiSelectedLightGroups.Count > 1;
+            if (!_isMultiSelectActive && !_isMultiLightSelectActive)
+                MultiSelectText.Visibility = Visibility.Collapsed;
+        }
+
+        private void ClearClosedRootUiReferences(HashSet<IViewerNode> closingNodes)
+        {
+            ClearComboBoxClosedSelection(ModelBinSelector, closingNodes);
+            ClearComboBoxClosedSelection(MeshSelector, closingNodes);
+            ClearComboBoxClosedSelection(DamageMeshSelector, closingNodes);
+            ClearComboBoxClosedSelection(LightPartSelector, closingNodes);
+            ClearComboBoxClosedSelection(LocatorPartSelector, closingNodes);
+            ClearComboBoxClosedSelection(AvPinSelector, closingNodes);
+            ClearComboBoxClosedSelection(CarbinModelSelector, closingNodes);
+            ClearComboBoxClosedSelection(AnimationSelector, closingNodes);
+        }
+
+        private void ClearComboBoxClosedSelection(ComboBox selector, HashSet<IViewerNode> closingNodes)
+        {
+            if (selector.SelectedItem is IViewerNode selectedNode && closingNodes.Contains(selectedNode))
+                selector.SelectedItem = null;
+
+            if (ItemsSourceContainsClosedNode(selector.ItemsSource, closingNodes))
+                selector.ItemsSource = null;
+        }
+
+        private bool ItemsSourceContainsClosedNode(object? itemsSource, HashSet<IViewerNode> closingNodes)
+        {
+            if (itemsSource is not System.Collections.IEnumerable items)
+                return false;
+
+            foreach (var item in items)
+            {
+                if (item is IViewerNode node && closingNodes.Contains(node))
+                    return true;
+
+                if (item is MeshScopeItem scopeItem && scopeItem.Node != null && closingNodes.Contains(scopeItem.Node))
+                    return true;
+            }
+
+            return false;
+        }
+
+        private void ClearClosedRootPendingWork(HashSet<IViewerNode> closingNodes)
+        {
+            _pendingMeshRenders.RemoveAll(mesh => closingNodes.Contains(mesh));
+            _pendingDamageMeshRenders.RemoveAll(mesh => closingNodes.Contains(mesh));
+
+            foreach (var modelBin in _pendingCarbinRefreshModelBins.Where(closingNodes.Contains).ToList())
+                _pendingCarbinRefreshModelBins.Remove(modelBin);
+
+            foreach (var lightGroup in _pendingLightRefreshGroups.Where(closingNodes.Contains).ToList())
+                _pendingLightRefreshGroups.Remove(lightGroup);
+        }
+
+        private void ClearClosedRootAnimationReferences(HashSet<IViewerNode> closingNodes)
+        {
+            bool animationUsesClosedRoot = AnimationSelector.SelectedItem is IViewerNode selectedAnimationNode && closingNodes.Contains(selectedAnimationNode)
+                || _currentAnimSkeletonNode != null && closingNodes.Contains(_currentAnimSkeletonNode)
+                || _boneMeshLinkMap?.Values.SelectMany(meshes => meshes).Any(mesh => closingNodes.Contains(mesh)) == true
+                || _originalMeshBoneTransforms?.Keys.Any(mesh => closingNodes.Contains(mesh)) == true;
+
+            if (!animationUsesClosedRoot)
+                return;
+
+            _animTimer?.Stop();
+            _isAnimPlaying = false;
+            _animCurrentTime = 0;
+            _animDuration = 0;
+            _currentAnimation = null;
+            _currentAnimSkeleton = null;
+            _currentAnimSkeletonNode = null;
+            _currentTrackFilter = null;
+            _preAnimBoneTransforms = null;
+            _boneMeshLinkMap = null;
+            _trackOnlyBoneTransforms = null;
+            _gr2BindPoseWorldTransforms = null;
+            _gr2InverseBindPoseTransforms = null;
+            _mbBindPoseWorldTransforms = null;
+            _mbInverseBindPoseTransforms = null;
+            _originalMeshBoneTransforms = null;
+            _animAnchorInverseTransforms = null;
+            _cachedBoneMap = null;
+            _cachedBoneMapSkeleton = null;
+            _boneLocalTransforms = null;
+            _linkedSkeletonMbPath = null;
+
+            AnimationSelector.SelectedItem = null;
+            AnimationSelector.ItemsSource = null;
+            TrackSelector.SelectedItem = null;
+            TrackSelector.ItemsSource = null;
+            AnimTimeSlider.Value = 0;
+            PlayPauseIcon.Glyph = "\uE768";
+            UpdateAnimTimeDisplay();
+            UpdateAnimBoneInfo();
+            UpdateBoneMatchDetails();
+        }
+
+        private void ClearSelectionVisuals()
+        {
+            UpdateHighlight((IViewerNode?)null);
+            UpdateHighlightForLightGroups(Array.Empty<LightGroupNode>());
+            HideTransformGizmo();
+            ClearTransformFields();
+        }
+
+        private void PruneClosedRootFromTabs(IViewerNode root)
+        {
+            foreach (var tab in ViewModel.Tabs)
+                tab.Roots.Remove(root);
+        }
+
+        private void DetachClosedSubtree(IViewerNode node)
+        {
+            foreach (var child in node.Children.ToList())
+                DetachClosedSubtree(child);
+
+            node.Children.Clear();
+            node.Parent = null;
         }
         
         private void CleanupNodeRecusrive(IViewerNode node)
@@ -403,6 +584,9 @@ namespace ForzaTechStudio.Views
 
         private void FileTree_ItemInvoked(TreeView sender, TreeViewItemInvokedEventArgs args)
         {
+            if (_isSyncingSelection)
+                return;
+
             var item = args.InvokedItem;
             if (item is TreeViewNode treeNode)
             {
@@ -411,17 +595,366 @@ namespace ForzaTechStudio.Views
 
             if (item is IViewerNode node)
             {
-                ViewModel.SelectedNode = node;
+                ApplySelectionFromTreeItems(sender.SelectedItems.Count > 0 ? sender.SelectedItems : new[] { item });
             }
         }
 
         private void FileTree_SelectionChanged(TreeView sender, TreeViewSelectionChangedEventArgs args)
         {
-            if (sender.SelectedItems.Count != 1 || args.AddedItems.Count == 0)
+            if (_isSyncingSelection)
                 return;
 
-            if (TryGetViewerNode(args.AddedItems[0], out var node))
-                ViewModel.SelectedNode = node;
+            ApplySelectionFromTreeItems(sender.SelectedItems);
+        }
+
+        private void FileTreeRow_PointerPressed(object sender, PointerRoutedEventArgs e)
+        {
+            if (_isSyncingSelection)
+                return;
+
+            var point = e.GetCurrentPoint(sender as UIElement);
+            if (!point.Properties.IsLeftButtonPressed)
+                return;
+
+            if (sender is not FrameworkElement { DataContext: TreeViewNode treeNode })
+                return;
+
+            if (treeNode.Content is not IViewerNode node)
+                return;
+
+            bool isCtrlHeld = Microsoft.UI.Input.InputKeyboardSource
+                .GetKeyStateForCurrentThread(Windows.System.VirtualKey.Control)
+                .HasFlag(CoreVirtualKeyStates.Down);
+
+            SelectTreeNodeFromClick(treeNode, node, isCtrlHeld);
+            e.Handled = true;
+        }
+
+        private void SelectTreeNodeFromClick(TreeViewNode treeNode, IViewerNode node, bool isCtrlHeld)
+        {
+            if (!isCtrlHeld)
+            {
+                ApplySingleSelection(node, syncTree: true);
+                return;
+            }
+
+            var selectedTreeNodes = FileTree.SelectedItems
+                .OfType<TreeViewNode>()
+                .Where(selectedNode => selectedNode.Content is IViewerNode)
+                .ToList();
+
+            if (selectedTreeNodes.Contains(treeNode))
+                selectedTreeNodes.Remove(treeNode);
+            else
+                selectedTreeNodes.Add(treeNode);
+
+            ApplySelectionFromTreeItems(selectedTreeNodes);
+            SyncTreeSelection(selectedTreeNodes
+                .Select(selectedNode => selectedNode.Content)
+                .OfType<IViewerNode>());
+        }
+
+        private void ApplySelectionFromTreeItems(IEnumerable<object> selectedItems)
+        {
+            var nodes = selectedItems
+                .Select(item => TryGetViewerNode(item, out var node) ? node : null)
+                .Where(node => node != null)
+                .Cast<IViewerNode>()
+                .Distinct()
+                .ToList();
+
+            ApplySelection(nodes, syncTree: false);
+        }
+
+        private void ApplySelection(IReadOnlyList<IViewerNode> nodes, bool syncTree)
+        {
+            if (_isSyncingSelection)
+                return;
+
+            _isSyncingSelection = true;
+            try
+            {
+                if (nodes.Count == 0)
+                {
+                    ClearSelection(syncTree);
+                    return;
+                }
+
+                var primaryNode = nodes[^1];
+                var meshNodes = nodes.OfType<MeshNode>().ToList();
+                var lightGroups = nodes
+                    .Select(node => node is LightRowNode row ? row.Parent as LightGroupNode : node as LightGroupNode)
+                    .Where(group => group != null)
+                    .Cast<LightGroupNode>()
+                    .Distinct()
+                    .ToList();
+
+                if (nodes.Count > 1 && meshNodes.Count == nodes.Count)
+                {
+                    ApplyMeshMultiSelection(meshNodes, primaryNode, syncTree);
+                    return;
+                }
+
+                if (nodes.Count > 1 && lightGroups.Count == nodes.Count)
+                {
+                    ApplyLightMultiSelection(lightGroups, primaryNode, syncTree);
+                    return;
+                }
+
+                if (nodes.Count > 1)
+                {
+                    ApplyMixedMultiSelection(nodes, primaryNode, syncTree);
+                    return;
+                }
+
+                ApplySingleSelection(primaryNode, syncTree);
+            }
+            finally
+            {
+                _isSyncingSelection = false;
+            }
+        }
+
+        private void ApplySingleSelection(IViewerNode node, bool syncTree)
+        {
+            if (!_isSyncingSelection)
+            {
+                _isSyncingSelection = true;
+                try
+                {
+                    ApplySingleSelection(node, syncTree);
+                }
+                finally
+                {
+                    _isSyncingSelection = false;
+                }
+                return;
+            }
+
+            ClearMultiSelection();
+            ClearSelectionState();
+            node.IsSelected = true;
+            if (syncTree)
+                SyncTreeSelection(new[] { node });
+            ViewModel.SelectedNode = node;
+            SyncSelectionToUI();
+        }
+
+        private void ApplyMeshMultiSelection(IEnumerable<MeshNode> meshes, IViewerNode primaryNode, bool syncTree)
+        {
+            if (!_isSyncingSelection)
+            {
+                _isSyncingSelection = true;
+                try
+                {
+                    ApplyMeshMultiSelection(meshes, primaryNode, syncTree);
+                }
+                finally
+                {
+                    _isSyncingSelection = false;
+                }
+                return;
+            }
+
+            var selectedMeshes = meshes.Distinct().ToList();
+            ClearMultiSelection();
+            ClearSelectionState();
+
+            _multiSelectedMeshes = selectedMeshes;
+            _isMultiSelectActive = selectedMeshes.Count > 0;
+            foreach (var mesh in selectedMeshes)
+                mesh.IsSelected = true;
+            primaryNode.IsSelected = true;
+            if (syncTree)
+                SyncTreeSelection(selectedMeshes.Cast<IViewerNode>());
+
+            ViewModel.SelectedNode = primaryNode;
+            SnapshotMultiSelectValues();
+            UpdateHighlight(_multiSelectedMeshes);
+            UpdateTransformUIForMultiSelect();
+        }
+
+        private void ApplyLightMultiSelection(IEnumerable<LightGroupNode> groups, IViewerNode primaryNode, bool syncTree)
+        {
+            if (!_isSyncingSelection)
+            {
+                _isSyncingSelection = true;
+                try
+                {
+                    ApplyLightMultiSelection(groups, primaryNode, syncTree);
+                }
+                finally
+                {
+                    _isSyncingSelection = false;
+                }
+                return;
+            }
+
+            var selectedGroups = groups.Distinct().ToList();
+            ClearMultiSelection();
+            ClearSelectionState();
+
+            _multiSelectedLightGroups = selectedGroups;
+            _isMultiLightSelectActive = selectedGroups.Count > 0;
+            foreach (var group in selectedGroups)
+                group.IsSelected = true;
+            primaryNode.IsSelected = true;
+            if (syncTree)
+                SyncTreeSelection(selectedGroups.Cast<IViewerNode>());
+
+            ViewModel.SelectedNode = primaryNode;
+            SnapshotMultiLightSelectValues();
+            UpdateHighlightForLightGroups(_multiSelectedLightGroups);
+            UpdateTransformUIForMultiLightSelect();
+        }
+
+        private void ApplyMixedMultiSelection(IEnumerable<IViewerNode> nodes, IViewerNode primaryNode, bool syncTree)
+        {
+            if (!_isSyncingSelection)
+            {
+                _isSyncingSelection = true;
+                try
+                {
+                    ApplyMixedMultiSelection(nodes, primaryNode, syncTree);
+                }
+                finally
+                {
+                    _isSyncingSelection = false;
+                }
+                return;
+            }
+
+            var selectedNodes = nodes.Distinct().ToList();
+            ClearMultiSelection();
+            ClearSelectionState();
+
+            foreach (var selectedNode in selectedNodes)
+                selectedNode.IsSelected = true;
+            primaryNode.IsSelected = true;
+
+            if (syncTree)
+                SyncTreeSelection(selectedNodes);
+
+            ViewModel.SelectedNode = primaryNode;
+
+            var meshTargets = selectedNodes.SelectMany(GetHighlightMeshesForNode).Distinct().ToList();
+            var lightTargets = selectedNodes.SelectMany(GetHighlightLightGroupsForNode).Distinct().ToList();
+
+            _currentHighlightTargets = meshTargets;
+            _currentLightHighlightTargets = lightTargets;
+
+            if (meshTargets.Count > 0)
+            {
+                _multiSelectedMeshes = meshTargets;
+                _isMultiSelectActive = true;
+                SnapshotMultiSelectValues();
+                UpdateHighlight(_multiSelectedMeshes);
+                UpdateTransformUIForMultiSelect();
+            }
+            else
+            {
+                UpdateHighlight(meshTargets);
+            }
+
+            if (lightTargets.Count > 0)
+            {
+                _multiSelectedLightGroups = lightTargets;
+                _isMultiLightSelectActive = meshTargets.Count == 0;
+                SnapshotMultiLightSelectValues();
+                UpdateHighlightForLightGroups(lightTargets);
+
+                if (meshTargets.Count == 0)
+                    UpdateTransformUIForMultiLightSelect();
+            }
+
+            if (meshTargets.Count == 0 && lightTargets.Count == 0)
+                SyncSelectionToUI();
+        }
+
+        private void ClearSelection(bool syncTree)
+        {
+            if (!_isSyncingSelection)
+            {
+                _isSyncingSelection = true;
+                try
+                {
+                    ClearSelection(syncTree);
+                }
+                finally
+                {
+                    _isSyncingSelection = false;
+                }
+                return;
+            }
+
+            ClearMultiSelection();
+            ClearSelectionState();
+            if (syncTree)
+                SyncTreeSelection(Array.Empty<IViewerNode>());
+            ViewModel.SelectedNode = null;
+            UpdateHighlight((IViewerNode?)null);
+        }
+
+        private void ClearSelectionState()
+        {
+            foreach (var root in ViewModel.Roots)
+                SetSelectedRecursive(root, false);
+        }
+
+        private void SetSelectedRecursive(IViewerNode node, bool isSelected)
+        {
+            node.IsSelected = isSelected;
+            foreach (var child in node.Children)
+                SetSelectedRecursive(child, isSelected);
+        }
+
+        private void SyncTreeSelection(IEnumerable<IViewerNode> selectedNodes)
+        {
+            var selectedTreeNodes = selectedNodes
+                .Select(node => _treeNodeMap.TryGetValue(node, out var treeNode) ? treeNode : null)
+                .Where(treeNode => treeNode != null)
+                .Cast<TreeViewNode>()
+                .ToList();
+
+            FileTree.SelectedItems.Clear();
+            foreach (var treeNode in selectedTreeNodes)
+                FileTree.SelectedItems.Add(treeNode);
+        }
+
+        private IEnumerable<MeshNode> GetHighlightMeshesForNode(IViewerNode node)
+        {
+            if (node is MeshNode mesh)
+            {
+                yield return mesh;
+                yield break;
+            }
+
+            foreach (var child in node.Children)
+            {
+                foreach (var childMesh in GetHighlightMeshesForNode(child))
+                    yield return childMesh;
+            }
+        }
+
+        private IEnumerable<LightGroupNode> GetHighlightLightGroupsForNode(IViewerNode node)
+        {
+            if (node is LightGroupNode lightGroup)
+            {
+                yield return lightGroup;
+                yield break;
+            }
+
+            if (node is LightRowNode rowNode && rowNode.Parent is LightGroupNode parentGroup)
+            {
+                yield return parentGroup;
+                yield break;
+            }
+
+            foreach (var child in node.Children)
+            {
+                foreach (var childGroup in GetHighlightLightGroupsForNode(child))
+                    yield return childGroup;
+            }
         }
 
         private async void FileTree_RightTapped(object sender, Microsoft.UI.Xaml.Input.RightTappedRoutedEventArgs e)
@@ -469,9 +1002,10 @@ namespace ForzaTechStudio.Views
         private void SyncSelectionToUI()
         {
             var node = ViewModel.SelectedNode;
+            RefreshTransformSelectionAvailability();
             
             // If multi-select is active, don't let single selection override the UI
-            if (_isMultiSelectActive)
+            if (_isMultiSelectActive || _isMultiLightSelectActive)
             {
                 // Still refresh locator cone colors
                 foreach (var root in ViewModel.Roots)
@@ -490,14 +1024,6 @@ namespace ForzaTechStudio.Views
             UpdateHighlight(node);
             
             if (node == null) return;
-
-            // Sync tree view selection without auto-expanding; the selected item will
-            // appear highlighted when the user manually expands the tree.
-            if (_treeNodeMap.TryGetValue(node, out var tvNode))
-            {
-                if (FileTree.SelectedItems.Count <= 1)
-                    FileTree.SelectedItem = tvNode;
-            }
 
             // Handle LocatorNode selection
             if (node is LocatorNode locNode)
@@ -683,7 +1209,7 @@ namespace ForzaTechStudio.Views
             if (meshList.Count == 0)
             {
                 _highlightModel.Visibility = Visibility.Collapsed;
-                HideTransformGizmo();
+                UpdateTransformGizmoForSelection();
                 return;
             }
 
@@ -717,12 +1243,12 @@ namespace ForzaTechStudio.Views
                 mergedGeo.TriangleIndices = ind;
                 _highlightModel.Geometry = mergedGeo;
                 _highlightModel.Visibility = Visibility.Visible;
-                UpdateTransformGizmoForTargets(meshList);
+                UpdateTransformGizmoForTargets(GetViewportTransformTargets(meshList));
             }
             else
             {
                  _highlightModel.Visibility = Visibility.Collapsed;
-                 HideTransformGizmo();
+                  UpdateTransformGizmoForSelection();
             }
         }
 
@@ -793,7 +1319,6 @@ namespace ForzaTechStudio.Views
         private void UpdateHighlightForLightGroups(IEnumerable<LightGroupNode> groups)
         {
             if (_lightHighlightModel == null) return;
-            HideTransformGizmo();
 
             var groupList = groups?.ToList() ?? new List<LightGroupNode>();
             _currentLightHighlightTargets = groupList;
@@ -804,6 +1329,7 @@ namespace ForzaTechStudio.Views
             if (groupList.Count == 0)
             {
                 _lightHighlightModel.Visibility = Visibility.Collapsed;
+                UpdateTransformGizmoForSelection();
                 return;
             }
 
@@ -835,6 +1361,8 @@ namespace ForzaTechStudio.Views
             {
                 _lightHighlightModel.Visibility = Visibility.Collapsed;
             }
+
+            UpdateTransformGizmoForTargets(GetViewportTransformTargets(groupList));
         }
 
         private void UpdateHighlightForCarbinModel(CarbinModelNode node)

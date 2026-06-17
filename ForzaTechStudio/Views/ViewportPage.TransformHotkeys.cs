@@ -43,11 +43,58 @@ namespace ForzaTechStudio.Views
             Local
         }
 
+        private enum ViewportTransformTargetKind
+        {
+            Mesh,
+            Locator,
+            AvPin,
+            LightGroup
+        }
+
+        private sealed class ViewportTransformSession
+        {
+            public string Description { get; }
+            public List<ViewportTransformTarget> Targets { get; }
+
+            public ViewportTransformSession(string description, List<ViewportTransformTarget> targets)
+            {
+                Description = description;
+                Targets = targets;
+            }
+        }
+
+        private sealed class ViewportTransformTarget
+        {
+            public ViewportTransformTargetKind Kind { get; init; }
+            public IViewerNode Node { get; init; } = default!;
+            public MeshNode? Mesh { get; init; }
+            public LocatorNode? Locator { get; init; }
+            public AvPinNode? AvPin { get; init; }
+            public LightGroupNode? LightGroup { get; init; }
+            public bool CanScale { get; init; }
+            public Vector3 OldPosition { get; init; }
+            public Vector3 OldRotation { get; init; }
+            public Vector3 OldScale { get; init; }
+            public Vector4 OldMeshScale { get; init; }
+            public Vector4 OldMeshTranslate { get; init; }
+            public Vector3 OldMeshRotation { get; init; }
+            public Matrix4x4 OldLocatorTransform { get; init; }
+            public double OldAvPinPosX { get; init; }
+            public double OldAvPinPosY { get; init; }
+            public double OldAvPinPosZ { get; init; }
+            public double OldAvPinAxisYaw { get; init; }
+            public double OldAvPinAxisPitch { get; init; }
+            public Vector4 OldLightPos { get; init; }
+            public Vector4 OldLightRot { get; init; }
+            public Vector4 OldLightDamagePos { get; init; }
+            public Vector4 OldLightDamageRot { get; init; }
+        }
+
         private ViewportTransformMode _activeTransformMode = ViewportTransformMode.None;
         private ViewportTransformAxis _activeTransformAxis = ViewportTransformAxis.None;
         private ViewportTransformAxisSpace _activeTransformAxisSpace = ViewportTransformAxisSpace.Global;
-        private MeshTransformAction? _activeTransformAction;
-        private readonly List<MeshNode> _activeTransformTargets = new();
+        private ViewportTransformSession? _activeTransformSession;
+        private readonly List<ViewportTransformTarget> _activeTransformTargets = new();
         private Point _transformMouseAnchor;
         private Point _transformPivotScreen;
         private Vector3 _transformPivotWorld;
@@ -253,15 +300,15 @@ namespace ForzaTechStudio.Views
 
         private void BeginViewportTransform(ViewportTransformMode mode)
         {
-            var targets = GetViewportTransformTargets();
+            var targets = GetViewportTransformTargets(mode);
             if (targets.Count == 0)
             {
                 UpdateTransformHotkeyStatus();
                 return;
             }
 
-            var action = BeginTransformAction(targets, GetTransformDescription(mode));
-            if (action.Entries.Count == 0)
+            var session = BeginViewportTransformSession(targets, GetTransformDescription(mode));
+            if (session.Targets.Count == 0)
             {
                 UpdateTransformHotkeyStatus();
                 return;
@@ -270,15 +317,11 @@ namespace ForzaTechStudio.Views
             _activeTransformMode = mode;
             _activeTransformAxis = ViewportTransformAxis.None;
             _activeTransformAxisSpace = ViewportTransformAxisSpace.Global;
-            _activeTransformAction = action;
+            _activeTransformSession = session;
             _activeTransformTargets.Clear();
-            _activeTransformTargets.AddRange(action.Entries
-                .Select(entry => entry.Mesh)
-                .Where(mesh => mesh != null)
-                .Cast<MeshNode>()
-                .Distinct());
+            _activeTransformTargets.AddRange(session.Targets);
 
-            _transformPivotWorld = CalculateTransformPivot(_activeTransformTargets, action);
+            _transformPivotWorld = CalculateTransformPivot(_activeTransformTargets);
             _transformMouseAnchor = _hasLastViewportPointerPosition
                 ? _lastViewportPointerPosition
                 : GetFallbackViewportAnchor(_transformPivotWorld);
@@ -300,7 +343,7 @@ namespace ForzaTechStudio.Views
 
         private void UpdateActiveViewportTransform(Point currentMouse)
         {
-            if (_activeTransformAction == null)
+            if (_activeTransformSession == null)
                 return;
 
             switch (_activeTransformMode)
@@ -316,6 +359,7 @@ namespace ForzaTechStudio.Views
                     break;
             }
 
+                    RefreshViewportTransformSessionUI(_activeTransformSession);
             UpdateTransformAxisGuide();
             RefreshHighlight();
             RefreshOverlays();
@@ -323,21 +367,22 @@ namespace ForzaTechStudio.Views
 
         private void ConfirmActiveViewportTransform()
         {
-            var action = _activeTransformAction;
-            if (action != null)
-                CommitTransformAction(action);
+            var session = _activeTransformSession;
+            if (session != null)
+                CommitViewportTransformSession(session);
 
+            RefreshViewportTransformSessionUI(session);
             ClearActiveViewportTransformState();
-            UpdateTransformUI();
             RefreshHighlight();
             RefreshOverlays();
         }
 
         private void CancelActiveViewportTransform()
         {
+            var session = _activeTransformSession;
             RestoreActiveTransformSnapshot();
+            RefreshViewportTransformSessionUI(session);
             ClearActiveViewportTransformState();
-            UpdateTransformUI();
             RefreshHighlight();
             RefreshOverlays();
         }
@@ -347,7 +392,7 @@ namespace ForzaTechStudio.Views
             _activeTransformMode = ViewportTransformMode.None;
             _activeTransformAxis = ViewportTransformAxis.None;
             _activeTransformAxisSpace = ViewportTransformAxisSpace.Global;
-            _activeTransformAction = null;
+            _activeTransformSession = null;
             _activeTransformTargets.Clear();
             ClearTransformAxisGuide(removeFromViewport: false);
             RestoreViewportCameraInputAfterTransform();
@@ -398,10 +443,21 @@ namespace ForzaTechStudio.Views
 
         private void UpdateTransformOverlayButtons()
         {
-            var enabled = _hasTransformSelection;
-            SetTransformOverlayButton(MoveTransformButton, enabled, enabled && _selectedGizmoMode == ViewportGizmoMode.Translate);
-            SetTransformOverlayButton(RotateTransformButton, enabled, enabled && _selectedGizmoMode == ViewportGizmoMode.Rotate);
-            SetTransformOverlayButton(ScaleTransformButton, enabled, enabled && _selectedGizmoMode == ViewportGizmoMode.Scale);
+            var targets = GetViewportTransformTargets();
+            var canTransform = targets.Count > 0;
+            var canScale = targets.Any(target => target.CanScale);
+
+            _hasTransformSelection = canTransform;
+            if (!canTransform || (_selectedGizmoMode == ViewportGizmoMode.Scale && !canScale))
+            {
+                _selectedGizmoMode = ViewportGizmoMode.None;
+                _transformGizmo?.SetVisible(false);
+                _transformGizmo?.SetMode(ViewportGizmoMode.None);
+            }
+
+            SetTransformOverlayButton(MoveTransformButton, canTransform, canTransform && _selectedGizmoMode == ViewportGizmoMode.Translate);
+            SetTransformOverlayButton(RotateTransformButton, canTransform, canTransform && _selectedGizmoMode == ViewportGizmoMode.Rotate);
+            SetTransformOverlayButton(ScaleTransformButton, canScale, canScale && _selectedGizmoMode == ViewportGizmoMode.Scale);
         }
 
         private void SetTransformOverlayButton(Button button, bool enabled, bool active)
@@ -428,10 +484,17 @@ namespace ForzaTechStudio.Views
             return RefreshTransformSelectionAvailability();
         }
 
-        private bool RefreshTransformSelectionAvailability(IReadOnlyList<MeshNode>? knownTargets = null)
+        private bool RefreshTransformSelectionAvailability(IReadOnlyList<ViewportTransformTarget>? knownTargets = null)
         {
-            _hasTransformSelection = knownTargets?.Count > 0 || (knownTargets == null && GetViewportTransformTargets().Count > 0);
+            var targets = knownTargets ?? GetViewportTransformTargets();
+            _hasTransformSelection = targets.Count > 0;
             if (!_hasTransformSelection)
+            {
+                _selectedGizmoMode = ViewportGizmoMode.None;
+                _transformGizmo?.SetVisible(false);
+                _transformGizmo?.SetMode(ViewportGizmoMode.None);
+            }
+            else if (_selectedGizmoMode == ViewportGizmoMode.Scale && !targets.Any(target => target.CanScale))
             {
                 _selectedGizmoMode = ViewportGizmoMode.None;
                 _transformGizmo?.SetVisible(false);
@@ -508,23 +571,19 @@ namespace ForzaTechStudio.Views
             if (!TryCreatePointerRay(position, out var rayOrigin, out var rayDirection))
                 return false;
 
-            var targets = GetViewportTransformTargets();
+            var targets = GetViewportTransformTargets(ToTransformMode(_selectedGizmoMode));
             if (targets.Count == 0)
                 return false;
 
-            var action = BeginTransformAction(targets, $"Gizmo {handle.Mode}");
-            if (action.Entries.Count == 0)
+            var session = BeginViewportTransformSession(targets, $"Gizmo {handle.Mode}");
+            if (session.Targets.Count == 0)
                 return false;
 
             _isGizmoDragging = true;
             _activeGizmoHandle = handle;
-            _gizmoTransformAction = action;
+            _gizmoTransformSession = session;
             _gizmoTransformTargets.Clear();
-            _gizmoTransformTargets.AddRange(action.Entries
-                .Select(entry => entry.Mesh)
-                .Where(mesh => mesh != null)
-                .Cast<MeshNode>()
-                .Distinct());
+            _gizmoTransformTargets.AddRange(session.Targets);
             _gizmoPivotWorld = _transformGizmo.Pivot;
             _transformMouseAnchor = position;
 
@@ -698,7 +757,7 @@ namespace ForzaTechStudio.Views
 
         private void UpdateActiveGizmoDrag(Point currentMouse)
         {
-            if (!_isGizmoDragging || _gizmoTransformAction == null ||
+            if (!_isGizmoDragging || _gizmoTransformSession == null ||
                 !TryCreatePointerRay(currentMouse, out var rayOrigin, out var rayDirection))
             {
                 return;
@@ -717,6 +776,7 @@ namespace ForzaTechStudio.Views
                     break;
             }
 
+                    RefreshViewportTransformSessionUI(_gizmoTransformSession);
             RefreshHighlight();
             RefreshOverlays();
         }
@@ -775,12 +835,12 @@ namespace ForzaTechStudio.Views
             if (!_isGizmoDragging)
                 return;
 
-            var action = _gizmoTransformAction;
-            if (action != null)
-                CommitTransformAction(action);
+            var session = _gizmoTransformSession;
+            if (session != null)
+                CommitViewportTransformSession(session);
 
+            RefreshViewportTransformSessionUI(session);
             ClearActiveGizmoDragState();
-            UpdateTransformUI();
             RefreshHighlight();
             RefreshOverlays();
             UpdateTransformGizmoForSelection();
@@ -792,8 +852,8 @@ namespace ForzaTechStudio.Views
                 return;
 
             RestoreGizmoTransformSnapshot();
+            RefreshViewportTransformSessionUI(_gizmoTransformSession);
             ClearActiveGizmoDragState();
-            UpdateTransformUI();
             RefreshHighlight();
             RefreshOverlays();
             UpdateTransformGizmoForSelection();
@@ -803,7 +863,7 @@ namespace ForzaTechStudio.Views
         {
             _isGizmoDragging = false;
             _activeGizmoHandle = default;
-            _gizmoTransformAction = null;
+            _gizmoTransformSession = null;
             _gizmoTransformTargets.Clear();
             _viewport?.ReleasePointerCaptures();
             RestoreViewportCameraInputAfterTransform();
@@ -811,62 +871,41 @@ namespace ForzaTechStudio.Views
 
         private void RestoreGizmoTransformSnapshot()
         {
-            if (_gizmoTransformAction == null)
+            if (_gizmoTransformSession == null)
                 return;
 
-            foreach (var entry in _gizmoTransformAction.Entries)
-            {
-                if (entry.Mesh?.GeometryData?.SourceMesh == null)
-                    continue;
-
-                entry.Mesh.GeometryData.SourceMesh.PositionScale = entry.OldScale;
-                entry.Mesh.GeometryData.SourceMesh.PositionTranslate = entry.OldTranslate;
-                entry.Mesh.GeometryData.RotationEulerDegrees = entry.OldRotation;
-                RefreshModalTransformMesh(entry.Mesh);
-            }
+            RestoreTransformSnapshot(_gizmoTransformSession);
         }
 
         private void ApplyGizmoTranslationPreview(Vector3 delta)
         {
-            if (_gizmoTransformAction == null)
+            if (_gizmoTransformSession == null)
                 return;
 
-            foreach (var entry in _gizmoTransformAction.Entries)
-            {
-                if (entry.Mesh?.GeometryData?.SourceMesh == null)
-                    continue;
-
-                entry.Mesh.GeometryData.SourceMesh.PositionTranslate = ApplyWorldTranslationDelta(entry.Mesh, entry.OldTranslate, delta);
-                RefreshModalTransformMesh(entry.Mesh);
-            }
+            foreach (var target in _gizmoTransformSession.Targets)
+                ApplyTargetTranslationPreview(target, delta);
         }
 
         private void ApplyGizmoRotationPreview(Vector3 axis, float deltaDegrees)
         {
-            if (_gizmoTransformAction == null)
+            if (_gizmoTransformSession == null)
                 return;
 
-            foreach (var entry in _gizmoTransformAction.Entries)
-            {
-                if (entry.Mesh?.GeometryData?.SourceMesh == null)
-                    continue;
-
-                entry.Mesh.GeometryData.RotationEulerDegrees = ComposeRotationEulerAroundAxis(entry, axis, deltaDegrees);
-                RefreshModalTransformMesh(entry.Mesh);
-            }
+            foreach (var target in _gizmoTransformSession.Targets)
+                ApplyTargetRotationPreview(target, ComposeTargetRotationEulerAroundAxis(target, axis, deltaDegrees));
         }
 
         private void ApplyGizmoScalePreview(float factor)
         {
-            if (_gizmoTransformAction == null)
+            if (_gizmoTransformSession == null)
                 return;
 
-            foreach (var entry in _gizmoTransformAction.Entries)
+            foreach (var target in _gizmoTransformSession.Targets)
             {
-                if (entry.Mesh?.GeometryData?.SourceMesh == null)
+                if (!target.CanScale)
                     continue;
 
-                var scale = entry.OldScale;
+                var scale = target.OldScale;
                 if (_activeGizmoHandle.IsUniform)
                 {
                     scale.X *= factor;
@@ -889,14 +928,13 @@ namespace ForzaTechStudio.Views
                     }
                 }
 
-                entry.Mesh.GeometryData.SourceMesh.PositionScale = scale;
-                RefreshModalTransformMesh(entry.Mesh);
+                ApplyTargetScalePreview(target, scale);
             }
         }
 
-        private Vector3 ComposeRotationEulerAroundAxis(MeshTransformEntry entry, Vector3 axis, float deltaDegrees)
+        private Vector3 ComposeTargetRotationEulerAroundAxis(ViewportTransformTarget target, Vector3 axis, float deltaDegrees)
         {
-            var initial = CreateRenderRotationMatrix(entry.OldRotation);
+            var initial = GetTargetRotationMatrix(target);
             var radians = deltaDegrees * MathF.PI / 180f;
             var axisRotation = Matrix4x4.CreateFromAxisAngle(NormalizeOrDefault(axis, Vector3.UnitZ), radians);
             return ExtractRenderEulerDegrees(initial * axisRotation);
@@ -904,11 +942,11 @@ namespace ForzaTechStudio.Views
 
         private void UpdateTransformGizmoForSelection()
         {
-            var targets = GetViewportTransformTargets();
+            var targets = GetViewportTransformTargets(ToTransformMode(_selectedGizmoMode));
             UpdateTransformGizmoForTargets(targets);
         }
 
-        private void UpdateTransformGizmoForTargets(IReadOnlyList<MeshNode> targets)
+        private void UpdateTransformGizmoForTargets(IReadOnlyList<ViewportTransformTarget> targets)
         {
             if (_transformGizmo == null)
                 return;
@@ -926,8 +964,8 @@ namespace ForzaTechStudio.Views
                 return;
             }
 
-            var action = BeginTransformAction(targets, "Gizmo Pivot");
-            if (action.Entries.Count == 0)
+            var session = BeginViewportTransformSession(targets, "Gizmo Pivot");
+            if (session.Targets.Count == 0)
             {
                 _hasTransformSelection = false;
                 _selectedGizmoMode = ViewportGizmoMode.None;
@@ -937,7 +975,7 @@ namespace ForzaTechStudio.Views
                 return;
             }
 
-            var pivot = CalculateTransformPivot(targets, action);
+            var pivot = CalculateTransformPivot(session.Targets);
             _gizmoPivotWorld = pivot;
             _transformGizmo.SetMode(_selectedGizmoMode);
             UpdateTransformGizmoVisual(pivot);
@@ -1015,19 +1053,10 @@ namespace ForzaTechStudio.Views
 
         private void RestoreActiveTransformSnapshot()
         {
-            if (_activeTransformAction == null)
+            if (_activeTransformSession == null)
                 return;
 
-            foreach (var entry in _activeTransformAction.Entries)
-            {
-                if (entry.Mesh?.GeometryData?.SourceMesh == null)
-                    continue;
-
-                entry.Mesh.GeometryData.SourceMesh.PositionScale = entry.OldScale;
-                entry.Mesh.GeometryData.SourceMesh.PositionTranslate = entry.OldTranslate;
-                entry.Mesh.GeometryData.RotationEulerDegrees = entry.OldRotation;
-                RefreshModalTransformMesh(entry.Mesh);
-            }
+            RestoreTransformSnapshot(_activeTransformSession);
         }
 
         private void CycleTransformAxis(ViewportTransformAxis axis)
@@ -1050,53 +1079,39 @@ namespace ForzaTechStudio.Views
             UpdateTransformAxisGuide();
             UpdateTransformHotkeyStatus();
 
-            if (_activeTransformAction != null && _hasLastViewportPointerPosition)
+            if (_activeTransformSession != null && _hasLastViewportPointerPosition)
                 UpdateActiveViewportTransform(_lastViewportPointerPosition);
         }
 
         private void ApplyTranslationPreview(Vector3 delta)
         {
-            if (_activeTransformAction == null)
+            if (_activeTransformSession == null)
                 return;
 
-            foreach (var entry in _activeTransformAction.Entries)
-            {
-                if (entry.Mesh?.GeometryData?.SourceMesh == null)
-                    continue;
-
-                entry.Mesh.GeometryData.SourceMesh.PositionTranslate = ApplyWorldTranslationDelta(entry.Mesh, entry.OldTranslate, delta);
-
-                RefreshModalTransformMesh(entry.Mesh);
-            }
+            foreach (var target in _activeTransformSession.Targets)
+                ApplyTargetTranslationPreview(target, delta);
         }
 
         private void ApplyRotationPreview(float deltaDegrees)
         {
-            if (_activeTransformAction == null)
+            if (_activeTransformSession == null)
                 return;
 
-            foreach (var entry in _activeTransformAction.Entries)
-            {
-                if (entry.Mesh?.GeometryData?.SourceMesh == null)
-                    continue;
-
-                entry.Mesh.GeometryData.RotationEulerDegrees = ComposeRotationEuler(entry, deltaDegrees);
-                RefreshModalTransformMesh(entry.Mesh);
-            }
+            foreach (var target in _activeTransformSession.Targets)
+                ApplyTargetRotationPreview(target, ComposeRotationEuler(target, deltaDegrees));
         }
 
         private void ApplyScalePreview(float scaleFactor)
         {
-            if (_activeTransformAction == null)
+            if (_activeTransformSession == null)
                 return;
 
-            foreach (var entry in _activeTransformAction.Entries)
+            foreach (var target in _activeTransformSession.Targets)
             {
-                if (entry.Mesh?.GeometryData?.SourceMesh == null)
+                if (!target.CanScale)
                     continue;
 
-                var oldScale = entry.OldScale;
-                var newScale = oldScale;
+                var newScale = target.OldScale;
 
                 if (_activeTransformAxis == ViewportTransformAxis.None)
                 {
@@ -1120,8 +1135,58 @@ namespace ForzaTechStudio.Views
                     }
                 }
 
-                entry.Mesh.GeometryData.SourceMesh.PositionScale = newScale;
-                RefreshModalTransformMesh(entry.Mesh);
+                ApplyTargetScalePreview(target, newScale);
+            }
+        }
+
+        private void RefreshViewportTransformSessionUI(ViewportTransformSession? session)
+        {
+            if (session == null || session.Targets.Count == 0)
+                return;
+
+            RefreshViewportTransformTargetUI(session.Targets);
+        }
+
+        private void RefreshViewportTransformTargetUI(IReadOnlyList<ViewportTransformTarget> targets)
+        {
+            if (targets.Count == 0)
+                return;
+
+            if (targets.Count == 1)
+            {
+                RefreshViewportTransformTargetUI(targets[0]);
+                return;
+            }
+
+            if (targets.All(target => target.Kind == ViewportTransformTargetKind.Mesh))
+            {
+                UpdateTransformUI();
+            }
+            else if (targets.All(target => target.Kind == ViewportTransformTargetKind.LightGroup) && _isMultiLightSelectActive)
+            {
+                UpdateTransformUIForMultiLightSelect();
+            }
+        }
+
+        private void RefreshViewportTransformTargetUI(ViewportTransformTarget target)
+        {
+            switch (target.Kind)
+            {
+                case ViewportTransformTargetKind.Mesh:
+                    UpdateTransformUI();
+                    break;
+
+                case ViewportTransformTargetKind.Locator when target.Locator != null:
+                    PopulateMatrixFields(target.Locator.LocatorEntry.SceneTransform);
+                    break;
+
+                case ViewportTransformTargetKind.AvPin when target.AvPin?.PoiData?.Visibility != null:
+                    PopulateAvPinFields(target.AvPin.PoiData.Visibility);
+                    break;
+
+                case ViewportTransformTargetKind.LightGroup when target.LightGroup != null:
+                    UpdateLightTransformUI(target.LightGroup);
+                    break;
             }
         }
 
@@ -1143,10 +1208,10 @@ namespace ForzaTechStudio.Views
 
         private Vector3 CalculateAxisTranslationDelta(Point currentMouse)
         {
-            if (_activeTransformAction == null || _activeTransformAction.Entries.Count == 0)
+            if (_activeTransformSession == null || _activeTransformSession.Targets.Count == 0)
                 return Vector3.Zero;
 
-            var axis = GetActiveAxisDirection(_activeTransformAction.Entries[0]);
+            var axis = GetActiveAxisDirection(_activeTransformSession.Targets[0]);
             if (!TryProjectWorldToScreen(_transformPivotWorld, out var pivotScreen) ||
                 !TryProjectWorldToScreen(_transformPivotWorld + axis, out var axisScreen))
             {
@@ -1204,9 +1269,9 @@ namespace ForzaTechStudio.Views
             return (float)Math.Clamp(factor, 0.001, 1000.0);
         }
 
-        private Vector3 ComposeRotationEuler(MeshTransformEntry entry, float deltaDegrees)
+        private Vector3 ComposeRotationEuler(ViewportTransformTarget target, float deltaDegrees)
         {
-            var initial = CreateRenderRotationMatrix(entry.OldRotation);
+            var initial = GetTargetRotationMatrix(target);
             var radians = deltaDegrees * MathF.PI / 180f;
 
             Matrix4x4 next;
@@ -1256,17 +1321,428 @@ namespace ForzaTechStudio.Views
             }
         }
 
-        private List<MeshNode> GetViewportTransformTargets()
+        private ViewportTransformSession BeginViewportTransformSession(IReadOnlyList<ViewportTransformTarget> targets, string description)
         {
-            IEnumerable<MeshNode> targets = Enumerable.Empty<MeshNode>();
+            return new ViewportTransformSession(description, targets.ToList());
+        }
+
+        private ViewportTransformTarget? CreateViewportTransformTarget(IViewerNode node)
+        {
+            switch (node)
+            {
+                case MeshNode mesh when mesh.GeometryData?.SourceMesh != null:
+                    return new ViewportTransformTarget
+                    {
+                        Kind = ViewportTransformTargetKind.Mesh,
+                        Node = mesh,
+                        Mesh = mesh,
+                        CanScale = true,
+                        OldPosition = ToVector3(mesh.GeometryData.SourceMesh.PositionTranslate),
+                        OldRotation = mesh.GeometryData.RotationEulerDegrees,
+                        OldScale = ToVector3(mesh.GeometryData.SourceMesh.PositionScale),
+                        OldMeshScale = mesh.GeometryData.SourceMesh.PositionScale,
+                        OldMeshTranslate = mesh.GeometryData.SourceMesh.PositionTranslate,
+                        OldMeshRotation = mesh.GeometryData.RotationEulerDegrees
+                    };
+
+                case LocatorNode locator:
+                    DecomposeTransformMatrix(locator.LocatorEntry.SceneTransform, out var locatorPosition, out var locatorRotation, out var locatorScale);
+                    return new ViewportTransformTarget
+                    {
+                        Kind = ViewportTransformTargetKind.Locator,
+                        Node = locator,
+                        Locator = locator,
+                        CanScale = true,
+                        OldPosition = locatorPosition,
+                        OldRotation = locatorRotation,
+                        OldScale = locatorScale,
+                        OldLocatorTransform = locator.LocatorEntry.SceneTransform
+                    };
+
+                case AvPinNode avPin when avPin.PoiData?.Visibility != null:
+                    var visibility = avPin.PoiData.Visibility;
+                    return new ViewportTransformTarget
+                    {
+                        Kind = ViewportTransformTargetKind.AvPin,
+                        Node = avPin,
+                        AvPin = avPin,
+                        CanScale = false,
+                        OldPosition = new Vector3((float)visibility.PosX, (float)visibility.PosY, (float)visibility.PosZ),
+                        OldRotation = new Vector3((float)visibility.AxisPitch, (float)visibility.AxisYaw, 0f),
+                        OldScale = Vector3.One,
+                        OldAvPinPosX = visibility.PosX,
+                        OldAvPinPosY = visibility.PosY,
+                        OldAvPinPosZ = visibility.PosZ,
+                        OldAvPinAxisYaw = visibility.AxisYaw,
+                        OldAvPinAxisPitch = visibility.AxisPitch
+                    };
+
+                case LightGroupNode lightGroup when lightGroup.GroupData != null:
+                    return new ViewportTransformTarget
+                    {
+                        Kind = ViewportTransformTargetKind.LightGroup,
+                        Node = lightGroup,
+                        LightGroup = lightGroup,
+                        CanScale = false,
+                        OldPosition = ToVector3(lightGroup.GroupData.Pos),
+                        OldRotation = QuaternionToEulerDegrees(lightGroup.GroupData.Rotation),
+                        OldScale = Vector3.One,
+                        OldLightPos = lightGroup.GroupData.Pos,
+                        OldLightRot = lightGroup.GroupData.Rot,
+                        OldLightDamagePos = lightGroup.GroupData.DamagePos,
+                        OldLightDamageRot = lightGroup.GroupData.DamageRot
+                    };
+            }
+
+            return null;
+        }
+
+        private void ApplyTargetTranslationPreview(ViewportTransformTarget target, Vector3 delta)
+        {
+            switch (target.Kind)
+            {
+                case ViewportTransformTargetKind.Mesh when target.Mesh?.GeometryData?.SourceMesh != null:
+                    target.Mesh.GeometryData.SourceMesh.PositionTranslate = ApplyWorldTranslationDelta(target.Mesh, target.OldMeshTranslate, delta);
+                    RefreshModalTransformMesh(target.Mesh);
+                    break;
+
+                case ViewportTransformTargetKind.Locator when target.Locator != null:
+                    target.Locator.LocatorEntry.SceneTransform = ComposeTransformMatrix(
+                        target.OldPosition + delta,
+                        target.OldRotation,
+                        target.OldScale,
+                        target.OldLocatorTransform);
+                    RefreshLocatorCone(target.Locator);
+                    break;
+
+                case ViewportTransformTargetKind.AvPin when target.AvPin?.PoiData?.Visibility != null:
+                    var visibility = target.AvPin.PoiData.Visibility;
+                    visibility.PosX = target.OldAvPinPosX + delta.X;
+                    visibility.PosY = target.OldAvPinPosY + delta.Y;
+                    visibility.PosZ = target.OldAvPinPosZ + delta.Z;
+                    RefreshAvPinCone(target.AvPin);
+                    break;
+
+                case ViewportTransformTargetKind.LightGroup when target.LightGroup?.GroupData != null:
+                    var group = target.LightGroup.GroupData;
+                    group.Pos = AddVector3(target.OldLightPos, delta);
+                    group.DamagePos = AddVector3(target.OldLightDamagePos, delta);
+                    RefreshLightTransformTarget(target.LightGroup);
+                    break;
+            }
+        }
+
+        private void ApplyTargetRotationPreview(ViewportTransformTarget target, Vector3 rotationDegrees)
+        {
+            switch (target.Kind)
+            {
+                case ViewportTransformTargetKind.Mesh when target.Mesh?.GeometryData?.SourceMesh != null:
+                    target.Mesh.GeometryData.RotationEulerDegrees = rotationDegrees;
+                    RefreshModalTransformMesh(target.Mesh);
+                    break;
+
+                case ViewportTransformTargetKind.Locator when target.Locator != null:
+                    target.Locator.LocatorEntry.SceneTransform = ComposeTransformMatrix(
+                        target.OldPosition,
+                        rotationDegrees,
+                        target.OldScale,
+                        target.OldLocatorTransform);
+                    RefreshLocatorCone(target.Locator);
+                    break;
+
+                case ViewportTransformTargetKind.AvPin when target.AvPin?.PoiData?.Visibility != null:
+                    var visibility = target.AvPin.PoiData.Visibility;
+                    visibility.AxisPitch = rotationDegrees.X;
+                    visibility.AxisYaw = rotationDegrees.Y;
+                    RefreshAvPinCone(target.AvPin);
+                    break;
+
+                case ViewportTransformTargetKind.LightGroup when target.LightGroup?.GroupData != null:
+                    var rotation = EulerDegreesToQuaternion(rotationDegrees);
+                    var rotationVector = new Vector4(rotation.X, rotation.Y, rotation.Z, rotation.W);
+                    target.LightGroup.GroupData.Rot = rotationVector;
+                    target.LightGroup.GroupData.DamageRot = rotationVector;
+                    RefreshLightTransformTarget(target.LightGroup);
+                    break;
+            }
+        }
+
+        private void ApplyTargetScalePreview(ViewportTransformTarget target, Vector3 scale)
+        {
+            switch (target.Kind)
+            {
+                case ViewportTransformTargetKind.Mesh when target.Mesh?.GeometryData?.SourceMesh != null:
+                    target.Mesh.GeometryData.SourceMesh.PositionScale = new Vector4(scale, target.OldMeshScale.W);
+                    RefreshModalTransformMesh(target.Mesh);
+                    break;
+
+                case ViewportTransformTargetKind.Locator when target.Locator != null:
+                    target.Locator.LocatorEntry.SceneTransform = ComposeTransformMatrix(
+                        target.OldPosition,
+                        target.OldRotation,
+                        scale,
+                        target.OldLocatorTransform);
+                    RefreshLocatorCone(target.Locator);
+                    break;
+            }
+        }
+
+        private void RestoreTransformSnapshot(ViewportTransformSession session)
+        {
+            foreach (var target in session.Targets)
+            {
+                switch (target.Kind)
+                {
+                    case ViewportTransformTargetKind.Mesh when target.Mesh?.GeometryData?.SourceMesh != null:
+                        target.Mesh.GeometryData.SourceMesh.PositionScale = target.OldMeshScale;
+                        target.Mesh.GeometryData.SourceMesh.PositionTranslate = target.OldMeshTranslate;
+                        target.Mesh.GeometryData.RotationEulerDegrees = target.OldMeshRotation;
+                        RefreshModalTransformMesh(target.Mesh);
+                        break;
+
+                    case ViewportTransformTargetKind.Locator when target.Locator != null:
+                        target.Locator.LocatorEntry.SceneTransform = target.OldLocatorTransform;
+                        RefreshLocatorCone(target.Locator);
+                        break;
+
+                    case ViewportTransformTargetKind.AvPin when target.AvPin?.PoiData?.Visibility != null:
+                        var visibility = target.AvPin.PoiData.Visibility;
+                        visibility.PosX = target.OldAvPinPosX;
+                        visibility.PosY = target.OldAvPinPosY;
+                        visibility.PosZ = target.OldAvPinPosZ;
+                        visibility.AxisYaw = target.OldAvPinAxisYaw;
+                        visibility.AxisPitch = target.OldAvPinAxisPitch;
+                        RefreshAvPinCone(target.AvPin);
+                        break;
+
+                    case ViewportTransformTargetKind.LightGroup when target.LightGroup?.GroupData != null:
+                        var group = target.LightGroup.GroupData;
+                        group.Pos = target.OldLightPos;
+                        group.Rot = target.OldLightRot;
+                        group.DamagePos = target.OldLightDamagePos;
+                        group.DamageRot = target.OldLightDamageRot;
+                        RefreshLightTransformTarget(target.LightGroup);
+                        break;
+                }
+            }
+        }
+
+        private void CommitViewportTransformSession(ViewportTransformSession session)
+        {
+            CommitMeshTransformTargets(session);
+            CommitLocatorTransformTargets(session);
+            CommitAvPinTransformTargets(session);
+            CommitLightTransformTargets(session);
+        }
+
+        private void CommitMeshTransformTargets(ViewportTransformSession session)
+        {
+            var entries = new List<MeshTransformEntry>();
+            foreach (var target in session.Targets.Where(target => target.Kind == ViewportTransformTargetKind.Mesh))
+            {
+                if (target.Mesh?.GeometryData?.SourceMesh == null)
+                    continue;
+
+                var source = target.Mesh.GeometryData.SourceMesh;
+                entries.Add(new MeshTransformEntry
+                {
+                    Mesh = target.Mesh,
+                    OldScale = target.OldMeshScale,
+                    OldTranslate = target.OldMeshTranslate,
+                    OldRotation = target.OldMeshRotation,
+                    NewScale = source.PositionScale,
+                    NewTranslate = source.PositionTranslate,
+                    NewRotation = target.Mesh.GeometryData.RotationEulerDegrees
+                });
+            }
+
+            entries = entries
+                .Where(entry => entry.OldScale != entry.NewScale || entry.OldTranslate != entry.NewTranslate || entry.OldRotation != entry.NewRotation)
+                .ToList();
+
+            if (entries.Count == 0)
+                return;
+
+            UpdateModelBinDirtyState(entries.Select(entry => entry.Mesh!).Where(mesh => mesh != null));
+            PushUndo(new MeshTransformAction(session.Description, entries));
+        }
+
+        private void CommitLocatorTransformTargets(ViewportTransformSession session)
+        {
+            foreach (var target in session.Targets.Where(target => target.Kind == ViewportTransformTargetKind.Locator))
+            {
+                if (target.Locator == null)
+                    continue;
+
+                var current = target.Locator.LocatorEntry.SceneTransform;
+                if (current == target.OldLocatorTransform)
+                    continue;
+
+                if (target.Locator.Parent is LocatorsXmlNode xmlRoot)
+                    xmlRoot.IsDirty = true;
+
+                var action = new LocatorTransformAction(session.Description, target.Locator, target.OldLocatorTransform)
+                {
+                    NewTransform = current
+                };
+                PushUndo(action);
+            }
+        }
+
+        private void CommitAvPinTransformTargets(ViewportTransformSession session)
+        {
+            foreach (var target in session.Targets.Where(target => target.Kind == ViewportTransformTargetKind.AvPin))
+            {
+                if (target.AvPin?.PoiData?.Visibility == null)
+                    continue;
+
+                var visibility = target.AvPin.PoiData.Visibility;
+                var action = new AvPinTransformAction(
+                    session.Description,
+                    target.AvPin,
+                    target.OldAvPinPosX,
+                    target.OldAvPinPosY,
+                    target.OldAvPinPosZ,
+                    target.OldAvPinAxisYaw,
+                    target.OldAvPinAxisPitch)
+                {
+                    NewPosX = visibility.PosX,
+                    NewPosY = visibility.PosY,
+                    NewPosZ = visibility.PosZ,
+                    NewAxisYaw = visibility.AxisYaw,
+                    NewAxisPitch = visibility.AxisPitch
+                };
+
+                if (!action.HasChanges)
+                    continue;
+
+                if (target.AvPin.Parent is AvPinsFileNode fileNode)
+                    fileNode.IsDirty = true;
+
+                PushUndo(action);
+            }
+        }
+
+        private void CommitLightTransformTargets(ViewportTransformSession session)
+        {
+            var entries = new List<LightGroupTransformEntry>();
+            foreach (var target in session.Targets.Where(target => target.Kind == ViewportTransformTargetKind.LightGroup))
+            {
+                if (target.LightGroup?.GroupData == null)
+                    continue;
+
+                var group = target.LightGroup.GroupData;
+                var entry = new LightGroupTransformEntry
+                {
+                    Group = target.LightGroup,
+                    OldPos = target.OldLightPos,
+                    OldRot = target.OldLightRot,
+                    OldDamagePos = target.OldLightDamagePos,
+                    OldDamageRot = target.OldLightDamageRot,
+                    NewPos = group.Pos,
+                    NewRot = group.Rot,
+                    NewDamagePos = group.DamagePos,
+                    NewDamageRot = group.DamageRot
+                };
+
+                if (entry.HasChanges)
+                    entries.Add(entry);
+            }
+
+            if (entries.Count == 0)
+                return;
+
+            foreach (var lightsBin in entries.Select(entry => entry.Group?.Parent).OfType<LightsBinNode>().Distinct())
+                lightsBin.IsDirty = true;
+
+            PushUndo(new LightGroupTransformAction(session.Description, entries));
+        }
+
+        private Matrix4x4 GetTargetRotationMatrix(ViewportTransformTarget target)
+        {
+            return target.Kind switch
+            {
+                ViewportTransformTargetKind.Locator => Matrix4x4.CreateFromQuaternion(EulerDegreesToQuaternion(target.OldRotation)),
+                ViewportTransformTargetKind.LightGroup => Matrix4x4.CreateFromQuaternion(new Quaternion(
+                    target.OldLightRot.X,
+                    target.OldLightRot.Y,
+                    target.OldLightRot.Z,
+                    target.OldLightRot.W)),
+                _ => CreateRenderRotationMatrix(target.OldRotation)
+            };
+        }
+
+        private void RefreshLightTransformTarget(LightGroupNode group)
+        {
+            UpdateLightRowNodeLabels(group);
+            if (group.IsChecked != false)
+            {
+                HideLight(group);
+                RenderLight(group);
+                if (_currentLightHighlightTargets.Contains(group))
+                    UpdateHighlightForLightGroups(_currentLightHighlightTargets);
+            }
+        }
+
+        private static Vector3 ToVector3(Vector4 value)
+        {
+            return new Vector3(value.X, value.Y, value.Z);
+        }
+
+        private static Vector4 AddVector3(Vector4 value, Vector3 delta)
+        {
+            return new Vector4(value.X + delta.X, value.Y + delta.Y, value.Z + delta.Z, value.W);
+        }
+
+        private List<ViewportTransformTarget> GetViewportTransformTargets(ViewportTransformMode mode = ViewportTransformMode.Translate)
+        {
+            var nodes = GetViewportTransformTargetNodes();
+            return GetViewportTransformTargets(nodes, mode);
+        }
+
+        private List<ViewportTransformTarget> GetViewportTransformTargets(IEnumerable<IViewerNode> nodes, ViewportTransformMode mode = ViewportTransformMode.Translate)
+        {
+            return nodes
+                .Select(CreateViewportTransformTarget)
+                .Where(target => target != null)
+                .Cast<ViewportTransformTarget>()
+                .Where(target => mode != ViewportTransformMode.Scale || target.CanScale)
+                .GroupBy(target => target.Node)
+                .Select(group => group.First())
+                .ToList();
+        }
+
+        private List<IViewerNode> GetViewportTransformTargetNodes()
+        {
+            IEnumerable<IViewerNode> targets = Enumerable.Empty<IViewerNode>();
 
             if (_isMultiSelectActive && _multiSelectedMeshes.Count > 0)
             {
                 targets = _multiSelectedMeshes;
             }
+            else if (_isMultiLightSelectActive && _multiSelectedLightGroups.Count > 0)
+            {
+                targets = _multiSelectedLightGroups;
+            }
             else if (ViewModel.SelectedNode is MeshNode meshNode)
             {
                 targets = new[] { meshNode };
+            }
+            else if (ViewModel.SelectedNode is LocatorNode locatorNode)
+            {
+                targets = new[] { locatorNode };
+            }
+            else if (ViewModel.SelectedNode is AvPinNode avPinNode)
+            {
+                targets = new[] { avPinNode };
+            }
+            else if (ViewModel.SelectedNode is LightGroupNode lightGroupNode)
+            {
+                targets = new[] { lightGroupNode };
+            }
+            else if (ViewModel.SelectedNode is LightRowNode lightRowNode && lightRowNode.Parent is LightGroupNode parentLightGroup)
+            {
+                targets = new[] { parentLightGroup };
             }
             else if (ViewModel.SelectedNode is ModelBinNode modelBinNode)
             {
@@ -1294,19 +1770,18 @@ namespace ForzaTechStudio.Views
             }
 
             return targets
-                .Where(mesh => mesh.GeometryData?.SourceMesh != null)
                 .Distinct()
                 .ToList();
         }
 
-        private Vector3 CalculateTransformPivot(IReadOnlyList<MeshNode> targets, MeshTransformAction action)
+        private Vector3 CalculateTransformPivot(IReadOnlyList<ViewportTransformTarget> targets)
         {
             var hasBounds = false;
             var bounds = new SDX.BoundingBox();
 
-            foreach (var mesh in targets)
+            foreach (var target in targets)
             {
-                if (_renderMap.TryGetValue(mesh, out var model) &&
+                if (_renderMap.TryGetValue(target.Node, out var model) &&
                     model is MeshGeometryModel3D meshModel &&
                     meshModel.Geometry != null &&
                     meshModel.Visibility != Visibility.Collapsed)
@@ -1329,18 +1804,14 @@ namespace ForzaTechStudio.Views
                 return new Vector3(center.X, center.Y, center.Z);
             }
 
-            var translateEntries = action.Entries
-                .Where(entry => entry.Mesh?.GeometryData?.SourceMesh != null)
-                .ToList();
-
-            if (translateEntries.Count == 0)
+            if (targets.Count == 0)
                 return Vector3.Zero;
 
             var total = Vector3.Zero;
-            foreach (var entry in translateEntries)
-                total += new Vector3(entry.OldTranslate.X, entry.OldTranslate.Y, entry.OldTranslate.Z);
+            foreach (var target in targets)
+                total += target.OldPosition;
 
-            return total / translateEntries.Count;
+            return total / targets.Count;
         }
 
         private void DisableViewportCameraInputForTransform()
@@ -1372,7 +1843,7 @@ namespace ForzaTechStudio.Views
 
         private void UpdateTransformAxisGuide()
         {
-            if (_activeTransformAxis == ViewportTransformAxis.None || _activeTransformAction == null)
+            if (_activeTransformAxis == ViewportTransformAxis.None || _activeTransformSession == null)
             {
                 ClearTransformAxisGuide(removeFromViewport: false);
                 return;
@@ -1382,7 +1853,7 @@ namespace ForzaTechStudio.Views
             if (_transformAxisGuide == null)
                 return;
 
-            var axis = GetActiveAxisDirection(_activeTransformAction.Entries[0]);
+            var axis = GetActiveAxisDirection(_activeTransformSession.Targets[0]);
             var length = GetAxisGuideLength();
             var start = _transformPivotWorld - (axis * length);
             var end = _transformPivotWorld + (axis * length);
@@ -1439,12 +1910,12 @@ namespace ForzaTechStudio.Views
             return 1000f;
         }
 
-        private Vector3 GetActiveAxisDirection(MeshTransformEntry referenceEntry)
+        private Vector3 GetActiveAxisDirection(ViewportTransformTarget referenceTarget)
         {
             var axis = GetAxisUnitVector(_activeTransformAxis);
             if (_activeTransformAxisSpace == ViewportTransformAxisSpace.Local)
             {
-                axis = Vector3.TransformNormal(axis, CreateRenderRotationMatrix(referenceEntry.OldRotation));
+                axis = Vector3.TransformNormal(axis, GetTargetRotationMatrix(referenceTarget));
             }
 
             return NormalizeOrDefault(axis, GetAxisUnitVector(_activeTransformAxis));
@@ -1772,6 +2243,17 @@ namespace ForzaTechStudio.Views
                 ViewportTransformMode.Rotate => "Viewport Rotate",
                 ViewportTransformMode.Scale => "Viewport Scale",
                 _ => "Viewport Transform"
+            };
+        }
+
+        private static ViewportTransformMode ToTransformMode(ViewportGizmoMode mode)
+        {
+            return mode switch
+            {
+                ViewportGizmoMode.Translate => ViewportTransformMode.Translate,
+                ViewportGizmoMode.Rotate => ViewportTransformMode.Rotate,
+                ViewportGizmoMode.Scale => ViewportTransformMode.Scale,
+                _ => ViewportTransformMode.None
             };
         }
 

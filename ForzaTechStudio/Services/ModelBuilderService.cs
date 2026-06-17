@@ -8,6 +8,7 @@ using ForzaTools.Bundles;
 using ForzaTools.Bundles.Blobs;
 using ForzaTools.Bundles.Metadata;
 using ForzaTools.Shared;
+using Syroot.BinaryData;
 
 namespace ForzaTechStudio.Services
 {
@@ -757,26 +758,70 @@ namespace ForzaTechStudio.Services
             
             foreach (var meta in source.Metadatas)
             {
-                if (meta is NameMetadata nameMeta)
-                {
-                    clone.Metadatas.Add(new NameMetadata 
-                    { 
-                        Tag = nameMeta.Tag, 
-                        Name = nameMeta.Name 
-                    });
-                }
-                else if (meta is IdentifierMetadata idMeta)
-                {
-                    clone.Metadatas.Add(new IdentifierMetadata 
-                    { 
-                        Tag = idMeta.Tag, 
-                        Id = idMeta.Id 
-                    });
-                }
-                // Add other metadata types as needed
+                clone.Metadatas.Add(CloneMetadata(meta));
             }
             
             return clone;
+        }
+
+        private static BundleMetadata CloneMetadata(BundleMetadata source)
+        {
+            switch (source)
+            {
+                case NameMetadata nameMeta:
+                    return new NameMetadata
+                    {
+                        Tag = nameMeta.Tag,
+                        Version = nameMeta.Version,
+                        Name = nameMeta.Name
+                    };
+                case IdentifierMetadata idMeta:
+                    return new IdentifierMetadata
+                    {
+                        Tag = idMeta.Tag,
+                        Version = idMeta.Version,
+                        Id = idMeta.Id
+                    };
+                case AtlasMetadata atlasMeta:
+                    return new AtlasMetadata
+                    {
+                        Tag = atlasMeta.Tag,
+                        Version = atlasMeta.Version,
+                        Unk = atlasMeta.Unk,
+                        UnkV2 = atlasMeta.UnkV2
+                    };
+                case BlendMetadata blendMeta:
+                    return new BlendMetadata
+                    {
+                        Tag = blendMeta.Tag,
+                        Version = blendMeta.Version,
+                        Unk1 = blendMeta.Unk1,
+                        Unk2 = blendMeta.Unk2
+                    };
+                case RawMetadata rawMeta:
+                    return new RawMetadata
+                    {
+                        Tag = rawMeta.Tag,
+                        Version = rawMeta.Version,
+                        RawData = rawMeta.RawData?.ToArray() ?? Array.Empty<byte>()
+                    };
+                default:
+                    return CloneAsRawMetadata(source);
+            }
+        }
+
+        private static RawMetadata CloneAsRawMetadata(BundleMetadata source)
+        {
+            using var stream = new MemoryStream();
+            var binaryStream = new BinaryStream(stream);
+            source.CreateModelBinMetadataData(binaryStream);
+
+            return new RawMetadata
+            {
+                Tag = source.Tag,
+                Version = source.Version,
+                RawData = stream.ToArray()
+            };
         }
     }
 }

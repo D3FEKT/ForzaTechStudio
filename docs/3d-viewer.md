@@ -177,3 +177,90 @@ Shown when a Granny file with animation data is loaded. Located in the lower lef
 ## Undo / Redo
 
 All transform edits (position, scale, rotation, bone matrix) support full undo/redo via Ctrl+Z and Ctrl+Y or Ctrl+Shift+Z.
+
+---
+
+## Texture System
+
+The viewport automatically resolves and loads textures for model materials from multiple sources.
+
+### Texture Sources
+
+| Source | Description |
+|---|---|
+| **Local (zip/folder)** | `.swatchbin` and `.pb` files found in loaded zips, sibling folders of opened modelbins, and manually dropped texture files. |
+| **Library (game root)** | Textures resolved through the configured game content directory. Uses path matching against a database index and direct file lookup within game `.zip` archives. |
+
+Toggle between sources using the **Local** and **Library** checkboxes in the toolbar. Both can be active simultaneously.
+
+### Texture Resolution
+
+Textures are matched against material `TextureParameter.Path` values using a multi-key lookup that covers:
+- Exact material paths (with optional `Game:\` prefix stripping)
+- Extensionless name variants (`.swatchbin` appended automatically)
+- Basename-only matches
+- CRC32 path hash lookups (for `TextureParameter.PathHash`)
+
+### Durango/Xbox Texture Deswizzling
+
+Durango (Xbox) swatchbin textures store pixel data in a tiled (swizzled) layout. The viewport automatically detiles and dealigns Durango textures before rendering:
+
+- **3D Viewport**: Textures are deswizzled to PC-linear DDS during `TryBuildTextureModelFromEntry`, producing correct visual output for Durango-sourced content.
+- **UV Maps Preview**: The texture preview in the UV Maps window uses the same deswizzle pipeline via `SwatchbinPreviewService`.
+- **Durango detection**: Automatic via `SwatchbinInfo.IsDurangoFormat` (blob version 2).
+- **Supported tile modes**: `XG_TILE_MODE_2D_THIN` and `XG_TILE_MODE_1D_THIN`.
+
+
+---
+
+## UV Channel System
+
+### Channel Selection
+
+Each mesh can have multiple UV channels (stored in `ForzaGeometryData.UvChannels`). The viewport selects the active UV channel per material:
+
+- **Default**: UV channel 0 for all standard material textures (diffuse, normal, specular, emissive).
+- **Manufacturer color paint**: UV channel 4 when a manufacturer color swatchbin overlay is available and the material is classified as `carpaint` or `carpaint_secondary`.
+
+### Per-Channel UV Transforms
+
+`MeshBlob.TexCoordTransforms[channelIndex]` stores a `Vector4` (U offset, U scale, V offset, V scale) per UV channel. The viewport applies the channel-specific transform followed by material tiling values:
+
+1. Source UV is V-flipped (`sourceV = 1 - uv.Y`) to match the OBJ/importer convention.
+2. Channel transform is applied: `u' = sourceU * transform.Y + transform.X`, `v' = sourceV * transform.W + transform.Z`.
+3. Material tiling is applied: `finalU = u' * tilingU`, `finalV = v' * tilingV`.
+
+Invalid or non-finite transforms are sanitized and skipped.
+
+### UV Maps Window
+
+The UV Maps window displays UV wireframes with channel-specific transforms applied for visual accuracy. Selection polygons and hit testing also use display-transformed coordinates. UV edit operations (drag, save) always manipulate the raw UV arrays directly.
+
+---
+
+## Manufacturer Colors
+
+### Loading
+
+Manufacturer color data is loaded from `manufacturercolors.bin` inside car `.zip` archives. The **Manufacturer Color** dropdown in the toolbar shows all available color entries grouped by manufacturer color group.
+
+### Color Application
+
+When a manufacturer color is selected:
+- **Carpaint materials** (`carpaint`, `carpaint_secondary`) use the selected color as the diffuse color tint.
+- The color's alpha value modulates the material opacity.
+- A **custom RGBA color** can also be set via the color picker and number boxes, overriding the selected manufacturer color.
+
+### Swatchbin Texture Overlay
+
+Each `ManufacturerColorEntry` may reference a `.swatchbin` texture via its `Path` field. When a manufacturer color is selected and its swatchbin path resolves through the texture lookup system:
+- The swatchbin texture is loaded (with automatic Durango deswizzling if needed) and applied as the diffuse/albedo map on manufacturer color paint materials.
+- UV channel 4 is used for texture coordinates on these parts.
+- The manufacturer color tint is applied as the diffuse color on top of the texture.
+
+The status text reports whether the swatchbin texture was found ("texture found") or not ("texture not found" / "no texture path").
+
+### Limitations
+
+- HelixToolkit Phong materials do not support multiple independent UV channels per material. When a manufacturer swatchbin is active, UV channel 4 replaces channel 0 for carpaint parts. All other materials continue to use UV channel 0.
+- Two-layer shader rendering (base texture + overlay on separate UVs) is not available in the current Phong material pipeline. This is documented as a known limitation.

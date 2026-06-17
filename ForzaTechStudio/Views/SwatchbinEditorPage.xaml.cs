@@ -28,6 +28,20 @@ namespace ForzaTechStudio.Views;
 
 public sealed partial class SwatchbinEditorPage : Page
 {
+    private static readonly string[] TextureSourceExtensions =
+    [
+        ".dds",
+        ".png",
+        ".jpg",
+        ".jpeg",
+        ".bmp",
+        ".tif",
+        ".tiff",
+        ".webp",
+        ".heic",
+        ".heif"
+    ];
+
     private readonly SwatchbinService _swatchbinService = new();
     private readonly Services.SwatchbinConversionService _swatchbinConversionService = new();
     private SwatchbinInfo? _currentSwatchbin;
@@ -620,10 +634,7 @@ public sealed partial class SwatchbinEditorPage : Page
         }
         
         openPicker.SuggestedStartLocation = PickerLocationId.ComputerFolder;
-        openPicker.FileTypeFilter.Add(".dds");
-        openPicker.FileTypeFilter.Add(".png");
-        openPicker.FileTypeFilter.Add(".jpg");
-        openPicker.FileTypeFilter.Add(".jpeg");
+        AddTextureSourceFileTypes(openPicker);
         
         var sourceFile = await openPicker.PickSingleFileAsync();
         if (sourceFile == null) return;
@@ -1605,10 +1616,7 @@ public sealed partial class SwatchbinEditorPage : Page
         }
         
         openPicker.SuggestedStartLocation = PickerLocationId.ComputerFolder;
-        openPicker.FileTypeFilter.Add(".dds");
-        openPicker.FileTypeFilter.Add(".png");
-        openPicker.FileTypeFilter.Add(".jpg");
-        openPicker.FileTypeFilter.Add(".jpeg");
+        AddTextureSourceFileTypes(openPicker);
 
         var sourceFile = await openPicker.PickSingleFileAsync();
         if (sourceFile == null) return;
@@ -1696,6 +1704,14 @@ public sealed partial class SwatchbinEditorPage : Page
             CloseButtonText = "OK"
         };
         await dialog.ShowAsync();
+    }
+
+    private static void AddTextureSourceFileTypes(FileOpenPicker picker)
+    {
+        foreach (var extension in TextureSourceExtensions)
+        {
+            picker.FileTypeFilter.Add(extension);
+        }
     }
 
     private async Task ShowInfoDialogAsync(string message)

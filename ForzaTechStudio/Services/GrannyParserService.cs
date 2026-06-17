@@ -16,22 +16,22 @@ namespace ForzaTechStudio.Services
         public bool IsGsf { get; set; }
         public uint TypeTag { get; set; }
         public uint Version { get; set; }
-        public string SourceFileName { get; set; }
-        public string StatusMessage { get; set; }
+        public string SourceFileName { get; set; } = string.Empty;
+        public string StatusMessage { get; set; } = string.Empty;
 
         public List<GrannySkeleton> Skeletons { get; set; } = new();
         public List<GrannyAnimation> Animations { get; set; } = new();
         public List<GrannyTrackGroup> TrackGroups { get; set; } = new();
         public List<GrannyModel> Models { get; set; } = new();
-        public GsfCharacterInfo CharacterInfo { get; set; }
+        public GsfCharacterInfo? CharacterInfo { get; set; }
 
-        internal GrannyContainer Container { get; set; }
+        internal GrannyContainer? Container { get; set; }
     }
 
     // granny::model — references a skeleton and an array of mesh bindings.
     public class GrannyModel
     {
-        public string Name { get; set; }
+        public string Name { get; set; } = string.Empty;
         // Name of the skeleton this model drives (matched by name in Forza).
         public string SkeletonName { get; set; }
         public int MeshBindingCount { get; set; }
@@ -52,6 +52,8 @@ namespace ForzaTechStudio.Services
         public Matrix4x4 InverseWorld4x4 { get; set; } = Matrix4x4.Identity;
         public float LODError { get; set; }
         public Matrix4x4 WorldTransform { get; set; } = Matrix4x4.Identity;
+        // FNV1a-64 hash of the bone name, when available from .skeld skeleton data
+        public ulong BoneHash { get; set; }
     }
 
     public class GrannyTransform
@@ -93,6 +95,9 @@ namespace ForzaTechStudio.Services
         public int DefaultLoopCount { get; set; }
         public int Flags { get; set; }
         public List<GrannyTrackGroup> TrackGroups { get; set; } = new();
+
+        // Whether this animation was decompressed via native ACL or identity fallback.
+        public bool IsNativeDecompressed { get; set; }
     }
 
     public class GrannyTrackGroup
@@ -109,6 +114,8 @@ namespace ForzaTechStudio.Services
         public string Name { get; set; }
         public int Flags { get; set; }
         public List<TransformKeyframe> Keyframes { get; set; } = new();
+        // FNV1a-64 hash of the bone this track animates.
+        public ulong BoneHash { get; set; }
 
         // Raw curve info for debugging/advanced use
         public GrannyCurveInfo PositionCurve { get; set; }
@@ -423,7 +430,7 @@ namespace ForzaTechStudio.Services
             return Parse(raw, filePath);
         }
 
-        public GrannyFileData Parse(byte[] raw, string virtualPath = null)
+        public GrannyFileData Parse(byte[] raw, string? virtualPath = null)
         {
             var result = new GrannyFileData();
             try
@@ -747,7 +754,7 @@ namespace ForzaTechStudio.Services
 
         //  Type-system parsing
 
-        private List<GrannyTypeDef> ReadTypeDefArray(GrannyContainer c, int secIdx, int offset, HashSet<(int, int)> visiting = null)
+        private List<GrannyTypeDef> ReadTypeDefArray(GrannyContainer c, int secIdx, int offset, HashSet<(int, int)>? visiting = null)
         {
             if (visiting == null) visiting = new HashSet<(int, int)>();
             if (!visiting.Add((secIdx, offset))) return new List<GrannyTypeDef>();

@@ -61,7 +61,7 @@ public class GameAssetDatabaseService
     // .materialbin, .shaderbin, and .swatchbin files and storing their Game:\ paths.
     public static async Task<(int indexed, string dbPath)> BuildDatabaseAsync(
         string gameId, string gameRootPath,
-        IProgress<string> progress = null,
+        IProgress<string>? progress = null,
         CancellationToken ct = default)
     {
         if (string.IsNullOrEmpty(gameRootPath) || !Directory.Exists(gameRootPath))
@@ -233,7 +233,7 @@ public class GameAssetDatabaseService
     }
 
     // Looks up a filename in the database and returns the Game:\ path if found.
-    public static string LookupFile(string gameId, string fileName)
+    public static string? LookupFile(string gameId, string fileName)
     {
         string dbPath = GetDatabasePath(gameId);
         if (!File.Exists(dbPath)) return null;
@@ -255,7 +255,7 @@ public class GameAssetDatabaseService
     }
 
     // Checks if a specific Game:\ path exists. Case-insensitive. Returns the stored path or null.
-    public static string LookupByPath(string gameId, string gamePath)
+    public static string? LookupByPath(string gameId, string gamePath)
     {
         string dbPath = GetDatabasePath(gameId);
         if (!File.Exists(dbPath)) return null;
@@ -335,7 +335,7 @@ public class GameAssetDatabaseService
     }
 
     // Returns all indexed paths for a given extension, optionally filtered by zip source substring.
-    public static List<string> GetAssetPaths(string gameId, string extension, string zipSourceContains = null)
+    public static List<string> GetAssetPaths(string gameId, string extension, string? zipSourceContains = null)
     {
         var results = new List<string>();
         string dbPath = GetDatabasePath(gameId);

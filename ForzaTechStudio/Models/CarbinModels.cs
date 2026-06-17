@@ -23,6 +23,9 @@ namespace ForzaTechStudio.ViewModels
         [
             new("Body", 0xF7DBE8A7C839A675UL),
             new("Stripes", 0x4FF3746D9B055F1DUL),
+            new("Stripes0", 0xE00E033E6A20B977UL),
+            new("Stripes1", 0xE00E023E6A20B7C4UL),
+            new("Stripes2", 0xE00E053E6A20BCDDUL),
             new("Hood", 0x6AC1E9D87FE5D953UL),
             new("Mirror", 0x1E5FF0F50C741122UL),
             new("Wing", 0xCD48110253EE319AUL),
@@ -41,7 +44,6 @@ namespace ForzaTechStudio.ViewModels
             new("Trim2", 0xE3AEF90D5E2350A1UL),
             new("Wheel1", 0xE20AAE21D70536F7UL),
             new("Wheel2", 0xE20AAF21D70538AAUL),
-            new("Stripes2", 0xE00E053E6A20BCDDUL),
             new("Override1", 0xBF98CB3AA93337A4UL),
             new("Override2", 0xBF98CE3AA9333CBDUL),
             new("Override3", 0xBF98CD3AA9333B0AUL),
@@ -1211,7 +1213,7 @@ namespace ForzaTechStudio.ViewModels
         ForzaHorizon3 = 5,
         ForzaHorizon4 = 6,
         ForzaHorizon5 = 7,
-        ForzaHorizon6 = 8, // Future game, not released yet but included for completeness
+        ForzaHorizon6 = 8, 
     }
 
 

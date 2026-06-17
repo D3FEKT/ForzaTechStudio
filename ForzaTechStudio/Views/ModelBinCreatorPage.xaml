@@ -277,156 +277,255 @@
                 <ScrollViewer x:Name="ConfigContent"
                               Visibility="Collapsed"
                               VerticalScrollBarVisibility="Auto"
-                              HorizontalScrollBarVisibility="Auto"
+                              HorizontalScrollBarVisibility="Disabled"
                               Padding="0,0,16,24">
-                    <Grid MinWidth="1240" MaxWidth="1700" ColumnSpacing="32" HorizontalAlignment="Center">
-                        <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="300"/>
-                            <ColumnDefinition Width="350"/>
-                            <ColumnDefinition Width="*"/>
-                        </Grid.ColumnDefinitions>
+                    <StackPanel Spacing="24" MaxWidth="1360" HorizontalAlignment="Center">
 
-                        <!-- Left: Bin Manager -->
-                        <Grid Grid.Column="0" RowDefinitions="Auto, *, Auto">
-                            <TextBlock Text="Output modelbins" Style="{StaticResource SubtitleTextBlockStyle}" Margin="0,0,0,24"/>
-                            <ListView Grid.Row="1" ItemsSource="{x:Bind ViewModel.BinConfigs, Mode=OneWay}" SelectedItem="{x:Bind ViewModel.SelectedBinConfig, Mode=TwoWay}"
-                                      MinHeight="520"
-                                      Background="{ThemeResource CardBackgroundFillColorDefaultBrush}" BorderBrush="{ThemeResource SurfaceStrokeColorDefaultBrush}" BorderThickness="1" CornerRadius="8" Margin="0,0,0,24">
-                                <ListView.ItemTemplate>
-                                    <DataTemplate x:DataType="viewmodels:ModelBinConfigViewModel">
-                                        <TextBlock Text="{x:Bind OutputName}" Padding="16,12" VerticalAlignment="Center"/>
-                                    </DataTemplate>
-                                </ListView.ItemTemplate>
-                            </ListView>
-                            <StackPanel Grid.Row="2" Spacing="12">
-                                <Button Command="{x:Bind ViewModel.AddBinCommand}" Content="Add New modelbin" HorizontalAlignment="Stretch"/>
-                                <Button Command="{x:Bind ViewModel.RemoveBinCommand}" CommandParameter="{x:Bind ViewModel.SelectedBinConfig, Mode=OneWay}" Content="Remove Selected" HorizontalAlignment="Stretch" Foreground="{ThemeResource SystemFillColorCriticalBrush}"/>
-                            </StackPanel>
-                        </Grid>
+                        <!-- Row 1: Two-column layout — Management + Configuration -->
+                        <Grid ColumnDefinitions="1*, 3*" ColumnSpacing="24">
 
-                        <!-- Middle: Object Inclusion -->
-                        <Grid Grid.Column="1" RowDefinitions="Auto, Auto, *">
-                            <TextBlock Text="Included Objects" Style="{StaticResource SubtitleTextBlockStyle}" Margin="0,0,0,24"/>
-                            <StackPanel Grid.Row="1" Orientation="Horizontal" Spacing="12" Margin="0,0,0,16">
-                                <Button Content="Select All" Command="{x:Bind ViewModel.SelectAllInConfigCommand}"/>
-                                <Button Content="Clear All" Command="{x:Bind ViewModel.DeselectAllInConfigCommand}"/>
-                            </StackPanel>
-                            <ListView Grid.Row="2" ItemsSource="{x:Bind ViewModel.FilteredModelGroups, Mode=OneWay}"
-                                      SelectionMode="Single"
-                                      SelectedItem="{x:Bind ViewModel.SelectedConfigObject, Mode=TwoWay}"
-                                      MinHeight="520"
-                                      Background="{ThemeResource CardBackgroundFillColorDefaultBrush}" BorderBrush="{ThemeResource SurfaceStrokeColorDefaultBrush}" BorderThickness="1" CornerRadius="8">
-                                <ListView.ItemTemplate>
-                                    <DataTemplate x:DataType="viewmodels:GroupViewModel">
-                                        <CheckBox IsChecked="{x:Bind IsSelected, Mode=TwoWay}" Content="{x:Bind Name}" Margin="16,8"/>
-                                    </DataTemplate>
-                                </ListView.ItemTemplate>
-                            </ListView>
-                        </Grid>
+                            <!-- ===== LEFT COLUMN: Bin Manager + Included Objects ===== -->
+                            <StackPanel Spacing="16">
 
-                        <!-- Right: Bin Settings -->
-                        <Grid Grid.Column="2" RowDefinitions="Auto, *, Auto">
-                            <StackPanel Grid.Row="0" Spacing="12" Margin="0,0,0,24" DataContext="{x:Bind ViewModel.SelectedBinConfig, Mode=OneWay}">
-                                <TextBlock Text="Modelbin Configuration" Style="{StaticResource SubtitleTextBlockStyle}"/>
-                                <TextBox Header="Internal Name" Text="{Binding OutputName, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"/>
-                            </StackPanel>
-
-                            <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" Padding="0,0,24,0">
-                                <StackPanel Spacing="32">
-                                <!-- Global Transform -->
-                                <Border Background="{ThemeResource CardBackgroundFillColorDefaultBrush}" BorderBrush="{ThemeResource SurfaceStrokeColorDefaultBrush}" BorderThickness="1" CornerRadius="8" Padding="24">
-                                    <StackPanel Spacing="20">
-                                        <TextBlock Text="Global Transform" FontWeight="SemiBold"/>
-                                        <Grid ColumnDefinitions="*, Auto" ColumnSpacing="24">
-                                            <Slider Value="{x:Bind ViewModel.GlobalResizePercentage, Mode=TwoWay}" Minimum="1" Maximum="200" StepFrequency="1"/>
-                                            <NumberBox Grid.Column="1" Value="{x:Bind ViewModel.GlobalResizePercentage, Mode=TwoWay}" Header="Scale %" Width="120" SpinButtonPlacementMode="Compact"/>
-                                        </Grid>
-                                        <Grid ColumnDefinitions="*,*,*" ColumnSpacing="16" RowSpacing="16">
-                                            <Grid.RowDefinitions>
-                                                <RowDefinition Height="Auto"/>
-                                                <RowDefinition Height="Auto"/>
-                                            </Grid.RowDefinitions>
-                                            <NumberBox Header="Scale X" Value="{x:Bind ViewModel.GlobalScaleX, Mode=TwoWay}" SpinButtonPlacementMode="Compact"/>
-                                            <NumberBox Grid.Column="1" Header="Scale Y" Value="{x:Bind ViewModel.GlobalScaleY, Mode=TwoWay}" SpinButtonPlacementMode="Compact"/>
-                                            <NumberBox Grid.Column="2" Header="Scale Z" Value="{x:Bind ViewModel.GlobalScaleZ, Mode=TwoWay}" SpinButtonPlacementMode="Compact"/>
-                                            <NumberBox Grid.Row="1" Header="Pos X" Value="{x:Bind ViewModel.GlobalPosX, Mode=TwoWay}" SpinButtonPlacementMode="Compact"/>
-                                            <NumberBox Grid.Row="1" Grid.Column="1" Header="Pos Y" Value="{x:Bind ViewModel.GlobalPosY, Mode=TwoWay}" SpinButtonPlacementMode="Compact"/>
-                                            <NumberBox Grid.Row="1" Grid.Column="2" Header="Pos Z" Value="{x:Bind ViewModel.GlobalPosZ, Mode=TwoWay}" SpinButtonPlacementMode="Compact"/>
+                                <!-- Output Modelbins Card -->
+                                <Border Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
+                                        BorderBrush="{ThemeResource SurfaceStrokeColorDefaultBrush}"
+                                        BorderThickness="1" CornerRadius="8" Padding="20">
+                                    <StackPanel Spacing="12">
+                                        <StackPanel Orientation="Horizontal" Spacing="8">
+                                            <FontIcon Glyph="&#xE804;" FontSize="16" Foreground="{ThemeResource AccentTextFillColorPrimaryBrush}"/>
+                                            <TextBlock Text="Output Modelbins" Style="{StaticResource SubtitleTextBlockStyle}" VerticalAlignment="Center"/>
+                                        </StackPanel>
+                                        <ListView ItemsSource="{x:Bind ViewModel.BinConfigs, Mode=OneWay}"
+                                                  SelectedItem="{x:Bind ViewModel.SelectedBinConfig, Mode=TwoWay}"
+                                                  MaxHeight="180"
+                                                  Background="{ThemeResource LayerFillColorDefaultBrush}"
+                                                  BorderBrush="{ThemeResource SurfaceStrokeColorDefaultBrush}"
+                                                  BorderThickness="1" CornerRadius="6">
+                                            <ListView.ItemTemplate>
+                                                <DataTemplate x:DataType="viewmodels:ModelBinConfigViewModel">
+                                                    <Grid Padding="12,10" ColumnDefinitions="Auto, *">
+                                                        <FontIcon Glyph="&#xEC40;" FontSize="14"
+                                                                  Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                                                                  VerticalAlignment="Center" Margin="0,0,10,0"/>
+                                                        <TextBlock Grid.Column="1" Text="{x:Bind OutputName}" VerticalAlignment="Center"
+                                                                   TextTrimming="CharacterEllipsis"/>
+                                                    </Grid>
+                                                </DataTemplate>
+                                            </ListView.ItemTemplate>
+                                        </ListView>
+                                        <Grid ColumnDefinitions="*, Auto" ColumnSpacing="8">
+                                            <Button Command="{x:Bind ViewModel.AddBinCommand}" Style="{StaticResource AccentButtonStyle}">
+                                                <StackPanel Orientation="Horizontal" Spacing="6">
+                                                    <FontIcon Glyph="&#xE710;" FontSize="12"/>
+                                                    <TextBlock Text="Add New"/>
+                                                </StackPanel>
+                                            </Button>
+                                            <Button Grid.Column="1"
+                                                    Command="{x:Bind ViewModel.RemoveBinCommand}"
+                                                    CommandParameter="{x:Bind ViewModel.SelectedBinConfig, Mode=OneWay}"
+                                                    Foreground="{ThemeResource SystemFillColorCriticalBrush}">
+                                                <StackPanel Orientation="Horizontal" Spacing="6">
+                                                    <FontIcon Glyph="&#xE711;" FontSize="12"/>
+                                                    <TextBlock Text="Remove"/>
+                                                </StackPanel>
+                                            </Button>
                                         </Grid>
                                     </StackPanel>
                                 </Border>
 
-                                <!-- Mesh Options -->
-                                <Border Background="{ThemeResource CardBackgroundFillColorDefaultBrush}" BorderBrush="{ThemeResource SurfaceStrokeColorDefaultBrush}" BorderThickness="1" CornerRadius="8" Padding="24">
-                                    <StackPanel Spacing="20">
-                                        <TextBlock Text="Mesh Options" FontWeight="SemiBold"/>
+                                <!-- Included Objects Card -->
+                                <Border Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
+                                        BorderBrush="{ThemeResource SurfaceStrokeColorDefaultBrush}"
+                                        BorderThickness="1" CornerRadius="8" Padding="20">
+                                    <StackPanel Spacing="12">
+                                        <StackPanel Orientation="Horizontal" Spacing="8">
+                                            <FontIcon Glyph="&#xF163;" FontSize="16" Foreground="{ThemeResource AccentTextFillColorPrimaryBrush}"/>
+                                            <TextBlock Text="Included Objects" Style="{StaticResource SubtitleTextBlockStyle}" VerticalAlignment="Center"/>
+                                        </StackPanel>
+                                        <StackPanel Orientation="Horizontal" Spacing="8">
+                                            <Button Command="{x:Bind ViewModel.SelectAllInConfigCommand}" Content="Select All"
+                                                    Style="{StaticResource GhostAccentButtonStyle}" FontSize="12"/>
+                                            <Button Command="{x:Bind ViewModel.DeselectAllInConfigCommand}" Content="Clear All"
+                                                    FontSize="12"/>
+                                        </StackPanel>
+                                        <ListView ItemsSource="{x:Bind ViewModel.FilteredModelGroups, Mode=OneWay}"
+                                                  SelectionMode="Single"
+                                                  SelectedItem="{x:Bind ViewModel.SelectedConfigObject, Mode=TwoWay}"
+                                                  MaxHeight="260"
+                                                  Background="{ThemeResource LayerFillColorDefaultBrush}"
+                                                  BorderBrush="{ThemeResource SurfaceStrokeColorDefaultBrush}"
+                                                  BorderThickness="1" CornerRadius="6">
+                                            <ListView.ItemTemplate>
+                                                <DataTemplate x:DataType="viewmodels:GroupViewModel">
+                                                    <CheckBox IsChecked="{x:Bind IsSelected, Mode=TwoWay}"
+                                                              Content="{x:Bind Name}" Margin="14,9"/>
+                                                </DataTemplate>
+                                            </ListView.ItemTemplate>
+                                        </ListView>
+                                    </StackPanel>
+                                </Border>
+                            </StackPanel>
 
-                                        <TextBlock Text="Bucket Flags" FontSize="13" Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
-                                        <TextBlock Text="Select an object on the left to edit its bucket flags."
-                                                   FontSize="12" TextWrapping="Wrap"
-                                                   Foreground="{ThemeResource TextFillColorTertiaryBrush}"
-                                                   Visibility="{x:Bind ViewModel.SelectedConfigObject, Mode=OneWay, Converter={StaticResource NullToVis}, ConverterParameter=Invert}"/>
-                                        <Grid ColumnDefinitions="*, *" ColumnSpacing="16" RowSpacing="10"
-                                              DataContext="{x:Bind ViewModel.SelectedConfigObject, Mode=OneWay}"
-                                              Visibility="{x:Bind ViewModel.SelectedConfigObject, Mode=OneWay, Converter={StaticResource NullToVis}}">
-                                            <Grid.RowDefinitions>
-                                                <RowDefinition Height="Auto"/>
-                                                <RowDefinition Height="Auto"/>
-                                                <RowDefinition Height="Auto"/>
-                                                <RowDefinition Height="Auto"/>
-                                            </Grid.RowDefinitions>
-                                            <CheckBox Grid.Row="0" Grid.Column="0" Content="Opaque" IsChecked="{Binding IsOpaque, Mode=TwoWay}"/>
-                                            <CheckBox Grid.Row="0" Grid.Column="1" Content="Decal" IsChecked="{Binding IsDecal, Mode=TwoWay}"/>
-                                            <CheckBox Grid.Row="1" Grid.Column="0" Content="Transparent" IsChecked="{Binding IsTransparent, Mode=TwoWay}"/>
-                                            <CheckBox Grid.Row="1" Grid.Column="1" Content="Shadow" IsChecked="{Binding IsShadow, Mode=TwoWay}"/>
-                                            <CheckBox Grid.Row="2" Grid.Column="0" Content="No Shadow" IsChecked="{Binding IsNotShadow, Mode=TwoWay}"/>
-                                            <CheckBox Grid.Row="2" Grid.Column="1" Content="Alpha Coverage" IsChecked="{Binding IsAlphaToCoverage, Mode=TwoWay}"/>
-                                            <CheckBox Grid.Row="3" Grid.Column="0" Content="Morph Damage" IsChecked="{Binding IsMorphDamage, Mode=TwoWay}"/>
-                                        </Grid>
+                            <!-- ===== RIGHT COLUMN: Configuration Settings (2-col internal) ===== -->
+                            <Border Grid.Column="1"
+                                    Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
+                                    BorderBrush="{ThemeResource SurfaceStrokeColorDefaultBrush}"
+                                    BorderThickness="1" CornerRadius="8" Padding="24">
+                                <StackPanel Spacing="16">
 
-                                        <TextBlock Text="Modifiers" FontSize="13" Foreground="{ThemeResource TextFillColorSecondaryBrush}" Margin="0,12,0,0"/>
-                                        <StackPanel Spacing="8">
-                                            <CheckBox Content="Mirror (X)" IsChecked="{x:Bind ViewModel.IsMirrorEnabled, Mode=TwoWay}"/>
-                                            <CheckBox Content="Recalculate Normals" IsChecked="{x:Bind ViewModel.RecalculateNormals, Mode=TwoWay}"/>
-                                            <CheckBox Content="Flip Faces" IsChecked="{x:Bind ViewModel.FlipFaces, Mode=TwoWay}"/>
+                                    <!-- Section Header -->
+                                    <StackPanel Orientation="Horizontal" Spacing="8">
+                                        <FontIcon Glyph="&#xE713;" FontSize="16" Foreground="{ThemeResource AccentTextFillColorPrimaryBrush}"/>
+                                        <TextBlock Text="Modelbin Configuration" Style="{StaticResource SubtitleTextBlockStyle}" VerticalAlignment="Center"/>
+                                    </StackPanel>
+
+                                    <!-- Internal 2-column layout: Name+Transform | Mesh Options -->
+                                    <Grid ColumnDefinitions="0.85*, 1.15*" ColumnSpacing="28">
+
+                                        <!-- ===== LEFT SUB-COLUMN: Name + Global Transform ===== -->
+                                        <StackPanel Spacing="16">
+
+                                            <!-- Internal Name -->
+                                            <StackPanel Spacing="6" DataContext="{x:Bind ViewModel.SelectedBinConfig, Mode=OneWay}">
+                                                <TextBlock Text="Internal Name" FontSize="13" Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
+                                                <TextBox Text="{Binding OutputName, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                                                         PlaceholderText="Enter a name for this modelbin"/>
+                                            </StackPanel>
+
+                                            <!-- Separator -->
+                                            <Border Height="1" Background="{ThemeResource SurfaceStrokeColorDefaultBrush}"/>
+
+                                            <!-- Global Transform -->
+                                            <StackPanel Spacing="10">
+                                                <TextBlock Text="Global Transform" Style="{StaticResource BodyStrongTextBlockStyle}"/>
+                                                <Grid ColumnDefinitions="*, Auto" ColumnSpacing="12">
+                                                    <Slider Value="{x:Bind ViewModel.GlobalResizePercentage, Mode=TwoWay}"
+                                                            Minimum="1" Maximum="200" StepFrequency="1" VerticalAlignment="Center"/>
+                                                    <NumberBox Grid.Column="1" Value="{x:Bind ViewModel.GlobalResizePercentage, Mode=TwoWay}"
+                                                               Header="Scale %" Width="90" SpinButtonPlacementMode="Compact" Minimum="1" Maximum="200"/>
+                                                </Grid>
+                                                <Grid ColumnDefinitions="*,*,*" ColumnSpacing="8">
+                                                    <NumberBox Header="Scale X" Value="{x:Bind ViewModel.GlobalScaleX, Mode=TwoWay}"
+                                                               SpinButtonPlacementMode="Compact" Minimum="0.01" SmallChange="0.1" LargeChange="1"/>
+                                                    <NumberBox Grid.Column="1" Header="Scale Y" Value="{x:Bind ViewModel.GlobalScaleY, Mode=TwoWay}"
+                                                               SpinButtonPlacementMode="Compact" Minimum="0.01" SmallChange="0.1" LargeChange="1"/>
+                                                    <NumberBox Grid.Column="2" Header="Scale Z" Value="{x:Bind ViewModel.GlobalScaleZ, Mode=TwoWay}"
+                                                               SpinButtonPlacementMode="Compact" Minimum="0.01" SmallChange="0.1" LargeChange="1"/>
+                                                </Grid>
+                                                <Grid ColumnDefinitions="*,*,*" ColumnSpacing="8">
+                                                    <NumberBox Header="Position X" Value="{x:Bind ViewModel.GlobalPosX, Mode=TwoWay}"
+                                                               SpinButtonPlacementMode="Compact" SmallChange="0.1" LargeChange="1"/>
+                                                    <NumberBox Grid.Column="1" Header="Position Y" Value="{x:Bind ViewModel.GlobalPosY, Mode=TwoWay}"
+                                                               SpinButtonPlacementMode="Compact" SmallChange="0.1" LargeChange="1"/>
+                                                    <NumberBox Grid.Column="2" Header="Position Z" Value="{x:Bind ViewModel.GlobalPosZ, Mode=TwoWay}"
+                                                               SpinButtonPlacementMode="Compact" SmallChange="0.1" LargeChange="1"/>
+                                                </Grid>
+                                            </StackPanel>
                                         </StackPanel>
 
-                                        <TextBlock Text="Axis Flips" FontSize="13" Foreground="{ThemeResource TextFillColorSecondaryBrush}" Margin="0,12,0,0"/>
-                                        <Grid ColumnDefinitions="Auto, Auto" ColumnSpacing="32">
-                                            <StackPanel Spacing="6">
-                                                <TextBlock Text="Position" FontSize="13" Margin="0,0,0,4"/>
-                                                <CheckBox Content="Flip X" IsChecked="{x:Bind ViewModel.FlipVertexX, Mode=TwoWay}"/>
-                                                <CheckBox Content="Flip Y" IsChecked="{x:Bind ViewModel.FlipVertexY, Mode=TwoWay}"/>
-                                                <CheckBox Content="Flip Z" IsChecked="{x:Bind ViewModel.FlipVertexZ, Mode=TwoWay}"/>
-                                            </StackPanel>
-                                            <StackPanel Grid.Column="1" Spacing="6">
-                                                <TextBlock Text="Normal" FontSize="13" Margin="0,0,0,4"/>
-                                                <CheckBox Content="Flip X" IsChecked="{x:Bind ViewModel.FlipNormalX, Mode=TwoWay}"/>
-                                                <CheckBox Content="Flip Y" IsChecked="{x:Bind ViewModel.FlipNormalY, Mode=TwoWay}"/>
-                                                <CheckBox Content="Flip Z" IsChecked="{x:Bind ViewModel.FlipNormalZ, Mode=TwoWay}"/>
-                                            </StackPanel>
-                                        </Grid>
-                                        <TextBlock Text="VLay Blob" FontSize="13" Foreground="{ThemeResource TextFillColorSecondaryBrush}" Margin="0,12,0,0"/>
-                                        <CheckBox Content="Advanced VLay Blob Patch" IsChecked="{x:Bind ViewModel.IsAdvancedVlayBlobPatchEnabled, Mode=TwoWay}"
-                                                  ToolTipService.ToolTip="Resolves required vertex elements from the target game's materialbins and shaderbins. Slower; requires a configured game path in Setup."/>
-                                    </StackPanel>
-                                </Border>
-                                </StackPanel>
-                            </ScrollViewer>
+                                        <!-- ===== RIGHT SUB-COLUMN: Mesh Options ===== -->
+                                        <StackPanel Grid.Column="1" Spacing="12">
+                                            <TextBlock Text="Mesh Options" Style="{StaticResource BodyStrongTextBlockStyle}"/>
 
-                            <StackPanel Grid.Row="2" Spacing="12" Margin="0,24,0,0">
+                                            <!-- Bucket Flags -->
+                                            <StackPanel Spacing="6">
+                                                <TextBlock Text="Bucket Flags" FontSize="13" Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
+                                                <TextBlock Text="Select an object on the left to edit its per-object bucket flags."
+                                                           FontSize="12" TextWrapping="Wrap"
+                                                           Foreground="{ThemeResource TextFillColorTertiaryBrush}"
+                                                           Visibility="{x:Bind ViewModel.SelectedConfigObject, Mode=OneWay, Converter={StaticResource NullToVis}, ConverterParameter=Invert}"/>
+                                                <Grid ColumnDefinitions="*, *" ColumnSpacing="12" RowSpacing="6"
+                                                      DataContext="{x:Bind ViewModel.SelectedConfigObject, Mode=OneWay}"
+                                                      Visibility="{x:Bind ViewModel.SelectedConfigObject, Mode=OneWay, Converter={StaticResource NullToVis}}">
+                                                    <Grid.RowDefinitions>
+                                                        <RowDefinition Height="Auto"/>
+                                                        <RowDefinition Height="Auto"/>
+                                                        <RowDefinition Height="Auto"/>
+                                                        <RowDefinition Height="Auto"/>
+                                                    </Grid.RowDefinitions>
+                                                    <CheckBox Grid.Row="0" Grid.Column="0" Content="Opaque" IsChecked="{Binding IsOpaque, Mode=TwoWay}"/>
+                                                    <CheckBox Grid.Row="0" Grid.Column="1" Content="Decal" IsChecked="{Binding IsDecal, Mode=TwoWay}"/>
+                                                    <CheckBox Grid.Row="1" Grid.Column="0" Content="Transparent" IsChecked="{Binding IsTransparent, Mode=TwoWay}"/>
+                                                    <CheckBox Grid.Row="1" Grid.Column="1" Content="Shadow" IsChecked="{Binding IsShadow, Mode=TwoWay}"/>
+                                                    <CheckBox Grid.Row="2" Grid.Column="0" Content="No Shadow" IsChecked="{Binding IsNotShadow, Mode=TwoWay}"/>
+                                                    <CheckBox Grid.Row="2" Grid.Column="1" Content="Alpha Coverage" IsChecked="{Binding IsAlphaToCoverage, Mode=TwoWay}"/>
+                                                    <CheckBox Grid.Row="3" Grid.Column="0" Content="Morph Damage" IsChecked="{Binding IsMorphDamage, Mode=TwoWay}"/>
+                                                </Grid>
+                                            </StackPanel>
+
+                                            <!-- Separator -->
+                                            <Border Height="1" Background="{ThemeResource SurfaceStrokeColorDefaultBrush}"/>
+
+                                            <!-- Modifiers -->
+                                            <StackPanel Spacing="4">
+                                                <TextBlock Text="Modifiers" FontSize="13" Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
+                                                <CheckBox Content="Mirror (X axis)" IsChecked="{x:Bind ViewModel.IsMirrorEnabled, Mode=TwoWay}"/>
+                                                <CheckBox Content="Recalculate Normals" IsChecked="{x:Bind ViewModel.RecalculateNormals, Mode=TwoWay}"/>
+                                                <CheckBox Content="Flip Faces" IsChecked="{x:Bind ViewModel.FlipFaces, Mode=TwoWay}"/>
+                                            </StackPanel>
+
+                                            <!-- Separator -->
+                                            <Border Height="1" Background="{ThemeResource SurfaceStrokeColorDefaultBrush}"/>
+
+                                            <!-- Axis Flips -->
+                                            <StackPanel Spacing="6">
+                                                <TextBlock Text="Axis Flips" FontSize="13" Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
+                                                <Grid ColumnDefinitions="*, *" ColumnSpacing="16">
+                                                    <StackPanel Spacing="3">
+                                                        <TextBlock Text="Position" FontSize="12" Foreground="{ThemeResource TextFillColorTertiaryBrush}" Margin="0,0,0,2"/>
+                                                        <CheckBox Content="Flip X" IsChecked="{x:Bind ViewModel.FlipVertexX, Mode=TwoWay}"/>
+                                                        <CheckBox Content="Flip Y" IsChecked="{x:Bind ViewModel.FlipVertexY, Mode=TwoWay}"/>
+                                                        <CheckBox Content="Flip Z" IsChecked="{x:Bind ViewModel.FlipVertexZ, Mode=TwoWay}"/>
+                                                    </StackPanel>
+                                                    <StackPanel Grid.Column="1" Spacing="3">
+                                                        <TextBlock Text="Normal" FontSize="12" Foreground="{ThemeResource TextFillColorTertiaryBrush}" Margin="0,0,0,2"/>
+                                                        <CheckBox Content="Flip X" IsChecked="{x:Bind ViewModel.FlipNormalX, Mode=TwoWay}"/>
+                                                        <CheckBox Content="Flip Y" IsChecked="{x:Bind ViewModel.FlipNormalY, Mode=TwoWay}"/>
+                                                        <CheckBox Content="Flip Z" IsChecked="{x:Bind ViewModel.FlipNormalZ, Mode=TwoWay}"/>
+                                                    </StackPanel>
+                                                </Grid>
+                                            </StackPanel>
+
+                                            <!-- Separator -->
+                                            <Border Height="1" Background="{ThemeResource SurfaceStrokeColorDefaultBrush}"/>
+
+                                            <!-- VLay Blob -->
+                                            <StackPanel Spacing="4">
+                                                <TextBlock Text="VLay Blob" FontSize="13" Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
+                                                <CheckBox Content="Advanced VLay Blob Patch"
+                                                          IsChecked="{x:Bind ViewModel.IsAdvancedVlayBlobPatchEnabled, Mode=TwoWay}"
+                                                          ToolTipService.ToolTip="Resolves required vertex elements from the target game's materialbins and shaderbins. Slower; requires a configured game path in Setup."/>
+                                            </StackPanel>
+                                        </StackPanel>
+                                    </Grid>
+                                </StackPanel>
+                            </Border>
+                        </Grid>
+
+                        <!-- Row 2: Export Bar -->
+                        <Border Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
+                                BorderBrush="{ThemeResource SurfaceStrokeColorDefaultBrush}"
+                                BorderThickness="1" CornerRadius="8" Padding="20">
+                            <StackPanel Spacing="16">
                                 <InfoBar IsOpen="True" IsClosable="False"
                                          Severity="{x:Bind ViewModel.ExportReadinessSeverity, Mode=OneWay}"
                                          Message="{x:Bind ViewModel.ExportReadinessMessage, Mode=OneWay}"/>
-                                <Button Command="{x:Bind ViewModel.ConvertModelCommand}" IsEnabled="{x:Bind ViewModel.IsReadyToExport, Mode=OneWay}" Style="{StaticResource AccentButtonStyle}" HorizontalAlignment="Stretch" Height="56">
-                                    <StackPanel Orientation="Horizontal" Spacing="16">
-                                        <ProgressRing IsActive="{x:Bind ViewModel.IsBusy, Mode=OneWay}" Width="24" Height="24" Foreground="{ThemeResource TextOnAccentFillColorPrimaryBrush}"/>
-                                        <TextBlock Text="{x:Bind ViewModel.SaveButtonText, Mode=OneWay}" FontSize="18" FontWeight="SemiBold"/>
+                                <Button Command="{x:Bind ViewModel.ConvertModelCommand}"
+                                        IsEnabled="{x:Bind ViewModel.IsReadyToExport, Mode=OneWay}"
+                                        Style="{StaticResource AccentButtonStyle}"
+                                        HorizontalAlignment="Stretch" Height="52">
+                                    <StackPanel Orientation="Horizontal" Spacing="12">
+                                        <ProgressRing IsActive="{x:Bind ViewModel.IsBusy, Mode=OneWay}"
+                                                      Width="20" Height="20"
+                                                      Foreground="{ThemeResource TextOnAccentFillColorPrimaryBrush}"/>
+                                        <TextBlock Text="{x:Bind ViewModel.SaveButtonText, Mode=OneWay}"
+                                                   FontSize="16" FontWeight="SemiBold"/>
                                     </StackPanel>
                                 </Button>
                             </StackPanel>
-                        </Grid>
-                    </Grid>
+                        </Border>
+                    </StackPanel>
                 </ScrollViewer>
             </Grid>
         </Grid>

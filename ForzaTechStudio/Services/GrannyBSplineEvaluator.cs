@@ -13,7 +13,7 @@ namespace ForzaTechStudio.Services
         public static void SampleTransformTrack(
             GrannyTransformTrack track, float time,
             out Vector3 position, out Quaternion orientation,
-            out Vector3 scale, out float[] scaleShear9)
+            out Vector3 scale, out float[]? scaleShear9)
         {
             position = Vector3.Zero;
             orientation = Quaternion.Identity;
@@ -29,14 +29,14 @@ namespace ForzaTechStudio.Services
             bool oriIsId = oriCurve == null || oriCurve.IsIdentity || !oriCurve.HasData;
             bool ssIsId  = ssCurve  == null || ssCurve.IsIdentity  || !ssCurve.HasData;
 
-            if (!posIsId && posCurve.Controls.Length >= 3)
+            if (!posIsId && posCurve != null && posCurve.Controls.Length >= 3)
             {
                 Span<float> buf = stackalloc float[3];
                 EvaluateCurve(posCurve, time, buf);
                 position = new Vector3(buf[0], buf[1], buf[2]);
             }
 
-            if (!oriIsId && oriCurve.Controls.Length >= 4)
+            if (!oriIsId && oriCurve != null && oriCurve.Controls.Length >= 4)
             {
                 Span<float> buf = stackalloc float[4];
                 EvaluateCurve(oriCurve, time, buf);
@@ -44,7 +44,7 @@ namespace ForzaTechStudio.Services
                 orientation = rawQ.LengthSquared() > 1e-12f ? Quaternion.Normalize(rawQ) : Quaternion.Identity;
             }
 
-            if (!ssIsId && ssCurve.Controls.Length >= 3)
+            if (!ssIsId && ssCurve != null && ssCurve.Controls.Length >= 3)
             {
                 int dim = ssCurve.Dimension > 0 ? ssCurve.Dimension : 3;
                 Span<float> buf = stackalloc float[dim];

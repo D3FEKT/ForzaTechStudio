@@ -45,7 +45,12 @@
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
       <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
     </Content>
+    <Content Include="Native\forzatech_acl.dll" Link="forzatech_acl.dll" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
     <Content Include="Assets\discord.png">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
+    </Content>
+    <Content Include="Assets\kofi.png">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
       <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
     </Content>
@@ -101,7 +106,6 @@
     <ProjectCapability Include="Msix" />
   </ItemGroup>
   <ItemGroup>
-    <PackageReference Include="AssimpNet" Version="4.1.0" />
     <PackageReference Include="BCnEncoder.Net" Version="2.1.0" />
     <PackageReference Include="CommunityToolkit.Mvvm" Version="8.4.0" />
     <PackageReference Include="CommunityToolkit.WinUI.UI.Controls.Markdown" Version="7.1.2" />
@@ -301,7 +305,7 @@
 
     <!-- Native DLLs that MUST stay beside the exe -->
     <ItemGroup>
-      <_NativeKeep Include="&#xD;&#xA;        $(PublishDir)assimp.dll;&#xD;&#xA;        $(PublishDir)xcompress64.dll;&#xD;&#xA;        $(PublishDir)xg.dll;&#xD;&#xA;        $(PublishDir)granny2_x64.dll;&#xD;&#xA;        $(PublishDir)e_sqlite3.dll;&#xD;&#xA;        $(PublishDir)createdump.exe;&#xD;&#xA;        $(PublishDir)Microsoft.WindowsAppRuntime.Bootstrap.dll;&#xD;&#xA;        $(PublishDir)Microsoft.WindowsAppRuntime.Bootstrap.Net.dll;&#xD;&#xA;        $(PublishDir)WebView2Loader.dll;&#xD;&#xA;        $(PublishDir)WinRTSupport.dll" />
+      <_NativeKeep Include="&#xD;&#xA;        $(PublishDir)xcompress64.dll;&#xD;&#xA;        $(PublishDir)xg.dll;&#xD;&#xA;        $(PublishDir)granny2_x64.dll;&#xD;&#xA;        $(PublishDir)e_sqlite3.dll;&#xD;&#xA;        $(PublishDir)createdump.exe;&#xD;&#xA;        $(PublishDir)Microsoft.WindowsAppRuntime.Bootstrap.dll;&#xD;&#xA;        $(PublishDir)Microsoft.WindowsAppRuntime.Bootstrap.Net.dll;&#xD;&#xA;        $(PublishDir)WebView2Loader.dll;&#xD;&#xA;        $(PublishDir)WinRTSupport.dll" />
 
       <_AppKeep Include="&#xD;&#xA;        $(PublishDir)ForzaTech Studio.exe;&#xD;&#xA;        $(PublishDir)ForzaTech Studio.dll;&#xD;&#xA;        $(PublishDir)ForzaTech Studio.runtimeconfig.json;&#xD;&#xA;        $(PublishDir)ForzaTech Studio.deps.json;&#xD;&#xA;        $(PublishDir)WinRT.Runtime.dll;&#xD;&#xA;        $(PublishDir)Microsoft.WinUI.dll;&#xD;&#xA;        $(PublishDir)Microsoft.Windows.SDK.NET.dll;&#xD;&#xA;        $(PublishDir)Microsoft.Windows.ApplicationModel.Background.UniversalBGTask.dll" />
       <!-- WebView2 native loader must stay beside the exe (loaded via LoadLibrary) -->

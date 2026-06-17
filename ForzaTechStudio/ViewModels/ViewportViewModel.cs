@@ -18,6 +18,7 @@ namespace ForzaTechStudio.ViewModels.ThreeDViewer
     {
         string Name { get; set; }
         bool? IsChecked { get; set; }
+        bool IsSelected { get; set; }
         bool IsExpanded { get; set; }
         ObservableCollection<IViewerNode> Children { get; }
         IViewerNode? Parent { get; set; }
@@ -68,6 +69,13 @@ namespace ForzaTechStudio.ViewModels.ThreeDViewer
         {
             get => _isExpanded;
             set => SetProperty(ref _isExpanded, value);
+        }
+
+        private bool _isSelected = false;
+        public bool IsSelected
+        {
+            get => _isSelected;
+            set => SetProperty(ref _isSelected, value);
         }
 
         private ObservableCollection<IViewerNode> _children = new();
@@ -204,6 +212,7 @@ namespace ForzaTechStudio.ViewModels.ThreeDViewer
     {
         public override NodeType Type => NodeType.Folder;
         public string FolderPath { get; set; } = string.Empty;
+        public ManufacturerColorsBlob? ManufacturerColors { get; set; }
     }
 
     public class ModelBinNode : ViewerNode
@@ -581,6 +590,7 @@ namespace ForzaTechStudio.ViewModels.ThreeDViewer
             Roots.Clear();
             ActiveTab?.Roots.Clear();
             SelectedNode = null;
+            RequestResetScene?.Invoke(this, EventArgs.Empty);
         }
 
         private IViewerNode FindRoot(IViewerNode node)
@@ -594,6 +604,7 @@ namespace ForzaTechStudio.ViewModels.ThreeDViewer
         }
 
         public event EventHandler<IViewerNode>? RequestCloseRoot;
+        public event EventHandler? RequestResetScene;
 
         // Cross-file helpers 
 

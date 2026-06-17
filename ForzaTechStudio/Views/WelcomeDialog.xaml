@@ -49,9 +49,6 @@
                 <TextBlock Text="What's New" FontSize="28" FontWeight="SemiBold" VerticalAlignment="Center"/>
             </StackPanel>
 
-            <TextBlock Grid.Row="1" TextWrapping="Wrap" FontSize="14" Opacity="0.75" FontStyle="Italic"
-                       Text="Thanks for the support — let's all make some cool mods together."/>
-
             <!-- Changelog entries -->
             <StackPanel Grid.Row="2" Spacing="14" VerticalAlignment="Top">
 
@@ -93,6 +90,7 @@
             <!-- Bottom actions -->
             <StackPanel Grid.Row="3" Spacing="12">
                 <HyperlinkButton Content="Join the community Discord" NavigateUri="https://discord.gg/forzamods" Padding="0"/>
+                <HyperlinkButton Content="Buy me a coffee" NavigateUri="https://ko-fi.com/d3fekt" Padding="0"/>
                 <CheckBox x:Name="DontShowAgainCheckBox" Content="Don't show this again" />
             </StackPanel>
         </Grid>

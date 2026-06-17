@@ -64,6 +64,48 @@ public class SwatchbinConversionService
     // Loads a <see cref="SwatchbinInfo"/> from a stream without resetting position.
     public SwatchbinInfo LoadInfo(Stream stream) => _swatchbinService.LoadSwatchbin(stream);
 
+
+    public byte[]? GetRenderReadyDdsData(SwatchbinInfo info)
+    {
+        if (info?.DdsData == null && info?.RawTextureData == null)
+            return null;
+
+        if (!info.IsDurangoFormat)
+            return info.DdsData;
+
+        if (info.TileMode == XG_TILE_MODE.XG_TILE_MODE_2D_THIN ||
+            info.TileMode == XG_TILE_MODE.XG_TILE_MODE_1D_THIN)
+        {
+            var detiledResult = DurangoDetile(info, info.RawTextureData!);
+            if (detiledResult == null)
+                return null;
+
+            var format = (XG_FORMAT)info.DxgiFormat;
+            byte[] dealigned = DealignDurangoTextureData(info, format, detiledResult.Value);
+
+            return CreateDdsFromLinearData(
+                dealigned,
+                (int)info.Width, (int)info.Height,
+                info.MipLevels, info.DxgiFormat,
+                info.IsTextureCube, info.IsTexture3D, info.Depth);
+        }
+
+        return null; // unsupported tile mode — caller should fall back to raw
+    }
+
+    // Loads a swatchbin from raw bytes and returns render-ready DDS data,
+    // detiling Durango textures automatically.
+
+    public byte[]? LoadRenderReadyDdsFromBytes(byte[] swatchbinBytes)
+    {
+        if (swatchbinBytes == null || swatchbinBytes.Length == 0)
+            return null;
+
+        using var stream = new MemoryStream(swatchbinBytes, writable: false);
+        var info = _swatchbinService.LoadSwatchbin(stream);
+        return GetRenderReadyDdsData(info);
+    }
+
     // Public conversion entry-points 
 
  

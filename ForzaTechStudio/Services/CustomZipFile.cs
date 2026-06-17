@@ -529,7 +529,9 @@ namespace ForzaTechStudio
                 // Simplified: Just iterate until we find the file
                 // Note: reusing the full iteration logic is safest as we need LocalHeaderOffset
                 
-                ExtractToDirectory(Path.GetDirectoryName(destinationPath), null, (name) => 
+                string? destDir = Path.GetDirectoryName(destinationPath);
+                if (destDir == null) return;
+                ExtractToDirectory(destDir, null, (name) => 
                 {
                      // name matches our target?
                      // Normalize slashes
@@ -560,7 +562,6 @@ namespace ForzaTechStudio
             // Compress replacement file using the same method
             byte[] newCompressedData;
             uint newUncompressedSize;
-            ushort newMethod;
             uint newCrc;
 
             using (var replacementStream = File.OpenRead(replacementFilePath))
@@ -577,13 +578,11 @@ namespace ForzaTechStudio
                 var originalMethod = (CompressionType)target.CompressionMethod;
                 if (originalMethod == CompressionType.Stored)
                 {
-                    newMethod = (ushort)CompressionType.Stored;
                     newCompressedData = rawBytes;
                 }
                 else
                 {
                     // Deflate (or LZX fallback to Deflate — no encoder available for LZX)
-                    newMethod = (ushort)CompressionType.Deflate;
                     using var compMs = new MemoryStream();
                     using (var ds = new DeflateStream(compMs, CompressionLevel.Optimal, leaveOpen: true))
                         ds.Write(rawBytes, 0, rawBytes.Length);

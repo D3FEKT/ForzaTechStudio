@@ -183,6 +183,13 @@
                         </StackPanel>
                     </Button>
 
+                    <Button Click="KofiButton_Click" Style="{StaticResource FooterButtonStyle}">
+                        <StackPanel Orientation="Horizontal" Spacing="8">
+                            <Image Source="ms-appx:///Assets/kofi.png" Width="16" Height="16"/>
+                            <TextBlock Text="Ko-fi" FontWeight="SemiBold" FontSize="14"/>
+                        </StackPanel>
+                    </Button>
+
                     <Button Click="DocsButton_Click" Style="{StaticResource FooterButtonStyle}">
                         <StackPanel Orientation="Horizontal" Spacing="8">
                             <FontIcon Glyph="&#xE736;" FontSize="16"/>

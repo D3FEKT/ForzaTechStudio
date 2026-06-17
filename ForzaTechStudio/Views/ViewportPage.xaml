@@ -31,14 +31,11 @@
         <converters:BoolToVisibilityIconConverter x:Key="BoolToVisibilityIconConverter"/>
         <converters:BooleanToVisibilityConverter x:Key="BoolToVisConverter"/>
 
-        <Style x:Key="DenseToolbarButtonStyle" TargetType="Button" BasedOn="{StaticResource SubtleButtonStyle}">
-            <Setter Property="Height" Value="30"/>
-            <Setter Property="MinWidth" Value="0"/>
-            <Setter Property="MinHeight" Value="30"/>
-            <Setter Property="Padding" Value="6,0"/>
-            <Setter Property="FontSize" Value="10"/>
-            <Setter Property="HorizontalAlignment" Value="Left"/>
-            <Setter Property="VerticalAlignment" Value="Center"/>
+        <Style x:Key="CompactGhostAccentButtonStyle" TargetType="Button" BasedOn="{StaticResource GhostAccentButtonStyle}">
+            <Setter Property="Height" Value="28"/>
+            <Setter Property="MinHeight" Value="28"/>
+            <Setter Property="Padding" Value="8,0"/>
+            <Setter Property="FontSize" Value="11"/>
             <Setter Property="HorizontalContentAlignment" Value="Center"/>
             <Setter Property="VerticalContentAlignment" Value="Center"/>
         </Style>
@@ -63,14 +60,6 @@
             <Setter Property="VerticalContentAlignment" Value="Center"/>
         </Style>
 
-        <Style x:Key="DenseToolbarSeparatorStyle" TargetType="Border">
-            <Setter Property="Width" Value="1"/>
-            <Setter Property="Height" Value="18"/>
-            <Setter Property="Margin" Value="3,0"/>
-            <Setter Property="VerticalAlignment" Value="Center"/>
-            <Setter Property="Background" Value="{ThemeResource DividerStrokeColorDefaultBrush}"/>
-        </Style>
-
         <Style x:Key="DensePropertyExpanderStyle" TargetType="Expander">
             <Setter Property="HorizontalAlignment" Value="Stretch"/>
             <Setter Property="HorizontalContentAlignment" Value="Stretch"/>
@@ -93,7 +82,8 @@
 
         <Style TargetType="NumberBox">
             <Setter Property="FontSize" Value="11"/>
-            <Setter Property="MinHeight" Value="24"/>
+            <Setter Property="MinHeight" Value="20"/>
+            <Setter Property="Padding" Value="3,0"/>
         </Style>
 
         <Style TargetType="RepeatButton">
@@ -233,7 +223,8 @@
                           Padding="0,0,0,8">
                      <TreeView.ItemTemplate>
                         <DataTemplate>
-                            <Grid Padding="0,2" ColumnSpacing="4">
+                            <Grid Padding="0,2" ColumnSpacing="4"
+                                  Background="Transparent">
                                 <Grid.ColumnDefinitions>
                                     <ColumnDefinition Width="Auto"/>
                                     <ColumnDefinition Width="Auto"/>
@@ -251,13 +242,15 @@
                                           Glyph="{Binding Content.Type, Converter={StaticResource NodeTypeIconConverter}}"
                                           FontSize="14"
                                           Foreground="{ThemeResource SystemControlForegroundBaseMediumBrush}"
-                                          VerticalAlignment="Center"/>
+                                          VerticalAlignment="Center"
+                                          PointerPressed="FileTreeRow_PointerPressed"/>
 
                                 <TextBlock Grid.Column="2" 
                                            Text="{Binding Content.Name}" 
                                            FontSize="12"
                                            VerticalAlignment="Center"
-                                           TextTrimming="CharacterEllipsis"/>
+                                           TextTrimming="CharacterEllipsis"
+                                           PointerPressed="FileTreeRow_PointerPressed"/>
                             </Grid>
                         </DataTemplate>
                      </TreeView.ItemTemplate>
@@ -878,13 +871,14 @@
                                         <!-- Selected material details -->
                                         <StackPanel x:Name="MeshMaterialDetailsPanel" Spacing="8" Visibility="Collapsed">
                                             <!-- Material ID NumberBox -->
-                                            <NumberBox x:Name="MeshMatIdBox"
-                                                       Header="Material ID"
-                                                       SpinButtonPlacementMode="Inline"
-                                                       Minimum="0"
-                                                       SmallChange="1"
-                                                       ValueChanged="MeshMatId_ValueChanged"
-                                                       FontSize="11" MinHeight="24"/>
+                                            <StackPanel Spacing="2">
+                                                <TextBlock Text="Material ID" FontSize="11"/>
+                                                <NumberBox x:Name="MeshMatIdBox"
+                                                           SpinButtonPlacementMode="Inline"
+                                                           Minimum="0"
+                                                           SmallChange="1"
+                                                           ValueChanged="MeshMatId_ValueChanged"/>
+                                            </StackPanel>
 
                                             <!-- Material Path -->
                                             <TextBox x:Name="MeshMatPathBox"
@@ -1741,74 +1735,68 @@
                             Padding="4,0"
                             VerticalAlignment="Center">
 
-            <!-- File: Open / Open Folder / Save / Save As -->
-            <Button Click="OpenFiles_Click"
-                    Style="{StaticResource DenseToolbarButtonStyle}"
-                    ToolTipService.ToolTip="Open new files (Ctrl+O)">
-                <StackPanel Orientation="Horizontal" Spacing="3">
-                    <FontIcon Glyph="&#xE8E5;" FontSize="13"/>
-                    <TextBlock Text="Open" FontSize="10" VerticalAlignment="Center"/>
+            <!-- File: Open / Save -->
+            <Button Style="{StaticResource CompactGhostAccentButtonStyle}"
+                    ToolTipService.ToolTip="Open files (Ctrl+O)">
+                <StackPanel Orientation="Horizontal" Spacing="4">
+                    <FontIcon Glyph="&#xE8E5;" FontSize="12"/>
+                    <TextBlock Text="Open" FontSize="11"/>
                 </StackPanel>
-                <Button.KeyboardAccelerators>
-                    <KeyboardAccelerator Modifiers="Control" Key="O"/>
-                </Button.KeyboardAccelerators>
-            </Button>
-
-            <Button Click="OpenFolder_Click"
-                    Style="{StaticResource DenseToolbarButtonStyle}"
-                    ToolTipService.ToolTip="Open a folder and its subfolders (Ctrl+Shift+O)">
-                <StackPanel Orientation="Horizontal" Spacing="3">
-                    <FontIcon Glyph="&#xE838;" FontSize="13"/>
-                    <TextBlock Text="Open Folder" FontSize="10" VerticalAlignment="Center"/>
-                </StackPanel>
-                <Button.KeyboardAccelerators>
-                    <KeyboardAccelerator Modifiers="Control,Shift" Key="O"/>
-                </Button.KeyboardAccelerators>
+                <Button.Flyout>
+                    <MenuFlyout>
+                        <MenuFlyoutItem Text="Open Files..." Click="OpenFiles_Click">
+                            <MenuFlyoutItem.Icon><FontIcon Glyph="&#xE8E5;"/></MenuFlyoutItem.Icon>
+                            <MenuFlyoutItem.KeyboardAccelerators>
+                                <KeyboardAccelerator Modifiers="Control" Key="O"/>
+                            </MenuFlyoutItem.KeyboardAccelerators>
+                        </MenuFlyoutItem>
+                        <MenuFlyoutItem Text="Open Folder..." Click="OpenFolder_Click">
+                            <MenuFlyoutItem.Icon><FontIcon Glyph="&#xE838;"/></MenuFlyoutItem.Icon>
+                            <MenuFlyoutItem.KeyboardAccelerators>
+                                <KeyboardAccelerator Modifiers="Control,Shift" Key="O"/>
+                            </MenuFlyoutItem.KeyboardAccelerators>
+                        </MenuFlyoutItem>
+                    </MenuFlyout>
+                </Button.Flyout>
             </Button>
 
             <Button x:Name="SaveBtn"
-                    Click="SaveCurrentModel_Click"
-                    Style="{StaticResource DenseToolbarButtonStyle}"
+                    Style="{StaticResource CompactGhostAccentButtonStyle}"
                     ToolTipService.ToolTip="Save (Ctrl+S)">
-                <StackPanel Orientation="Horizontal" Spacing="3">
-                    <FontIcon Glyph="&#xE74E;" FontSize="13"/>
-                    <TextBlock Text="Save" FontSize="10" VerticalAlignment="Center"/>
+                <StackPanel Orientation="Horizontal" Spacing="4">
+                    <FontIcon Glyph="&#xE74E;" FontSize="12"/>
+                    <TextBlock Text="Save" FontSize="11"/>
                 </StackPanel>
-                <Button.KeyboardAccelerators>
-                    <KeyboardAccelerator Modifiers="Control" Key="S"/>
-                </Button.KeyboardAccelerators>
-            </Button>
-
-            <Button Click="SaveCurrentModelAs_Click"
-                    Style="{StaticResource DenseToolbarButtonStyle}"
-                    ToolTipService.ToolTip="Save As (Ctrl+Shift+S)">
-                <StackPanel Orientation="Horizontal" Spacing="3">
-                    <FontIcon Glyph="&#xE792;" FontSize="13"/>
-                    <TextBlock Text="Save As" FontSize="10" VerticalAlignment="Center"/>
-                </StackPanel>
-                <Button.KeyboardAccelerators>
-                    <KeyboardAccelerator Modifiers="Control,Shift" Key="S"/>
-                </Button.KeyboardAccelerators>
-            </Button>
-
-            <Button Click="SaveAllModified_Click"
-                    Style="{StaticResource DenseToolbarButtonStyle}"
-                    ToolTipService.ToolTip="Save all modified files (Ctrl+Alt+S)">
-                <StackPanel Orientation="Horizontal" Spacing="3">
-                    <FontIcon Glyph="&#xEA35;" FontSize="13"/>
-                    <TextBlock Text="Save All" FontSize="10" VerticalAlignment="Center"/>
-                </StackPanel>
-                <Button.KeyboardAccelerators>
-                    <KeyboardAccelerator Modifiers="Control,Menu" Key="S"/>
-                </Button.KeyboardAccelerators>
+                <Button.Flyout>
+                    <MenuFlyout>
+                        <MenuFlyoutItem Text="Save" Click="SaveCurrentModel_Click">
+                            <MenuFlyoutItem.Icon><FontIcon Glyph="&#xE74E;"/></MenuFlyoutItem.Icon>
+                            <MenuFlyoutItem.KeyboardAccelerators>
+                                <KeyboardAccelerator Modifiers="Control" Key="S"/>
+                            </MenuFlyoutItem.KeyboardAccelerators>
+                        </MenuFlyoutItem>
+                        <MenuFlyoutItem Text="Save As..." Click="SaveCurrentModelAs_Click">
+                            <MenuFlyoutItem.Icon><FontIcon Glyph="&#xE792;"/></MenuFlyoutItem.Icon>
+                            <MenuFlyoutItem.KeyboardAccelerators>
+                                <KeyboardAccelerator Modifiers="Control,Shift" Key="S"/>
+                            </MenuFlyoutItem.KeyboardAccelerators>
+                        </MenuFlyoutItem>
+                        <MenuFlyoutItem Text="Save All" Click="SaveAllModified_Click">
+                            <MenuFlyoutItem.Icon><FontIcon Glyph="&#xEA35;"/></MenuFlyoutItem.Icon>
+                            <MenuFlyoutItem.KeyboardAccelerators>
+                                <KeyboardAccelerator Modifiers="Control,Menu" Key="S"/>
+                            </MenuFlyoutItem.KeyboardAccelerators>
+                        </MenuFlyoutItem>
+                    </MenuFlyout>
+                </Button.Flyout>
             </Button>
 
             <Button Command="{x:Bind ViewModel.CloseSelectedCommand}"
-                    Style="{StaticResource DenseToolbarButtonStyle}"
+                    Style="{StaticResource CompactGhostAccentButtonStyle}"
                     ToolTipService.ToolTip="Close Selected (Ctrl+W)">
-                <StackPanel Orientation="Horizontal" Spacing="3">
-                    <FontIcon Glyph="&#xE711;" FontSize="13"/>
-                    <TextBlock Text="Close Selected" FontSize="10" VerticalAlignment="Center"/>
+                <StackPanel Orientation="Horizontal" Spacing="4">
+                    <FontIcon Glyph="&#xE711;" FontSize="12"/>
+                    <TextBlock Text="Close Selected" FontSize="11"/>
                 </StackPanel>
                 <Button.KeyboardAccelerators>
                     <KeyboardAccelerator Modifiers="Control" Key="W"/>
@@ -1816,11 +1804,11 @@
             </Button>
 
             <Button Command="{x:Bind ViewModel.CloseAllCommand}"
-                    Style="{StaticResource DenseToolbarButtonStyle}"
+                    Style="{StaticResource CompactGhostAccentButtonStyle}"
                     ToolTipService.ToolTip="Close All Files (Ctrl+Shift+W)">
-                <StackPanel Orientation="Horizontal" Spacing="3">
-                    <FontIcon Glyph="&#xE74D;" FontSize="13"/>
-                    <TextBlock Text="Close All" FontSize="10" VerticalAlignment="Center"/>
+                <StackPanel Orientation="Horizontal" Spacing="4">
+                    <FontIcon Glyph="&#xE74D;" FontSize="12"/>
+                    <TextBlock Text="Close All" FontSize="11"/>
                 </StackPanel>
                 <Button.KeyboardAccelerators>
                     <KeyboardAccelerator Modifiers="Control,Shift" Key="W"/>
@@ -1828,11 +1816,11 @@
             </Button>
 
             <Button x:Name="ReloadBtn"
-                    Style="{StaticResource DenseToolbarButtonStyle}"
+                    Style="{StaticResource CompactGhostAccentButtonStyle}"
                     ToolTipService.ToolTip="Reload opened files">
-                <StackPanel Orientation="Horizontal" Spacing="3">
-                    <FontIcon Glyph="&#xE72C;" FontSize="13"/>
-                    <TextBlock Text="Reload" FontSize="10" VerticalAlignment="Center"/>
+                <StackPanel Orientation="Horizontal" Spacing="4">
+                    <FontIcon Glyph="&#xE72C;" FontSize="12"/>
+                    <TextBlock Text="Reload" FontSize="11"/>
                 </StackPanel>
                 <Button.Flyout>
                     <Flyout Placement="Bottom">
@@ -1866,13 +1854,15 @@
                 </Button.Flyout>
             </Button>
 
-            <Border Style="{StaticResource DenseToolbarSeparatorStyle}"/>
+            <Border Width="1"
+                    Background="{ThemeResource DividerStrokeColorDefaultBrush}"
+                    Margin="3,4"/>
 
             <!-- Export -->
-            <Button Style="{StaticResource DenseToolbarButtonStyle}" ToolTipService.ToolTip="Export model">
-                <StackPanel Orientation="Horizontal" Spacing="3">
-                    <FontIcon Glyph="&#xEDE1;" FontSize="13"/>
-                    <TextBlock Text="Export" FontSize="10" VerticalAlignment="Center"/>
+            <Button Style="{StaticResource CompactGhostAccentButtonStyle}" ToolTipService.ToolTip="Export model">
+                <StackPanel Orientation="Horizontal" Spacing="4">
+                    <FontIcon Glyph="&#xEDE1;" FontSize="12"/>
+                    <TextBlock Text="Export" FontSize="11"/>
                 </StackPanel>
                 <Button.Flyout>
                     <MenuFlyout>
@@ -1911,15 +1901,17 @@
                 </Button.Flyout>
             </Button>
 
-            <Border Style="{StaticResource DenseToolbarSeparatorStyle}"/>
+            <Border Width="1"
+                    Background="{ThemeResource DividerStrokeColorDefaultBrush}"
+                    Margin="3,4"/>
 
             <!-- Selection / Filter -->
             <Button x:Name="SelectedBtn"
-                    Style="{StaticResource DenseToolbarButtonStyle}"
+                    Style="{StaticResource CompactGhostAccentButtonStyle}"
                     ToolTipService.ToolTip="Filter viewport visibility">
-                <StackPanel Orientation="Horizontal" Spacing="3">
-                    <FontIcon Glyph="&#xE762;" FontSize="13"/>
-                    <TextBlock Text="Filter" FontSize="10" VerticalAlignment="Center"/>
+                <StackPanel Orientation="Horizontal" Spacing="4">
+                    <FontIcon Glyph="&#xE762;" FontSize="12"/>
+                    <TextBlock Text="Filter" FontSize="11"/>
                 </StackPanel>
                 <Button.Flyout>
                     <MenuFlyout>
@@ -1952,14 +1944,16 @@
                 </Button.Flyout>
             </Button>
 
-            <Border Style="{StaticResource DenseToolbarSeparatorStyle}"/>
+            <Border Width="1"
+                    Background="{ThemeResource DividerStrokeColorDefaultBrush}"
+                    Margin="3,4"/>
 
             <Button x:Name="MaterialsBtn"
-                    Style="{StaticResource DenseToolbarButtonStyle}"
+                    Style="{StaticResource CompactGhostAccentButtonStyle}"
                     ToolTipService.ToolTip="Viewport material options">
-                <StackPanel Orientation="Horizontal" Spacing="3">
-                    <FontIcon Glyph="&#xE790;" FontSize="13"/>
-                    <TextBlock Text="Materials" FontSize="10" VerticalAlignment="Center"/>
+                <StackPanel Orientation="Horizontal" Spacing="4">
+                    <FontIcon Glyph="&#xE790;" FontSize="12"/>
+                    <TextBlock Text="Materials" FontSize="11"/>
                 </StackPanel>
                 <Button.Flyout>
                     <Flyout Placement="Bottom">
@@ -2035,41 +2029,46 @@
                                                     <ColumnDefinition Width="*"/>
                                                     <ColumnDefinition Width="40"/>
                                                 </Grid.ColumnDefinitions>
-                                                <NumberBox x:Name="ManufacturerColorRedBox"
-                                                           Header="R"
-                                                           Minimum="0"
-                                                           Maximum="255"
-                                                           SmallChange="1"
-                                                           LargeChange="16"
-                                                           SpinButtonPlacementMode="Compact"
-                                                           ValueChanged="ManufacturerCustomColorBox_ValueChanged"/>
-                                                <NumberBox x:Name="ManufacturerColorGreenBox"
-                                                           Grid.Column="1"
-                                                           Header="G"
-                                                           Minimum="0"
-                                                           Maximum="255"
-                                                           SmallChange="1"
-                                                           LargeChange="16"
-                                                           SpinButtonPlacementMode="Compact"
-                                                           ValueChanged="ManufacturerCustomColorBox_ValueChanged"/>
-                                                <NumberBox x:Name="ManufacturerColorBlueBox"
-                                                           Grid.Column="2"
-                                                           Header="B"
-                                                           Minimum="0"
-                                                           Maximum="255"
-                                                           SmallChange="1"
-                                                           LargeChange="16"
-                                                           SpinButtonPlacementMode="Compact"
-                                                           ValueChanged="ManufacturerCustomColorBox_ValueChanged"/>
-                                                <NumberBox x:Name="ManufacturerColorAlphaBox"
-                                                           Grid.Column="3"
-                                                           Header="A"
-                                                           Minimum="0"
-                                                           Maximum="255"
-                                                           SmallChange="1"
-                                                           LargeChange="16"
-                                                           SpinButtonPlacementMode="Compact"
-                                                           ValueChanged="ManufacturerCustomColorBox_ValueChanged"/>
+                                                <StackPanel Grid.Column="0" Spacing="2">
+                                                    <TextBlock Text="R" FontSize="10" Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
+                                                    <NumberBox x:Name="ManufacturerColorRedBox"
+                                                               Minimum="0"
+                                                               Maximum="255"
+                                                               SmallChange="1"
+                                                               LargeChange="16"
+                                                               SpinButtonPlacementMode="Compact"
+                                                               ValueChanged="ManufacturerCustomColorBox_ValueChanged"/>
+                                                </StackPanel>
+                                                <StackPanel Grid.Column="1" Spacing="2">
+                                                    <TextBlock Text="G" FontSize="10" Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
+                                                    <NumberBox x:Name="ManufacturerColorGreenBox"
+                                                               Minimum="0"
+                                                               Maximum="255"
+                                                               SmallChange="1"
+                                                               LargeChange="16"
+                                                               SpinButtonPlacementMode="Compact"
+                                                               ValueChanged="ManufacturerCustomColorBox_ValueChanged"/>
+                                                </StackPanel>
+                                                <StackPanel Grid.Column="2" Spacing="2">
+                                                    <TextBlock Text="B" FontSize="10" Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
+                                                    <NumberBox x:Name="ManufacturerColorBlueBox"
+                                                               Minimum="0"
+                                                               Maximum="255"
+                                                               SmallChange="1"
+                                                               LargeChange="16"
+                                                               SpinButtonPlacementMode="Compact"
+                                                               ValueChanged="ManufacturerCustomColorBox_ValueChanged"/>
+                                                </StackPanel>
+                                                <StackPanel Grid.Column="3" Spacing="2">
+                                                    <TextBlock Text="A" FontSize="10" Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
+                                                    <NumberBox x:Name="ManufacturerColorAlphaBox"
+                                                               Minimum="0"
+                                                               Maximum="255"
+                                                               SmallChange="1"
+                                                               LargeChange="16"
+                                                               SpinButtonPlacementMode="Compact"
+                                                               ValueChanged="ManufacturerCustomColorBox_ValueChanged"/>
+                                                </StackPanel>
                                                 <Button Grid.Column="4"
                                                         Width="36"
                                                         Height="36"
@@ -2185,13 +2184,15 @@
                 </Button.Flyout>
             </Button>
 
-            <Border Style="{StaticResource DenseToolbarSeparatorStyle}"/>
+            <Border Width="1"
+                    Background="{ThemeResource DividerStrokeColorDefaultBrush}"
+                    Margin="3,4"/>
 
             <!-- View / Camera / Options -->
-            <Button Style="{StaticResource DenseToolbarButtonStyle}" ToolTipService.ToolTip="View options">
-                <StackPanel Orientation="Horizontal" Spacing="3">
-                    <FontIcon Glyph="&#xE890;" FontSize="13"/>
-                    <TextBlock Text="View" FontSize="10" VerticalAlignment="Center"/>
+            <Button Style="{StaticResource CompactGhostAccentButtonStyle}" ToolTipService.ToolTip="View options">
+                <StackPanel Orientation="Horizontal" Spacing="4">
+                    <FontIcon Glyph="&#xE890;" FontSize="12"/>
+                    <TextBlock Text="View" FontSize="11"/>
                 </StackPanel>
                 <Button.Flyout>
                     <MenuFlyout>
@@ -2218,10 +2219,10 @@
                 </Button.Flyout>
             </Button>
 
-            <Button x:Name="CameraOptionsBtn" Style="{StaticResource DenseToolbarButtonStyle}" ToolTipService.ToolTip="Camera options">
-                <StackPanel Orientation="Horizontal" Spacing="3">
-                    <FontIcon Glyph="&#xE781;" FontSize="13"/>
-                    <TextBlock Text="Camera" FontSize="10" VerticalAlignment="Center"/>
+            <Button x:Name="CameraOptionsBtn" Style="{StaticResource CompactGhostAccentButtonStyle}" ToolTipService.ToolTip="Camera options">
+                <StackPanel Orientation="Horizontal" Spacing="4">
+                    <FontIcon Glyph="&#xE781;" FontSize="12"/>
+                    <TextBlock Text="Camera" FontSize="11"/>
                 </StackPanel>
                 <Button.Flyout>
                     <Flyout Placement="Bottom">
@@ -2433,10 +2434,10 @@
                 </Button.Flyout>
             </Button>
 
-            <Button Style="{StaticResource DenseToolbarButtonStyle}" ToolTipService.ToolTip="Options">
-                <StackPanel Orientation="Horizontal" Spacing="3">
-                    <FontIcon Glyph="&#xE713;" FontSize="13"/>
-                    <TextBlock Text="Options" FontSize="10" VerticalAlignment="Center"/>
+            <Button Style="{StaticResource CompactGhostAccentButtonStyle}" ToolTipService.ToolTip="Options">
+                <StackPanel Orientation="Horizontal" Spacing="4">
+                    <FontIcon Glyph="&#xE713;" FontSize="12"/>
+                    <TextBlock Text="Options" FontSize="11"/>
                 </StackPanel>
                 <Button.Flyout>
                     <Flyout>
@@ -2560,7 +2561,11 @@
                             <FontIcon Glyph="&#xE744;" FontSize="14"/>
                         </Button>
 
-                        <Border Style="{StaticResource DenseToolbarSeparatorStyle}" Height="22" Margin="2,0"/>
+                        <Border Width="1"
+                                Height="22"
+                                Margin="2,0"
+                                VerticalAlignment="Center"
+                                Background="{ThemeResource DividerStrokeColorDefaultBrush}"/>
 
                         <Button x:Name="UndoBtn"
                                 Style="{StaticResource DenseViewportOverlayButtonStyle}"

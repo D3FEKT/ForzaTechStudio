@@ -63,7 +63,7 @@ namespace ForzaTechStudio.Services
             // Vertex Buffer
             vertexBufferBlob.Header = new BufferHeader
             {
-                NumElements = 1,
+                SubElementCount = 1,
                 Stride = (ushort)offset,
                 Length = 0,
                 Data = Array.Empty<byte[]>(),
@@ -74,7 +74,7 @@ namespace ForzaTechStudio.Services
             // Index Buffer
             indexBufferBlob.Header = new BufferHeader
             {
-                NumElements = 1,
+                SubElementCount = 1,
                 Stride = 2,
                 Length = 0,
                 Data = Array.Empty<byte[]>(),

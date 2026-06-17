@@ -20,7 +20,6 @@ using System.Text.Json;
 
 namespace ForzaTechStudio.ViewModels
 {
-    // NEW: Material cache entry that stores file path AND eagerly loads MaterialBlob when accessed
     public class CachedMaterialBlob
     {
         public string Name { get; set; } = string.Empty;
@@ -30,6 +29,7 @@ namespace ForzaTechStudio.ViewModels
         
         // In-memory MaterialBlob created on-demand (NOT loaded from file)
         private MaterialBlob? _blob;
+        public bool HasLoadedBlob => _blob != null;
         
         public MaterialBlob Blob
         {
@@ -412,6 +412,7 @@ namespace ForzaTechStudio.ViewModels
         private readonly ObjParserService _parserService = new ObjParserService();
         private readonly FbxParserService _fbxParser = new FbxParserService();
         private readonly SettingsService _settingsService = new SettingsService();
+        private readonly MaterialInstanceBuilderService _materialInstanceBuilder = new MaterialInstanceBuilderService();
         private bool _isManualOverride;
         private bool _suppressZipSelectionChange;
         private bool _hasInitializedZip;
@@ -1050,12 +1051,36 @@ namespace ForzaTechStudio.ViewModels
 
                 var canonicalGroups = GetCanonicalBinGroups(targetBin);
 
+                var flipVertexX = FlipVertexX;
+                var flipVertexY = FlipVertexY;
+                var flipVertexZ = FlipVertexZ;
+                var flipNormalX = FlipNormalX;
+                var flipNormalY = FlipNormalY;
+                var flipNormalZ = FlipNormalZ;
+                var flipFaces = FlipFaces;
+                var isMirrorEnabled = IsMirrorEnabled;
+                var recalculateNormals = RecalculateNormals;
+
                 // Capture enabled groups and their settings safely on UI thread
                 var groupsToProcess = canonicalGroups
                     .Select(g => new { 
                         Group = g.SourceGroup, 
                         MatName = g.SelectedMaterial,
-                        ViewModel = g
+                        ViewModel = g,
+                        IsFirstTimeOrReset = !g.HasBaseTransform,
+                        ScaleX = g.ObjScaleX,
+                        ScaleY = g.ObjScaleY,
+                        ScaleZ = g.ObjScaleZ,
+                        PosX = g.ObjPosX,
+                        PosY = g.ObjPosY,
+                        PosZ = g.ObjPosZ,
+                        g.IsOpaque,
+                        g.IsDecal,
+                        g.IsTransparent,
+                        g.IsShadow,
+                        g.IsNotShadow,
+                        g.IsAlphaToCoverage,
+                        g.IsMorphDamage
                     })
                     .ToList();
 
@@ -1069,8 +1094,9 @@ namespace ForzaTechStudio.ViewModels
 
                 // Store transform updates to apply on UI thread
                 var transformUpdates = new List<(GroupViewModel vm, Vector4 scale, Vector4 translate)>();
+                Bundle? builtBundle = null;
 
-                await Task.Run(() =>
+                await Task.Run(async () =>
                 {
                     var objectBuildList = new List<ObjectBuildData>();
 
@@ -1107,16 +1133,16 @@ namespace ForzaTechStudio.ViewModels
                         var remappedIndices = group.Indices.Select(i => oldToNewIndexMap[i]).ToArray();
 
                         // Modifiers
-                        if (FlipVertexX) FlipVector3Array(compactedPositions, true, false, false);
-                        if (FlipVertexY) FlipVector3Array(compactedPositions, false, true, false);
-                        if (FlipVertexZ) FlipVector3Array(compactedPositions, false, false, true);
+                        if (flipVertexX) FlipVector3Array(compactedPositions, true, false, false);
+                        if (flipVertexY) FlipVector3Array(compactedPositions, false, true, false);
+                        if (flipVertexZ) FlipVector3Array(compactedPositions, false, false, true);
 
                         // Tangents
-                        if (FlipVertexX) FlipVector4Array(compactedTangents, true, false, false);
-                        if (FlipVertexY) FlipVector4Array(compactedTangents, false, true, false);
-                        if (FlipVertexZ) FlipVector4Array(compactedTangents, false, false, true);
+                        if (flipVertexX) FlipVector4Array(compactedTangents, true, false, false);
+                        if (flipVertexY) FlipVector4Array(compactedTangents, false, true, false);
+                        if (flipVertexZ) FlipVector4Array(compactedTangents, false, false, true);
 
-                        if (IsMirrorEnabled)
+                        if (isMirrorEnabled)
                         {
                             FlipVector3Array(compactedPositions, true, false, false);
                             FlipVector4Array(compactedTangents, true, false, false);
@@ -1124,23 +1150,23 @@ namespace ForzaTechStudio.ViewModels
                         }
 
                         // Winding
-                        bool shouldFlipWinding = FlipFaces;
-                        if (IsMirrorEnabled) shouldFlipWinding = !shouldFlipWinding;
+                        bool shouldFlipWinding = flipFaces;
+                        if (isMirrorEnabled) shouldFlipWinding = !shouldFlipWinding;
                         if (shouldFlipWinding) FlipFaceWinding(remappedIndices);
 
                         // Normals
                         Vector3[] finalNormals;
-                        if (RecalculateNormals)
+                        if (recalculateNormals)
                         {
                             finalNormals = RecalculateMeshNormals(compactedPositions, remappedIndices);
                         }
                         else
                         {
                             finalNormals = compactedNormals;
-                            if (FlipNormalX) FlipVector3Array(finalNormals, true, false, false);
-                            if (FlipNormalY) FlipVector3Array(finalNormals, false, true, false);
-                            if (FlipNormalZ) FlipVector3Array(finalNormals, false, false, true);
-                            if (IsMirrorEnabled) FlipVector3Array(finalNormals, true, false, false);
+                            if (flipNormalX) FlipVector3Array(finalNormals, true, false, false);
+                            if (flipNormalY) FlipVector3Array(finalNormals, false, true, false);
+                            if (flipNormalZ) FlipVector3Array(finalNormals, false, false, true);
+                            if (isMirrorEnabled) FlipVector3Array(finalNormals, true, false, false);
                             
                             for (int i = 0; i < finalNormals.Length; i++) finalNormals[i] = Vector3.Normalize(finalNormals[i]);
                         }
@@ -1158,19 +1184,16 @@ namespace ForzaTechStudio.ViewModels
                         var processedParam = _builderService.ProcessGeometry(geoInput, gameTarget);
 
                         // Check if we need to initialize the base transform (first time processing)
-                        var vm = item.ViewModel;
-                        bool isFirstTimeOrReset = !vm.HasBaseTransform;
-
-                        if (isFirstTimeOrReset)
+                        if (item.IsFirstTimeOrReset)
                         {
                             // Store calculated values to update UI later
-                            transformUpdates.Add((vm, processedParam.PositionScale, processedParam.PositionTranslate));
+                            transformUpdates.Add((item.ViewModel, processedParam.PositionScale, processedParam.PositionTranslate));
                         }
                         else
                         {
                             // User has modified values - use them directly
-                            processedParam.PositionScale = new Vector4(vm.ObjScaleX, vm.ObjScaleY, vm.ObjScaleZ, 1);
-                            processedParam.PositionTranslate = new Vector4(vm.ObjPosX, vm.ObjPosY, vm.ObjPosZ, 0);
+                            processedParam.PositionScale = new Vector4(item.ScaleX, item.ScaleY, item.ScaleZ, 1);
+                            processedParam.PositionTranslate = new Vector4(item.PosX, item.PosY, item.PosZ, 0);
                         }
 
                         // Get MaterialBlob from library
@@ -1178,6 +1201,7 @@ namespace ForzaTechStudio.ViewModels
                         string? materialRelPath = null;
                         if (_materialLibrary.TryGetValue(item.MatName, out var cachedMat))
                         {
+                            await EnsureMaterialBlobLoadedAsync(cachedMat);
                             cachedMat.NormalizeMaterialPath();
                             materialBlob = cachedMat.Blob;
                             materialRelPath = cachedMat.RelativeZipPath;
@@ -1190,20 +1214,24 @@ namespace ForzaTechStudio.ViewModels
                             MaterialBlob = materialBlob,
                             ObjectName = group.Name,
                             MaterialRelativePath = materialRelPath,
-                            IsOpaque = item.ViewModel.IsOpaque,
-                            IsDecal = item.ViewModel.IsDecal,
-                            IsTransparent = item.ViewModel.IsTransparent,
-                            IsShadow = item.ViewModel.IsShadow,
-                            IsNotShadow = item.ViewModel.IsNotShadow,
-                            IsAlphaToCoverage = item.ViewModel.IsAlphaToCoverage,
-                            IsMorphDamage = item.ViewModel.IsMorphDamage
+                            IsOpaque = item.IsOpaque,
+                            IsDecal = item.IsDecal,
+                            IsTransparent = item.IsTransparent,
+                            IsShadow = item.IsShadow,
+                            IsNotShadow = item.IsNotShadow,
+                            IsAlphaToCoverage = item.IsAlphaToCoverage,
+                            IsMorphDamage = item.IsMorphDamage
                         });
                     }
 
-                    _activeBundle = _builderService.CreateBundleFromObjects(objectBuildList, gameTarget);
+                    builtBundle = _builderService.CreateBundleFromObjects(objectBuildList, gameTarget);
                 });
                 
-                targetBin.ActiveBundle = _activeBundle;
+                targetBin.ActiveBundle = builtBundle;
+                if (targetBin == SelectedBinConfig)
+                {
+                    _activeBundle = builtBundle;
+                }
                 if (targetBin != SelectedBinConfig)
                 {
                      // If we built a background bin, don't set global _activeBundle unless we want to?
@@ -1226,7 +1254,7 @@ namespace ForzaTechStudio.ViewModels
                     OnPropertyChanged(nameof(TransformScaleZ));
                 }
 
-                if (_activeBundle != null)
+                if (targetBin.ActiveBundle != null)
                 {
                     StatusMessage = "Geometry updated.";
                 }
@@ -1482,7 +1510,7 @@ namespace ForzaTechStudio.ViewModels
                 }
                 else if (ext == ".fbx")
                 {
-                    _rawScene = await Task.Run(() => _fbxParser.Parse(InputFilePath));
+                    _rawScene = await Task.Run(() => _fbxParser.Parse(InputFilePath, CreateImportSettings()));
                     MtlStatusMessage = "Materials loaded from FBX.";
                 }
 
@@ -2132,7 +2160,8 @@ namespace ForzaTechStudio.ViewModels
                         AvailableMaterials,
                         HandleMaterialAssignmentChanged,
                         OpenBrowserForAssignment,
-                        _materialLibrary
+                        _materialLibrary,
+                        EnsureMaterialBlobLoadedAsync
                     );
 
                     // Priority: 1) explicit mesh snapshot, 2) group.SelectedMaterial
@@ -2571,37 +2600,35 @@ namespace ForzaTechStudio.ViewModels
         // and swaps in a real parsed inner bundle so Edit Parameters shows correct parameters.
         private async Task TrySwapBlobFromZipAsync(CachedMaterialBlob cached)
         {
-            if (cached == null || string.IsNullOrEmpty(MaterialZipPath) || string.IsNullOrEmpty(cached.RelativeZipPath))
+            await EnsureMaterialBlobLoadedAsync(cached);
+        }
+
+        private async Task EnsureMaterialBlobLoadedAsync(CachedMaterialBlob cached)
+        {
+            if (cached == null)
                 return;
+
+            if (cached.HasLoadedBlob || string.IsNullOrEmpty(MaterialZipPath) || string.IsNullOrEmpty(cached.RelativeZipPath))
+                return;
+
             try
             {
-                byte[]? bytes = await Task.Run(() =>
-                {
-                    using var zip = new CustomZipFile(MaterialZipPath);
-                    var entries = zip.GetEntries();
-                    var entry = entries.FirstOrDefault(e =>
-                        string.Equals(e.Name, cached.RelativeZipPath, StringComparison.OrdinalIgnoreCase));
-                    return entry != null ? zip.ExtractToMemory(entry) : null;
-                });
+                var result = await Task.Run(() => _materialInstanceBuilder.BuildFromMaterialsZip(
+                    MaterialZipPath,
+                    cached.RelativeZipPath,
+                    cached.Name,
+                    CurrentGameTarget));
 
-                if (bytes == null || bytes.Length < 4) return;
-
-                using var ms = new MemoryStream(bytes);
-                uint magic = new System.IO.BinaryReader(ms).ReadUInt32();
-                ms.Position = 0;
-                if (magic == Bundle.BundleTag)
-                {
-                    var innerBundle = new Bundle();
-                    innerBundle.Load(ms);
-                    // Swap the inner bundle so EditParameters shows real shader parameters
-                    cached.Blob.Bundle = innerBundle;
-                    cached.NormalizeMaterialPath();
-                    System.Diagnostics.Debug.WriteLine($"[BlobSwap] Swapped inner bundle for '{cached.Name}': {innerBundle.Blobs.Count} blobs");
-                }
+                cached.Blob = result.MaterialBlob;
+                System.Diagnostics.Debug.WriteLine(
+                    $"[MaterialBlob] Loaded '{cached.Name}' from '{cached.RelativeZipPath}': " +
+                    $"bundle {result.SourceBundleVersion}, MTPR {result.ShaderParameterVersion}, " +
+                    $"params {result.ShaderParameterCount}, path '{result.NormalizedMaterialPath}'");
             }
             catch (Exception ex)
             {
-                System.Diagnostics.Debug.WriteLine($"[BlobSwap] Failed for '{cached?.Name}': {ex.Message}");
+                StatusMessage = $"Warning: failed to load material '{cached.Name}' from zip: {ex.Message}";
+                System.Diagnostics.Debug.WriteLine($"[MaterialBlob] Failed for '{cached.Name}': {ex}");
             }
         }
 
@@ -2645,6 +2672,7 @@ namespace ForzaTechStudio.ViewModels
         public ObservableCollection<string> AvailableMaterials { get; }
         
         private readonly Dictionary<string, CachedMaterialBlob>? _materialLibrary;
+        private readonly Func<CachedMaterialBlob, Task>? _loadMaterialBlobAsync;
 
         public MaterialAssignment(
             string meshName,
@@ -2652,7 +2680,8 @@ namespace ForzaTechStudio.ViewModels
             ObservableCollection<string> availableMaterials,
             Action<MaterialAssignment> onMaterialChanged,
             Action<MaterialAssignment> onBrowseRequested,
-            Dictionary<string, CachedMaterialBlob>? materialLibrary = null)
+            Dictionary<string, CachedMaterialBlob>? materialLibrary = null,
+            Func<CachedMaterialBlob, Task>? loadMaterialBlobAsync = null)
         {
             MeshName = meshName;
             SourceMaterialName = sourceMaterialName;
@@ -2660,15 +2689,18 @@ namespace ForzaTechStudio.ViewModels
             _onMaterialChanged = onMaterialChanged;
             _onBrowseRequested = onBrowseRequested;
             _materialLibrary = materialLibrary;
+            _loadMaterialBlobAsync = loadMaterialBlobAsync;
         }
 
         partial void OnSelectedMaterialChanged(string value)
         {
-            // Preload the material blob into memory when selected
             if (!string.IsNullOrEmpty(value) && _materialLibrary != null && _materialLibrary.TryGetValue(value, out var cachedMaterial))
             {
-                System.Diagnostics.Debug.WriteLine($"Material '{value}' selected, preloading blob...");
-                cachedMaterial.PreloadBlob();
+                System.Diagnostics.Debug.WriteLine($"Material '{value}' selected, queueing blob load...");
+                if (_loadMaterialBlobAsync != null)
+                    _ = _loadMaterialBlobAsync(cachedMaterial);
+                else
+                    cachedMaterial.PreloadBlob();
             }
             
             _onMaterialChanged?.Invoke(this);

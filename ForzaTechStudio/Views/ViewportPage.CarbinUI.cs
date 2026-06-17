@@ -53,9 +53,7 @@ namespace ForzaTechStudio.Views
             if (_isUpdatingCarbinUi) return;
             if (CarbinModelSelector.SelectedItem is CarbinModelNode node)
             {
-                ViewModel.SelectedNode = node;
-                if (_treeNodeMap.TryGetValue(node, out var treeViewNode) && FileTree.SelectedItems.Count <= 1)
-                    FileTree.SelectedItem = treeViewNode;
+                ApplySingleSelection(node, syncTree: true);
             }
         }
 

@@ -7,6 +7,7 @@ using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
 using System.Numerics;
 using SDX = SharpDX;
@@ -126,6 +127,7 @@ namespace ForzaTechStudio.Views
                 }
 
                 _animCurrentTime = 0;
+                _animPlayLogged = false;
 
                 // Build set of track bone names for matching
                 var trackBoneNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
@@ -179,6 +181,72 @@ namespace ForzaTechStudio.Views
                     }
                 }
 
+                // Third: if still no skeleton, build a virtual one from the first ModelBin's
+                // SkeletonBlob. CLIPD files have no embedded skeleton and the user may not
+                // have loaded a separate .skeld — but ModelBins carry their own bone data.
+                if (_currentAnimSkeleton == null)
+                {
+                    var modelBins = ViewModel.GetAllModelBinNodes();
+                    foreach (var mb in modelBins)
+                    {
+                        var skelBlob = mb.Bundle?.Blobs.OfType<SkeletonBlob>().FirstOrDefault();
+                        if (skelBlob == null || skelBlob.Bones.Count == 0) continue;
+
+                        // Build world-space matrices from the ModelBin skeleton (parent-chained)
+                        var worldMats = new Matrix4x4[skelBlob.Bones.Count];
+                        for (int i = 0; i < skelBlob.Bones.Count; i++)
+                        {
+                            var sb = skelBlob.Bones[i];
+                            worldMats[i] = (sb.ParentId >= 0 && sb.ParentId < i)
+                                ? sb.Matrix * worldMats[sb.ParentId]
+                                : sb.Matrix;
+                        }
+
+                        // Convert to parent-relative local transforms for GrannyBone
+                        var virtualSkel = new GrannySkeleton
+                        {
+                            Name = skelBlob.Bones[0].Name ?? "ModelBinSkeleton",
+                            Bones = new List<GrannyBone>()
+                        };
+                        for (int i = 0; i < skelBlob.Bones.Count; i++)
+                        {
+                            var sb = skelBlob.Bones[i];
+                            int pid = sb.ParentId;
+                            // Compute local = world * inv(parentWorld)
+                            Matrix4x4 localMat;
+                            if (pid >= 0 && pid < i && Matrix4x4.Invert(worldMats[pid], out var invParent))
+                                localMat = worldMats[i] * invParent;
+                            else
+                                localMat = worldMats[i];
+
+                            virtualSkel.Bones.Add(new GrannyBone
+                            {
+                                Name = sb.Name ?? $"bone_{i}",
+                                ParentIndex = pid,
+                                LocalTransform = new GrannyTransform
+                                {
+                                    Flags = 7,
+                                    Position = localMat.Translation,
+                                    Orientation = Quaternion.CreateFromRotationMatrix(
+                                        new Matrix4x4(localMat.M11, localMat.M12, localMat.M13, 0,
+                                                       localMat.M21, localMat.M22, localMat.M23, 0,
+                                                       localMat.M31, localMat.M32, localMat.M33, 0,
+                                                       0, 0, 0, 1)),
+                                    ScaleShear0 = new Vector3(localMat.M11, localMat.M12, localMat.M13),
+                                    ScaleShear1 = new Vector3(localMat.M21, localMat.M22, localMat.M23),
+                                    ScaleShear2 = new Vector3(localMat.M31, localMat.M32, localMat.M33)
+                                },
+                                InverseWorld4x4 = Matrix4x4.Identity,
+                                BoneHash = 0
+                            });
+                        }
+                        _currentAnimSkeleton = virtualSkel;
+                        _currentAnimSkeletonNode = null;
+                        Log($"SEL: built virtual skel from MB SkeletonBlob ({virtualSkel.Bones.Count} bones)");
+                        break;
+                    }
+                }
+
                 // Invalidate cached bone map when skeleton changes
                 _cachedBoneMapSkeleton = null;
                 _cachedBoneMap = null;
@@ -209,6 +277,16 @@ namespace ForzaTechStudio.Views
                             _cachedBoneMap[_currentAnimSkeleton.Bones[i].Name] = i;
                     }
                     _cachedBoneMapSkeleton = _currentAnimSkeleton;
+
+                    var sn = _currentAnimSkeleton.Bones.Take(5).Select(b => b.Name ?? "?").ToList();
+                    int tc = _currentAnimation?.TrackGroups.Sum(tg => tg.TransformTracks.Count) ?? 0;
+                    int hd = _currentAnimation?.TrackGroups.Sum(tg => tg.TransformTracks.Count(tt => tt.HasAnimationData)) ?? 0;
+                    var tn = _currentAnimation?.TrackGroups.SelectMany(tg => tg.TransformTracks).Take(5).Select(tt => tt.Name ?? "?").ToList() ?? new List<string>();
+                    Log($"SEL: skel={_currentAnimSkeleton.Bones.Count}bones [{string.Join(",", sn)}] anim={tc}trk({hd}data) [{string.Join(",", tn)}]");
+                }
+                else
+                {
+                    Log("SEL: SKELETON=NULL - no matching skeleton found for this animation!");
                 }
 
                 _isUpdatingAnimSlider = true;
@@ -236,10 +314,43 @@ namespace ForzaTechStudio.Views
 
         private int CountBoneMatches(GrannySkeleton skeleton, HashSet<string> trackBoneNames)
         {
+            // Primary: name-based match (fast path for GR2 skeletons)
             var boneNames = new HashSet<string>(
                 skeleton.Bones.Where(b => !string.IsNullOrEmpty(b.Name)).Select(b => b.Name),
                 StringComparer.OrdinalIgnoreCase);
-            return trackBoneNames.Count(t => boneNames.Contains(t));
+
+            // Build a dict for TryMatchBoneName (variant matching)
+            var boneDict = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+            for (int i = 0; i < skeleton.Bones.Count; i++)
+            {
+                if (!string.IsNullOrEmpty(skeleton.Bones[i].Name))
+                    boneDict[skeleton.Bones[i].Name] = i;
+            }
+
+            int matches = 0;
+            foreach (var trackName in trackBoneNames)
+            {
+                // Direct name match
+                if (boneNames.Contains(trackName))
+                { matches++; continue; }
+
+                // Variant name match: handles "boneDoorLR" vs "Door_LR" etc.
+                if (TryMatchBoneName(trackName, boneDict, out _))
+                { matches++; continue; }
+
+                // Hash-based match for CLIPD/SKELD skeletons
+                ulong h = ComputeFnv1a64(trackName);
+                if (h != 0)
+                {
+                    foreach (var bone in skeleton.Bones)
+                    {
+                        if (bone.BoneHash != 0 && bone.BoneHash == h)
+                        { matches++; break; }
+                    }
+                }
+            }
+
+            return matches;
         }
 
         // Track Selector
@@ -497,6 +608,8 @@ namespace ForzaTechStudio.Views
 
                 StartAnimTimer();
                 PlayPauseIcon.Glyph = "\uE769"; // Pause icon
+
+                Log($"PLAY: skel={_currentAnimSkeleton?.Bones.Count ?? 0} anim={_currentAnimation?.Name} dur={_animDuration:F3}s MBs={ViewModel.GetAllModelBinNodes().Count}");
             }
         }
 
@@ -681,21 +794,49 @@ namespace ForzaTechStudio.Views
             _trackOnlyBoneTransforms ??= new Dictionary<string, Matrix4x4>(StringComparer.OrdinalIgnoreCase);
             _trackOnlyBoneTransforms.Clear();
 
-            // Apply animation tracks � write into _boneLocalTransforms (not WorldTransform)
+// Apply animation tracks, write into _boneLocalTransforms (not WorldTransform)
             // When _currentTrackFilter is set, only process that one specific track;
             // all other bones stay at their bind-pose local transform (seeded above).
+            var boneDict = boneMap != null && boneMap.Count > 0
+                ? boneMap : new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+
             foreach (var trackGroup in anim.TrackGroups)
             {
                 foreach (var track in trackGroup.TransformTracks)
                 {
                     if (string.IsNullOrEmpty(track.Name)) continue;
 
-                    // Respect track filter � when a specific track is chosen, only draw its path
+                    // Respect track filter, when a specific track is chosen, only draw its path
                     if (_currentTrackFilter != null && !ReferenceEquals(track, _currentTrackFilter))
                         continue;
 
                     int boneIdx = -1;
-                    bool inSkeleton = skeleton != null && boneMap.TryGetValue(track.Name, out boneIdx);
+                    bool inSkeleton = skeleton != null && boneDict.TryGetValue(track.Name, out boneIdx);
+
+                    // Fallback 1
+                    if (!inSkeleton && skeleton != null)
+                    {
+                        if (TryMatchBoneName(track.Name, boneDict, out int matchedIdx))
+                        {
+                            boneIdx = matchedIdx;
+                            inSkeleton = true;
+                        }
+                    }
+
+                    // Fallback 2
+                    if (!inSkeleton && skeleton != null && track.BoneHash != 0)
+                    {
+                        for (int bi = 0; bi < skeleton.Bones.Count; bi++)
+                        {
+                            if (skeleton.Bones[bi].BoneHash != 0 &&
+                                skeleton.Bones[bi].BoneHash == track.BoneHash)
+                            {
+                                boneIdx = bi;
+                                inSkeleton = true;
+                                break;
+                            }
+                        }
+                    }
 
                     if (track.HasAnimationData)
                     {
@@ -885,17 +1026,53 @@ namespace ForzaTechStudio.Views
 
         private void RefreshSkeletonRendering()
         {
-            // Drive ModelBin meshes through the bone-remap path.
             bool hasSkeleton = _currentAnimSkeleton != null && _currentAnimSkeleton.Bones.Count > 0;
             bool hasTrackOnly = _trackOnlyBoneTransforms != null && _trackOnlyBoneTransforms.Count > 0;
-            if (!hasSkeleton && !hasTrackOnly) return;
+            if (!hasSkeleton && !hasTrackOnly)
+            {
+                Log($"RENDER_SKIP: noSkel={!hasSkeleton} noTrackOnly={!hasTrackOnly}");
+                return;
+            }
 
+            int meshDriven = 0;
             var modelBins = ViewModel.GetAllModelBinNodes();
             foreach (var mb in modelBins)
             {
-                UpdateModelBinWithSkeleton(mb, _currentAnimSkeleton);
+                meshDriven += UpdateModelBinWithSkeleton(mb, _currentAnimSkeleton);
+            }
+
+            if (!_animPlayLogged && _isAnimPlaying)
+            {
+                _animPlayLogged = true;
+                if (modelBins.Count > 0)
+                {
+                    var mb = modelBins[0];
+                    int meshCount = mb.Children.OfType<MeshNode>().Count();
+                    var meshBones = mb.Children.OfType<MeshNode>()
+                        .Select(m => m.GeometryData?.BoneName)
+                        .Where(n => !string.IsNullOrEmpty(n))
+                        .Take(5).ToList();
+                    Log($"RENDER: MBs={modelBins.Count} meshes={meshCount} driven={meshDriven} mbBones=[{string.Join(",", meshBones)}]");
+                }
+                else
+                {
+                    Log("RENDER: NO Modelbins loaded!");
+                }
+
+                if (_currentAnimSkeleton != null)
+                {
+                    var sb = _currentAnimSkeleton.Bones.Take(5).Select(b => b.Name ?? "?").ToList();
+                    Log($"RENDER: skelBones=[{string.Join(",", sb)}]");
+                }
+                if (_currentAnimation != null)
+                {
+                    var tb = _currentAnimation.TrackGroups.SelectMany(tg => tg.TransformTracks).Take(5).Select(tt => $"{tt.Name}({tt.HasAnimationData})").ToList();
+                    Log($"RENDER: tracks=[{string.Join(",", tb)}]");
+                }
             }
         }
+
+        private bool _animPlayLogged;
 
         // Caches the GR2 skeleton bind-pose world transforms before animation starts.
         // These are used to compute delta transforms during animation playback.
@@ -909,17 +1086,21 @@ namespace ForzaTechStudio.Views
             // GR2 skeleton bind pose 
             if (_currentAnimSkeleton != null)
             {
+                // Virtual skeletons (built from Modelbin SkeletonBlob) 
+                bool isVirtualSkel = _currentAnimSkeletonNode == null;
+
                 var bindPoseWorld = new Matrix4x4[_currentAnimSkeleton.Bones.Count];
                 for (int i = 0; i < _currentAnimSkeleton.Bones.Count; i++)
                 {
                     var bone = _currentAnimSkeleton.Bones[i];
 
+                    Matrix4x4 local;
+                    if (bone.ParentIndex < 0 && !isVirtualSkel)
+                        local = Matrix4x4.Identity;  // strip FH5 root offset for real GR2
+                    else
+                        local = bone.LocalTransform.ToMatrix();
 
-                    Matrix4x4 local = (bone.ParentIndex < 0)
-                        ? Matrix4x4.Identity
-                        : bone.LocalTransform.ToMatrix();
-
-                    // world = local  parent  (row-vector convention)
+                    // world = local * parent (row-vector convention)
                     bindPoseWorld[i] = (bone.ParentIndex >= 0 && bone.ParentIndex < i)
                         ? local * bindPoseWorld[bone.ParentIndex]
                         : local;
@@ -961,7 +1142,7 @@ namespace ForzaTechStudio.Views
             }
         }
 
-        private void UpdateModelBinWithSkeleton(ModelBinNode modelBin, GrannySkeleton? skeleton)
+        private int UpdateModelBinWithSkeleton(ModelBinNode modelBin, GrannySkeleton? skeleton)
         {
             //  Step 1: Build bone-name - animated world transform map 
             var gr2BoneTransforms = new Dictionary<string, Matrix4x4>(StringComparer.OrdinalIgnoreCase);
@@ -981,7 +1162,7 @@ namespace ForzaTechStudio.Views
                         gr2BoneTransforms[kvp.Key] = kvp.Value;
                 }
             }
-            if (gr2BoneTransforms.Count == 0) return;
+            if (gr2BoneTransforms.Count == 0) return 0;
 
             // Step 2: GR2 skeleton bone name set (O(1) membership) 
             var gr2SkeletonBoneNames = skeleton != null
@@ -993,22 +1174,9 @@ namespace ForzaTechStudio.Views
             // Step 3: Get the ModelBin SkeletonBlob once
             SkeletonBlob? skelBlob = modelBin.Bundle?.Blobs.OfType<SkeletonBlob>().FirstOrDefault();
 
-            // Step 4: Build mesh list via link-map (O(1)) or direct children scan
-            var boneMeshLinkMap = _boneMeshLinkMap;
-            IEnumerable<MeshNode> meshesToProcess;
-            if (boneMeshLinkMap != null && boneMeshLinkMap.Count > 0)
-            {
-                meshesToProcess = gr2BoneTransforms.Keys
-                    .Where(boneMeshLinkMap.ContainsKey)
-                    .SelectMany(n => boneMeshLinkMap[n])
-                    .Where(m => m?.GeometryData != null &&
-                                (m.ParentModelBin == modelBin || (m.Parent as ModelBinNode) == modelBin))
-                    .Distinct();
-            }
-            else
-            {
-                meshesToProcess = modelBin.Children.OfType<MeshNode>();
-            }
+
+            IEnumerable<MeshNode> meshesToProcess = modelBin.Children.OfType<MeshNode>();
+            int meshDrivenCount = 0;
 
             foreach (var mesh in meshesToProcess)
             {
@@ -1024,12 +1192,41 @@ namespace ForzaTechStudio.Views
                 if (string.IsNullOrEmpty(boneName) && mesh.GeometryData.SourceBone != null)
                     boneName = mesh.GeometryData.SourceBone.Name;
 
-                if (string.IsNullOrEmpty(boneName) || !gr2BoneTransforms.TryGetValue(boneName, out var animatedWorld))
+                if (string.IsNullOrEmpty(boneName))
                     continue;
+
+
+                if (!gr2BoneTransforms.TryGetValue(boneName, out var animatedWorld))
+                {
+                    if (!TryMatchBoneName(boneName, gr2BoneTransforms, out animatedWorld))
+                        continue;
+                }
+
+                // Determine if this bone is in the GR2 skeleton (may have been matched by variant).
+                // Also find the actual GR2 bone name for bind-pose lookups.
+                bool boneInGr2Skeleton = gr2SkeletonBoneNames.Contains(boneName);
+                string gr2BoneNameForBindPose = boneName; // default: the modelbin name
+                if (!boneInGr2Skeleton)
+                {
+                    // The variant-matched name might be in the GR2 skeleton
+                    foreach (var gr2Bone in skeleton?.Bones ?? Enumerable.Empty<GrannyBone>())
+                    {
+                        if (string.IsNullOrEmpty(gr2Bone.Name)) continue;
+                        if (string.Equals(gr2Bone.Name, boneName, StringComparison.OrdinalIgnoreCase) ||
+                            (gr2Bone.Name.StartsWith("bone", StringComparison.OrdinalIgnoreCase) &&
+                             gr2Bone.Name.Length > 4 &&
+                             string.Equals(gr2Bone.Name[4..], boneName, StringComparison.OrdinalIgnoreCase)))
+                        {
+                            boneInGr2Skeleton = true;
+                            gr2BoneNameForBindPose = gr2Bone.Name; // use GR2 name for bind-pose dicts
+                            break;
+                        }
+                    }
+                }
 
                 Matrix4x4 finalTransform;
 
-                if (gr2SkeletonBoneNames.Contains(boneName))
+                if (boneInGr2Skeleton)
                 {
                     // GR2 skeleton bone 
 
@@ -1050,10 +1247,15 @@ namespace ForzaTechStudio.Views
                     // Prefer the spatial anchor (inverse of gr2AnimWorld at t=0) so the
                     // model stays at its original position when the animation starts.
                     // Fall back to the static bind-pose inverse if anchor isn't built yet.
+                    // Try GR2 name first, then modelbin name for compat.
                     bool anchorFound = _animAnchorInverseTransforms != null &&
-                                       _animAnchorInverseTransforms.TryGetValue(boneName, out gr2InvBind);
+                                       (_animAnchorInverseTransforms.TryGetValue(gr2BoneNameForBindPose, out gr2InvBind) ||
+                                        _animAnchorInverseTransforms.TryGetValue(boneName, out gr2InvBind));
                     if (!anchorFound && _gr2InverseBindPoseTransforms != null)
-                        _gr2InverseBindPoseTransforms.TryGetValue(boneName, out gr2InvBind);
+                    {
+                        if (!_gr2InverseBindPoseTransforms.TryGetValue(gr2BoneNameForBindPose, out gr2InvBind))
+                            _gr2InverseBindPoseTransforms.TryGetValue(boneName, out gr2InvBind);
+                    }
 
                     finalTransform = mbBind * gr2InvBind * animatedWorld;
 
@@ -1101,7 +1303,10 @@ namespace ForzaTechStudio.Views
                 }
 
                 UpdateMeshRenderingWithBoneTransform(mesh, finalTransform);
+                meshDrivenCount++;
             }
+
+            return meshDrivenCount;
         }
 
         // Builds spatial anchors for track-only bones (bones in animation tracks but absent from the GR2 skeleton).
@@ -1638,13 +1843,15 @@ namespace ForzaTechStudio.Views
             foreach (var root in ViewModel.Roots)
                 CollectAnimNodes(root, animNodes);
 
-            // Enhance display names with duration and track info
+            // Enhance display names with duration, track info, and decompression status
             foreach (var node in animNodes)
             {
                 if (node.AnimationData != null)
                 {
                     int trackCount = node.AnimationData.TrackGroups.Sum(tg => tg.TransformTracks.Count);
-                    node.Name = $"{node.AnimationData.Name ?? "Unnamed"} ({node.AnimationData.Duration:F2}s, {trackCount} tracks)";
+                    int animated = node.AnimationData.TrackGroups.Sum(tg => tg.TransformTracks.Count(tt => tt.HasAnimationData));
+                    string status = node.AnimationData.IsNativeDecompressed ? "ACL" : "identity";
+                    node.Name = $"{node.AnimationData.Name ?? "Unnamed"} ({node.AnimationData.Duration:F2}s, {trackCount} tracks, {animated} anim, {status})";
                 }
             }
 
@@ -1836,12 +2043,145 @@ namespace ForzaTechStudio.Views
                             if (!_boneMeshLinkMap.ContainsKey(boneName))
                                 _boneMeshLinkMap[boneName] = new List<MeshNode>();
                             _boneMeshLinkMap[boneName].Add(mesh);
+
+                            // Also index by resolved AnimationNameTable names for cross-reference
+                            ulong fnv64 = ComputeFnv1a64(boneName);
+                            string? resolved = AnimationNameTable.ResolveBone(fnv64);
+                            if (resolved != null && !string.Equals(resolved, boneName, StringComparison.OrdinalIgnoreCase))
+                            {
+                                if (!_boneMeshLinkMap.ContainsKey(resolved))
+                                    _boneMeshLinkMap[resolved] = new List<MeshNode>();
+                                if (!_boneMeshLinkMap[resolved].Contains(mesh))
+                                    _boneMeshLinkMap[resolved].Add(mesh);
+                            }
                         }
                     }
                 }
             }
         }
 
+        // FNV1a-64 hash of a UTF-8 string.
+        private static ulong ComputeFnv1a64(string text)
+        {
+            const ulong FNV_OFFSET = 0xCBF29CE484222325;
+            const ulong FNV_PRIME  = 0x100000001B3;
+            ulong hash = FNV_OFFSET;
+            byte[] bytes = System.Text.Encoding.UTF8.GetBytes(text);
+            foreach (byte b in bytes)
+            {
+                hash ^= b;
+                hash *= FNV_PRIME;
+            }
+            return hash;
+        }
+
+
+        private static bool TryMatchBoneName<TValue>(
+            string candidateName,
+            Dictionary<string, TValue> targetDict,
+            out TValue value)
+        {
+            value = default!;
+            if (string.IsNullOrEmpty(candidateName) || targetDict.Count == 0)
+                return false;
+
+            // 1. Direct match (case-insensitive, already handled by the dictionary)
+            if (targetDict.TryGetValue(candidateName, out value!))
+                return true;
+
+            // 2. Strip "bone" prefix:  "boneDoorLR" -> "DoorLR"
+            if (candidateName.StartsWith("bone", StringComparison.OrdinalIgnoreCase) && candidateName.Length > 4)
+            {
+                if (targetDict.TryGetValue(candidateName[4..], out value!))
+                    return true;
+            }
+
+            // 3. Add "bone" prefix:  "DoorLR" -> "boneDoorLR"
+            string withPrefix = "bone" + candidateName;
+            if (targetDict.TryGetValue(withPrefix, out value!))
+                return true;
+
+            // 4. Remove underscores from candidate: "Door_LR" -> "DoorLR"
+            string noUnderscores = candidateName.Replace("_", "");
+            if (!string.Equals(noUnderscores, candidateName, StringComparison.Ordinal))
+            {
+                if (targetDict.TryGetValue(noUnderscores, out value!))
+                    return true;
+                // 4b. Remove underscores + add "bone" prefix: "Door_LR" -> "boneDoorLR"
+                if (targetDict.TryGetValue("bone" + noUnderscores, out value!))
+                    return true;
+            }
+
+            // 5. Remove "bone" prefix then remove underscores: "bone_Door_LR" -> "DoorLR"
+            if (candidateName.StartsWith("bone", StringComparison.OrdinalIgnoreCase) && candidateName.Length > 4)
+            {
+                string stripped2 = candidateName[4..].Replace("_", "");
+                if (!string.Equals(stripped2, candidateName[4..], StringComparison.Ordinal))
+                {
+                    if (targetDict.TryGetValue(stripped2, out value!))
+                        return true;
+                }
+            }
+
+            // 6. Last resort: lowercase candidate vs lowercase keys
+            string candidateLower = candidateName.ToLowerInvariant();
+            foreach (var kvp in targetDict)
+            {
+                if (string.Equals(kvp.Key, candidateLower, StringComparison.OrdinalIgnoreCase))
+                {
+                    // Already handled by ordinal-ignore-case dictionary, but just in case
+                    value = kvp.Value;
+                    return true;
+                }
+            }
+
+            return false;
+        }
+
+        //  diagnostic logging
+
+        private static StreamWriter? _logWriter;
+        private static readonly object _logLock = new();
+        private static string? _logPath;
+        private static bool _logCleanupRegistered;
+
+        private static void Log(string message)
+        {
+            lock (_logLock)
+            {
+                try
+                {
+                    if (_logWriter == null)
+                    {
+                        _logPath = Path.Combine(AppContext.BaseDirectory, "logs.txt");
+                        try { File.Delete(_logPath); } catch { }
+                        _logWriter = new StreamWriter(_logPath, append: true) { AutoFlush = true };
+                        _logWriter.WriteLine($"=== Animation Log {DateTime.Now:yyyy-MM-dd HH:mm:ss} ===");
+                        if (!_logCleanupRegistered)
+                        {
+                            _logCleanupRegistered = true;
+                            AppDomain.CurrentDomain.ProcessExit += (_, _) => CleanupLog();
+                        }
+                    }
+                    _logWriter.WriteLine($"[{DateTime.Now:HH:mm:ss.fff}] {message}");
+                }
+                catch { }
+            }
+        }
+
+        private static void CleanupLog()
+        {
+            lock (_logLock)
+            {
+                try { _logWriter?.Close(); } catch { }
+                _logWriter = null;
+                if (_logPath != null)
+                {
+                    try { File.Delete(_logPath); } catch { }
+                    _logPath = null;
+                }
+            }
+        }
 
 
     }

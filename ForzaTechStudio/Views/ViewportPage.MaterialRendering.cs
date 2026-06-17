@@ -10,6 +10,7 @@ using Microsoft.UI.Xaml.Media;
 using System;
 using System.Collections.ObjectModel;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
 using System.Numerics;
 using SDX = SharpDX;
@@ -180,6 +181,7 @@ namespace ForzaTechStudio.Views
         {
             bool useSingleColor = SingleColorToggle?.IsChecked == true;
             string textureSourceKey = _selectedTextureGameSource?.Key ?? string.Empty;
+            int activeUvChannel = GetViewportActiveRenderUvChannel(data, modelBin);
 
             return new ViewportMaterialCacheKey(
                 modelBin,
@@ -196,7 +198,8 @@ namespace ForzaTechStudio.Views
                 loadTextures,
                 _useLocalViewportTextures,
                 _useLibraryViewportTextures,
-                textureSourceKey);
+                textureSourceKey,
+                activeUvChannel);
         }
 
         private string GetManufacturerMaterialCacheKey()
@@ -213,6 +216,7 @@ namespace ForzaTechStudio.Views
         private void InvalidateViewportMaterialCache()
         {
             _viewportMaterialCache.Clear();
+            _materialbinParseInProgress.Clear();
         }
 
         private static int QuantizeMaterialFloat(float value)
@@ -274,7 +278,9 @@ namespace ForzaTechStudio.Views
             bool hasEmissiveTexture = false;
             var textureMaps = new ViewportRuntimeTextureMaps();
 
-            if (!isCarPaint && materialBlob?.Bundle != null)
+            // Always process material parameters for textures (normal maps, etc.) even on car paint.
+            // Only skip diffuse COLOR params for car paint (those come from manufacturer/single color).
+            if (materialBlob?.Bundle != null)
             {
                 foreach (var paramBlob in materialBlob.Bundle.Blobs.OfType<MaterialShaderParameterBlob>())
                 {
@@ -294,6 +300,9 @@ namespace ForzaTechStudio.Views
                             }
                             else if (IsDiffuseColorParameter(parameter, parameterName))
                             {
+                                // Car paint materials get their diffuse from the manufacturer/single color
+                                if (isCarPaint || isManufacturerColorPaint)
+                                    continue;
                                 diffuse = new SDX.Color4(Clamp01(vectorValue.X), Clamp01(vectorValue.Y), Clamp01(vectorValue.Z), alpha);
                                 if (ShouldUseColorAlpha(parameter, parameterName))
                                     alpha *= AlphaOrOne(vectorValue.W);
@@ -325,12 +334,16 @@ namespace ForzaTechStudio.Views
             }
 
             var selectedManufacturerColor = TryGetManufacturerColorForMaterial(isManufacturerColorPaint);
+            TextureModel? manufacturerSwatchbinTexture = null;
             if (selectedManufacturerColor.HasValue)
             {
                 var manufacturerColor = selectedManufacturerColor.Value;
                 alpha = Clamp01(alpha * manufacturerColor.Alpha);
                 diffuse = new SDX.Color4(manufacturerColor.Red, manufacturerColor.Green, manufacturerColor.Blue, alpha);
                 emissive = new SDX.Color4(0f, 0f, 0f, 1f);
+
+                // Resolve the manufacturer swatchbin texture for overlay on UV channel 4
+                manufacturerSwatchbinTexture = TryResolveManufacturerSwatchbinTexture();
             }
             else if (isCarPaint)
             {
@@ -370,8 +383,8 @@ namespace ForzaTechStudio.Views
                     ? new SDX.Color4(0.55f, 0.55f, 0.58f, 1f)
                     : new SDX.Color4(0.18f, 0.18f, 0.18f, 1f),
                 SpecularShininess = isTransparentHint ? 80f : 32f,
-                DiffuseMap = isCarPaint ? null : textureMaps.DiffuseMap,
-                DiffuseAlphaMap = isCarPaint ? null : textureMaps.DiffuseAlphaMap,
+                DiffuseMap = manufacturerSwatchbinTexture ?? (isCarPaint ? null : textureMaps.DiffuseMap),
+                DiffuseAlphaMap = manufacturerSwatchbinTexture ?? (isCarPaint ? null : textureMaps.DiffuseAlphaMap),
                 NormalMap = textureMaps.NormalMap,
                 SpecularColorMap = textureMaps.SpecularColorMap,
                 EmissiveMap = textureMaps.EmissiveMap,
@@ -392,6 +405,245 @@ namespace ForzaTechStudio.Views
                 return null;
 
             return selectedItem.ToColor4();
+        }
+
+        /// <summary>
+        /// Robust path resolution: tries key-based lookup, then basename match, then path suffix match.
+        /// The expensive fallback scans (basename/suffix) are only used during material resolution,
+        /// not during quick status checks.
+        /// </summary>
+        private SwatchbinArchiveEntry? ResolveTextureEntryByPath(string texturePath)
+        {
+            return ResolveTextureEntryByPath(texturePath, useFallbackScan: true);
+        }
+
+        /// <summary>
+        /// Resolves a texture entry by path. Set <paramref name="useFallbackScan"/> to false
+        /// for fast status checks that should not iterate all stored entries.
+        /// </summary>
+        private SwatchbinArchiveEntry? ResolveTextureEntryByPath(string texturePath, bool useFallbackScan)
+        {
+            // 1. Key-based lookup with all candidate keys (fast, dictionary-based)
+            if (_useLocalViewportTextures)
+            {
+                foreach (string key in BuildViewportTextureLookupKeys(texturePath))
+                {
+                    if (_viewportTextureLookup.TryGetValue(key, out var entry))
+                        return entry;
+                }
+            }
+
+            // 2. Library lookup
+            if (_useLibraryViewportTextures)
+            {
+                var gameEntry = ResolveViewportGameTextureEntry(texturePath);
+                if (gameEntry != null)
+                    return gameEntry;
+            }
+
+            // 3-4. Expensive fallback scans — only when actually resolving (not for quick status checks)
+            if (!useFallbackScan)
+                return null;
+
+            // 3. Fallback: basename match against all stored entries
+            string targetBasename = Path.GetFileName(texturePath.Replace('/', '\\'));
+            if (!string.IsNullOrWhiteSpace(targetBasename))
+            {
+                foreach (var kvp in _viewportTextureLookup)
+                {
+                    string entryBasename = Path.GetFileName(kvp.Key.Replace('/', '\\'));
+                    if (string.Equals(entryBasename, targetBasename, StringComparison.OrdinalIgnoreCase))
+                        return kvp.Value;
+                }
+            }
+
+            // 4. Fallback: path suffix match
+            string normalizedRequest = NormalizeViewportTexturePath(texturePath);
+            if (!string.IsNullOrWhiteSpace(normalizedRequest))
+            {
+                foreach (var kvp in _viewportTextureLookup)
+                {
+                    if (kvp.Key.EndsWith(normalizedRequest, StringComparison.OrdinalIgnoreCase)
+                        || normalizedRequest.EndsWith(kvp.Key, StringComparison.OrdinalIgnoreCase))
+                        return kvp.Value;
+                }
+            }
+
+            return null;
+        }
+
+        // Guards against infinite recursion when .materialbin files reference each other
+        private readonly HashSet<string> _materialbinParseInProgress = new(StringComparer.OrdinalIgnoreCase);
+
+        /// <summary>
+        /// Loads a .materialbin file from a zip, parses it to find swatchbin texture references,
+        /// and returns the first successfully resolved swatchbin entry.
+        /// Checks MaterialShaderParameterBlob texture parameters and MatLBlob.Path references.
+        /// Includes recursion guard to prevent infinite loops from circular .materialbin references.
+        /// </summary>
+        private SwatchbinArchiveEntry? ResolveMaterialbinToSwatchbinEntry(string materialbinPath)
+        {
+            // Recursion guard: prevent infinite loops from circular .materialbin references
+            if (!_materialbinParseInProgress.Add(materialbinPath))
+                return null;
+
+            try
+            {
+                // First, find the .materialbin entry itself
+                SwatchbinArchiveEntry? materialbinEntry = ResolveTextureEntryByPath(materialbinPath);
+                if (materialbinEntry == null)
+                    return null;
+
+                try
+                {
+                    // Parse the .materialbin as a Bundle
+                    using var stream = new MemoryStream(materialbinEntry.SwatchbinData);
+                    var bundle = new ForzaTools.Bundles.Bundle();
+                    bundle.Load(stream);
+
+                    System.Diagnostics.Debug.WriteLine($"[Viewport/ManufacturerColors] Parsed .materialbin: {materialbinPath}, {bundle.Blobs.Count} blobs");
+
+                    // 1. Check MatLBlob(s) for swatchbin path references
+                    foreach (var matlBlob in bundle.Blobs.OfType<MatLBlob>())
+                    {
+                        foreach (string? path in new[] { matlBlob.Path, matlBlob.PathV1_1, matlBlob.PathV1_2 })
+                        {
+                            if (string.IsNullOrWhiteSpace(path))
+                                continue;
+                            System.Diagnostics.Debug.WriteLine($"[Viewport/ManufacturerColors]   MatLBlob path: {path}");
+
+                            // Try direct swatchbin resolution first (not .materialbin)
+                            if (!path.EndsWith(".materialbin", StringComparison.OrdinalIgnoreCase))
+                            {
+                                var resolved = ResolveTextureEntryByPath(path);
+                                if (resolved != null)
+                                    return resolved;
+                            }
+                            else
+                            {
+                                // Recurse into nested .materialbin (guard prevents infinite loops)
+                                var nested = ResolveMaterialbinToSwatchbinEntry(path);
+                                if (nested != null)
+                                    return nested;
+                            }
+                        }
+                    }
+
+                    // 2. Find all MaterialShaderParameterBlobs and extract texture paths
+                    foreach (var blob in bundle.Blobs)
+                    {
+                        if (blob is not MaterialShaderParameterBlob paramBlob)
+                            continue;
+                        if (paramBlob.Tag != ForzaTools.Bundles.Bundle.TAG_BLOB_MaterialShaderParameter
+                            && paramBlob.Tag != ForzaTools.Bundles.Bundle.TAG_BLOB_DefaultShaderParameter)
+                            continue;
+
+                        foreach (var parameter in paramBlob.Parameters)
+                        {
+                            if (parameter.Type != ShaderParameterType.Texture2D)
+                                continue;
+                            if (parameter.Value is not TextureParameter tp)
+                                continue;
+                            if (string.IsNullOrWhiteSpace(tp.Path))
+                                continue;
+
+                            System.Diagnostics.Debug.WriteLine($"[Viewport/ManufacturerColors]   ShaderParam texture path: {tp.Path}");
+
+                            var resolvedSwatchbin = ResolveTextureEntryByPath(tp.Path);
+                            if (resolvedSwatchbin != null)
+                                return resolvedSwatchbin;
+                        }
+                    }
+                }
+                catch (Exception ex)
+                {
+                    System.Diagnostics.Debug.WriteLine($"[Viewport/ManufacturerColors] Failed to parse .materialbin {materialbinPath}: {ex.Message}");
+                }
+
+                return null;
+            }
+            finally
+            {
+                _materialbinParseInProgress.Remove(materialbinPath);
+            }
+        }
+
+        /// <summary>
+        /// Attempts to resolve the swatchbin texture referenced by the currently selected manufacturer color entry.
+        /// Looks up the path via the viewport texture lookup (local zip/folder/library).
+        /// Also supports .materialbin paths by parsing them for swatchbin references.
+        /// Returns null if no manufacturer color is selected, the entry has no path, or the texture cannot be found/loaded.
+        /// </summary>
+        private TextureModel? TryResolveManufacturerSwatchbinTexture()
+        {
+            var selectedItem = _selectedManufacturerColorItem;
+            if (selectedItem == null)
+                return null;
+
+            string texturePath = selectedItem.Entry.Path;
+            if (string.IsNullOrWhiteSpace(texturePath))
+                return null;
+
+            // Ensure texture lookup is fresh
+            if (_viewportTextureLookupDirty)
+                RefreshViewportTextureLookupFromLoadedRoots();
+
+            SwatchbinArchiveEntry? resolvedEntry = ResolveTextureEntryByPath(texturePath);
+
+            // If the path points to a .materialbin, load and parse it to find swatchbin references
+            if (resolvedEntry == null && texturePath.EndsWith(".materialbin", StringComparison.OrdinalIgnoreCase))
+            {
+                resolvedEntry = ResolveMaterialbinToSwatchbinEntry(texturePath);
+            }
+
+            if (resolvedEntry == null)
+            {
+                System.Diagnostics.Debug.WriteLine($"[Viewport/ManufacturerColors] Texture not found: {texturePath}");
+                return null;
+            }
+
+            try
+            {
+                byte[]? ddsData = _viewportSwatchbinConversionService.LoadRenderReadyDdsFromBytes(resolvedEntry.SwatchbinData);
+                if (ddsData == null || ddsData.Length == 0)
+                    return null;
+
+                var textureStream = new MemoryStream(ddsData, writable: false);
+                return new TextureModel(textureStream, autoCloseStream: true);
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"[Viewport/ManufacturerColors] Failed to load texture {texturePath}: {ex.Message}");
+                return null;
+            }
+        }
+
+        /// <summary>
+        /// Returns a status string indicating whether the selected manufacturer color's swatchbin texture was resolved.
+        /// Uses key-based lookup only (fast, no iteration) to avoid blocking the UI thread.
+        /// </summary>
+        private string GetManufacturerSwatchbinStatusText()
+        {
+            var selectedItem = _selectedManufacturerColorItem;
+            if (selectedItem == null)
+                return string.Empty;
+
+            string texturePath = selectedItem.Entry.Path;
+            if (string.IsNullOrWhiteSpace(texturePath))
+                return " (no texture path)";
+
+            if (_viewportTextureLookupDirty)
+                RefreshViewportTextureLookupFromLoadedRoots();
+
+            // Fast key-based check only — no expensive iteration
+            var resolvedEntry = ResolveTextureEntryByPath(texturePath, useFallbackScan: false);
+
+            if (resolvedEntry == null && texturePath.EndsWith(".materialbin", StringComparison.OrdinalIgnoreCase))
+            {
+                resolvedEntry = ResolveMaterialbinToSwatchbinEntry(texturePath);
+            }
+
+            return resolvedEntry != null ? " (texture found)" : " (texture not found)";
         }
 
         private void ApplyViewportTextureParameter(ShaderParameter parameter, TextureParameter textureParameter, ViewportRuntimeTextureMaps textureMaps)
@@ -421,22 +673,74 @@ namespace ForzaTechStudio.Views
             }
         }
 
+        // Hash sets for direct texture parameter name hash → slot classification.
+        // These cover parameters whose names may not be resolvable through NameHashService.
+        private static readonly HashSet<uint> ViewportNormalTextureHashes = new()
+        {
+            // Common normal map parameter hashes (populated as discovered)
+        };
+
+        private static readonly HashSet<uint> ViewportSpecularTextureHashes = new()
+        {
+            // Common specular/roughness/metal map parameter hashes (populated as discovered)
+        };
+
+        private static readonly HashSet<uint> ViewportDiffuseTextureHashes = new()
+        {
+            // Common diffuse/basecolor/albedo map parameter hashes (populated as discovered)
+            // Add known hashes from texture parameters that fail name resolution:
+            // e.g. "CH1DiffuseTextureTexture", "BaseColorAlpha_1", etc.
+        };
+
         private static ViewportTextureSlot ClassifyViewportTextureParameter(ShaderParameter parameter, TextureParameter textureParameter)
         {
+            // 1. Hash-based classification (works even when NameHashService can't resolve the name)
+            if (ViewportNormalTextureHashes.Contains(parameter.NameHash))
+                return ViewportTextureSlot.Normal;
+            if (ViewportEmissiveHashes.Contains(parameter.NameHash))
+                return ViewportTextureSlot.Emissive;
+            if (ViewportSpecularTextureHashes.Contains(parameter.NameHash))
+                return ViewportTextureSlot.Specular;
+            if (ViewportAlphaHashes.Contains(parameter.NameHash))
+                return ViewportTextureSlot.Alpha;
+            if (ViewportDiffuseTextureHashes.Contains(parameter.NameHash))
+                return ViewportTextureSlot.Diffuse;
+            // Also check diffuse color hashes (some texture params share hashes with color params)
+            if (ViewportDiffuseColorHashes.Contains(parameter.NameHash))
+                return ViewportTextureSlot.Diffuse;
+
+            // 2. Name-based classification (fallback when hash isn't in lookup sets)
             string parameterName = NameHashService.Instance.GetName(parameter.NameHash) ?? string.Empty;
             string tokens = $"{parameterName} {textureParameter.Path}".ToLowerInvariant();
 
+            // Normal map detection
             if (tokens.Contains("normal", StringComparison.Ordinal))
                 return ViewportTextureSlot.Normal;
+
+            // Emissive detection
             if (tokens.Contains("emissive", StringComparison.Ordinal) || tokens.Contains("emission", StringComparison.Ordinal))
                 return ViewportTextureSlot.Emissive;
-            if (tokens.Contains("specular", StringComparison.Ordinal) || tokens.Contains("roughness", StringComparison.Ordinal) || tokens.Contains("metal", StringComparison.Ordinal))
+
+            // Specular / roughness / metal / gloss detection
+            if (tokens.Contains("specular", StringComparison.Ordinal) || tokens.Contains("roughness", StringComparison.Ordinal)
+                || tokens.Contains("metal", StringComparison.Ordinal) || tokens.Contains("gloss", StringComparison.Ordinal))
                 return ViewportTextureSlot.Specular;
-            if (tokens.Contains("alpha", StringComparison.Ordinal) && !tokens.Contains("basecoloralpha", StringComparison.Ordinal))
+
+            // Alpha detection — "BaseColorAlpha" variants are diffuse+alpha, classify as Diffuse (primary)
+            if (tokens.Contains("alpha", StringComparison.Ordinal))
+            {
+                if (tokens.Contains("basecoloralpha", StringComparison.Ordinal))
+                    return ViewportTextureSlot.Diffuse;
                 return ViewportTextureSlot.Alpha;
-            if (tokens.Contains("diffuse", StringComparison.Ordinal) || tokens.Contains("basecolor", StringComparison.Ordinal) || tokens.Contains("albedo", StringComparison.Ordinal) || tokens.Contains("main", StringComparison.Ordinal) || tokens.Contains("color", StringComparison.Ordinal))
+            }
+
+            // Diffuse / basecolor / albedo detection (broad catch-all)
+            if (tokens.Contains("diffuse", StringComparison.Ordinal) || tokens.Contains("basecolor", StringComparison.Ordinal)
+                || tokens.Contains("albedo", StringComparison.Ordinal) || tokens.Contains("main", StringComparison.Ordinal)
+                || tokens.Contains("color", StringComparison.Ordinal))
                 return ViewportTextureSlot.Diffuse;
 
+            // Default: treat unknown textures as diffuse maps
             return ViewportTextureSlot.Diffuse;
         }
 
@@ -616,11 +920,37 @@ namespace ForzaTechStudio.Views
             return MaterialTextContains(data, materialBlob, ViewportCarPaintTokens);
         }
 
-        private static bool IsManufacturerColorPaintMaterial(ForzaGeometryData data, MaterialBlob? materialBlob)
+        /// <summary>
+        /// Determines whether a material should receive manufacturer color treatment.
+        /// Checks built-in carpaint names AND the selected manufacturer color entry's material names.
+        /// </summary>
+        private bool IsManufacturerColorPaintMaterial(ForzaGeometryData data, MaterialBlob? materialBlob)
         {
+            // 1. Check built-in carpaint material names
             foreach (string identifier in EnumerateViewportMaterialIdentifiers(data, materialBlob))
             {
                 if (ViewportManufacturerColorMaterialNames.Contains(identifier))
+                    return true;
+            }
+
+            // 2. Check against the selected manufacturer color entry's material names
+            var selectedItem = _selectedManufacturerColorItem;
+            if (selectedItem != null)
+            {
+                foreach (string materialName in selectedItem.Entry.MaterialNames ?? Enumerable.Empty<string>())
+                {
+                    if (!string.IsNullOrWhiteSpace(materialName))
+                    {
+                        foreach (string identifier in EnumerateViewportMaterialIdentifiers(data, materialBlob))
+                        {
+                            if (string.Equals(identifier, materialName, StringComparison.OrdinalIgnoreCase))
+                                return true;
+                        }
+                    }
+                }
+
+                // Also check via ManufacturerColorTargetsMaterial for broader matching
+                if (ManufacturerColorTargetsMaterial(selectedItem.Entry, data, materialBlob))
                     return true;
             }
 
@@ -771,6 +1101,22 @@ namespace ForzaTechStudio.Views
                         }
                     }
                 }
+
+                foreach (var folderNode in EnumerateViewerNodes<FolderNode>(ViewModel.Roots))
+                {
+                    var blob = folderNode.ManufacturerColors;
+                    if (blob == null)
+                        continue;
+
+                    for (int groupIndex = 0; groupIndex < blob.Groups.Count; groupIndex++)
+                    {
+                        var group = blob.Groups[groupIndex];
+                        for (int entryIndex = 0; entryIndex < group.Entries.Count; entryIndex++)
+                        {
+                            ManufacturerColorItems.Add(new ViewportManufacturerColorItem(folderNode.FolderPath, folderNode.Name, groupIndex, entryIndex, group.Entries[entryIndex]));
+                        }
+                    }
+                }
             }
             finally
             {
@@ -833,7 +1179,9 @@ namespace ForzaTechStudio.Views
             _customManufacturerCarPaintColor = null;
             SyncManufacturerCustomColorControls();
             ResetManufacturerColorBtn.IsEnabled = true;
-            ManufacturerColorStatusText.Text = $"Selected {_selectedManufacturerColorItem.DisplayName}.";
+
+            string textureStatus = GetManufacturerSwatchbinStatusText();
+            ManufacturerColorStatusText.Text = $"Selected {_selectedManufacturerColorItem.DisplayName}.{textureStatus}";
             InvalidateViewportMaterialCache();
             UpdateMeshColors(SingleColorToggle?.IsChecked ?? false);
         }
@@ -1005,7 +1353,8 @@ namespace ForzaTechStudio.Views
             bool LoadTextures,
             bool UseLocalTextures,
             bool UseLibraryTextures,
-            string TextureSourceKey);
+            string TextureSourceKey,
+            int ActiveUvChannel);
 
         private sealed class ViewportCachedMaterial
         {

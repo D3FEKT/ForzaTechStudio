@@ -23,12 +23,14 @@ namespace ForzaTechStudio.Views
         private readonly SwatchbinArchiveService _swatchbinArchiveService = new();
         private readonly SwatchbinService _viewportSwatchbinService = new();
         private readonly SwatchbinPreviewService _viewportSwatchbinPreviewService = new();
+        private readonly SwatchbinConversionService _viewportSwatchbinConversionService = new();
         private readonly Dictionary<string, SwatchbinArchiveEntry> _viewportTextureLookup = new(StringComparer.OrdinalIgnoreCase);
         private readonly Dictionary<uint, SwatchbinArchiveEntry> _viewportTextureHashLookup = new();
         private readonly Dictionary<string, TextureModel?> _viewportTextureModelCache = new(StringComparer.OrdinalIgnoreCase);
         private readonly Dictionary<string, SwatchbinArchiveEntry?> _viewportGameTextureEntryCache = new(StringComparer.OrdinalIgnoreCase);
         private readonly Dictionary<string, ViewportLooseTextureFile> _viewportLooseTextureFiles = new(StringComparer.OrdinalIgnoreCase);
         private readonly HashSet<string> _viewportTextureModelBuildFailures = new(StringComparer.OrdinalIgnoreCase);
+        private readonly HashSet<string> _viewportTextureLoadInFlight = new(StringComparer.OrdinalIgnoreCase);
         private bool _viewportTextureLookupDirty = true;
         private bool _isUpdatingTextureGameSelection;
         private ViewportGameTextureSourceItem? _selectedTextureGameSource;
@@ -50,6 +52,7 @@ namespace ForzaTechStudio.Views
             _viewportTextureModelCache.Clear();
             _viewportGameTextureEntryCache.Clear();
             _viewportTextureModelBuildFailures.Clear();
+            _viewportTextureLoadInFlight.Clear();
             InvalidateViewportMaterialCache();
         }
 
@@ -118,6 +121,108 @@ namespace ForzaTechStudio.Views
                 {
                     System.Diagnostics.Debug.WriteLine($"[Viewport/Textures] {looseTextureFile.Path}: {ex.Message}");
                 }
+            }
+
+            // Scan sibling .swatchbin / .pb files next to loaded modelbins and folder roots
+            IndexLocalFolderTextures();
+        }
+
+        private void IndexLocalFolderTextures()
+        {
+            var scannedFolders = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+            foreach (var modelBin in EnumerateViewerNodes<ModelBinNode>(ViewModel.Roots))
+            {
+                if (string.IsNullOrWhiteSpace(modelBin.FilePath) || !File.Exists(modelBin.FilePath))
+                    continue;
+
+                string? folder = Path.GetDirectoryName(modelBin.FilePath);
+                if (string.IsNullOrWhiteSpace(folder) || !scannedFolders.Add(folder))
+                    continue;
+
+                IndexSiblingTextureFiles(folder);
+            }
+
+            foreach (var folderNode in EnumerateViewerNodes<FolderNode>(ViewModel.Roots))
+            {
+                if (string.IsNullOrWhiteSpace(folderNode.FolderPath) || !Directory.Exists(folderNode.FolderPath))
+                    continue;
+
+                string folder = Path.GetFullPath(folderNode.FolderPath);
+                if (!scannedFolders.Add(folder))
+                    continue;
+
+                IndexSiblingTextureFiles(folder);
+            }
+        }
+
+        private void IndexSiblingTextureFiles(string folderPath)
+        {
+            if (string.IsNullOrWhiteSpace(folderPath) || !Directory.Exists(folderPath))
+                return;
+
+            string normalizedRoot = Path.GetFullPath(folderPath).TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar) + Path.DirectorySeparatorChar;
+
+            try
+            {
+                foreach (string filePath in Directory.EnumerateFiles(folderPath, "*", SearchOption.AllDirectories))
+                {
+                    string extension = Path.GetExtension(filePath);
+                    if (!extension.Equals(".swatchbin", StringComparison.OrdinalIgnoreCase)
+                        && !extension.Equals(".pb", StringComparison.OrdinalIgnoreCase)
+                        && !extension.Equals(".materialbin", StringComparison.OrdinalIgnoreCase))
+                        continue;
+
+                    string fullPath = Path.GetFullPath(filePath);
+                    // Use relative path from the folder root so path-based lookups (e.g. "textures\car_paint.swatchbin") match
+                    string logicalPath = fullPath.StartsWith(normalizedRoot, StringComparison.OrdinalIgnoreCase)
+                        ? fullPath.Substring(normalizedRoot.Length)
+                        : Path.GetFileName(fullPath);
+
+                    try
+                    {
+                        if (extension.Equals(".swatchbin", StringComparison.OrdinalIgnoreCase))
+                        {
+                            AddViewportTextureLookupEntry(new SwatchbinArchiveEntry
+                            {
+                                DisplayName = $"[Folder] {logicalPath}",
+                                SourceArchivePath = fullPath,
+                                LogicalPath = logicalPath,
+                                DataLoader = () => File.ReadAllBytes(fullPath)
+                            });
+                        }
+                        else if (extension.Equals(".pb", StringComparison.OrdinalIgnoreCase))
+                        {
+                            using var stream = File.OpenRead(fullPath);
+                            foreach (var entry in SwatchbinArchiveService.ExtractTextureBundleEntries(
+                                stream, fullPath, logicalPath,
+                                $"[Folder] {logicalPath}",
+                                logicalPath))
+                            {
+                                AddViewportTextureLookupEntry(entry);
+                            }
+                        }
+                        else if (extension.Equals(".materialbin", StringComparison.OrdinalIgnoreCase))
+                        {
+                            // Index the materialbin itself so ResolveMaterialbinToSwatchbinEntry can load it
+                            AddViewportTextureLookupEntry(new SwatchbinArchiveEntry
+                            {
+                                DisplayName = $"[Folder] {logicalPath}",
+                                SourceArchivePath = fullPath,
+                                LogicalPath = logicalPath,
+                                DataLoader = () => File.ReadAllBytes(fullPath)
+                            });
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        System.Diagnostics.Debug.WriteLine($"[Viewport/Textures] {fullPath}: {ex.Message}");
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"[Viewport/Textures] {folderPath}: {ex.Message}");
             }
         }
 
@@ -378,12 +483,11 @@ namespace ForzaTechStudio.Views
         {
             try
             {
-                using var stream = new MemoryStream(entry.SwatchbinData);
-                SwatchbinInfo info = new SwatchbinService().LoadSwatchbin(stream);
-                if (info.DdsData == null || info.DdsData.Length == 0)
+                byte[]? ddsData = _viewportSwatchbinConversionService.LoadRenderReadyDdsFromBytes(entry.SwatchbinData);
+                if (ddsData == null || ddsData.Length == 0)
                     return null;
 
-                var textureStream = new MemoryStream(info.DdsData, writable: false);
+                var textureStream = new MemoryStream(ddsData, writable: false);
                 return new TextureModel(textureStream, autoCloseStream: true);
             }
             catch (Exception ex)
@@ -425,9 +529,23 @@ namespace ForzaTechStudio.Views
 
             Add(candidates, normalizedPath);
 
+            // Strip "media\" prefix if present (common in Game:\media\... references)
+            if (normalizedPath.StartsWith("media\\", StringComparison.OrdinalIgnoreCase))
+            {
+                string stripped = normalizedPath[6..];
+                Add(candidates, stripped);
+                string strippedNoExt = Path.ChangeExtension(stripped, null) ?? stripped;
+                Add(candidates, strippedNoExt);
+                Add(candidates, strippedNoExt + ".swatchbin");
+                Add(candidates, strippedNoExt + ".materialbin");
+                Add(candidates, strippedNoExt + ".pb");
+            }
+
             string withoutExtension = Path.ChangeExtension(normalizedPath, null) ?? normalizedPath;
             Add(candidates, withoutExtension);
             Add(candidates, withoutExtension + ".swatchbin");
+            Add(candidates, withoutExtension + ".materialbin");
+            Add(candidates, withoutExtension + ".pb");
 
             string fileName = Path.GetFileName(normalizedPath.Replace('/', '\\'));
             if (!string.IsNullOrWhiteSpace(fileName))
@@ -436,6 +554,8 @@ namespace ForzaTechStudio.Views
                 string fileNameWithoutExtension = Path.ChangeExtension(fileName, null) ?? fileName;
                 Add(candidates, fileNameWithoutExtension);
                 Add(candidates, fileNameWithoutExtension + ".swatchbin");
+                Add(candidates, fileNameWithoutExtension + ".materialbin");
+                Add(candidates, fileNameWithoutExtension + ".pb");
             }
 
             foreach (string candidate in candidates)
@@ -708,7 +828,66 @@ namespace ForzaTechStudio.Views
             if (_viewportTextureModelBuildFailures.Contains(cacheKey))
                 return null;
 
+            // Texture not yet loaded. Return null for this frame 
+            _ = LoadAndCacheTextureAsync(entry, cacheKey);
             return null;
+        }
+
+
+        private async Task LoadAndCacheTextureAsync(SwatchbinArchiveEntry entry, string cacheKey)
+        {
+            // Avoid duplicate loads for the same cache key
+            if (_viewportTextureModelCache.ContainsKey(cacheKey)
+                || _viewportTextureModelBuildFailures.Contains(cacheKey))
+                return;
+
+            // Avoid starting duplicate loads
+            if (!_viewportTextureLoadInFlight.Add(cacheKey))
+                return;
+
+            try
+            {
+                TextureModel? model = null;
+                try
+                {
+                    var ct = _textureRefreshCts.Token;
+                    model = await Task.Run(() => TryBuildTextureModelFromEntry(entry), ct);
+                }
+                catch (OperationCanceledException)
+                {
+                    return;
+                }
+                catch (Exception ex)
+                {
+                    System.Diagnostics.Debug.WriteLine($"[Viewport/Textures] Async load failed {entry.DisplayName}: {ex.Message}");
+                }
+
+                // Cache the result on the UI thread and refresh materials
+                DispatcherQueue.TryEnqueue(() =>
+                {
+                    try
+                    {
+                        if (_viewportTextureLookupDirty)
+                            return; // Session was closed; don't update stale caches
+
+                        _viewportTextureModelCache.TryAdd(cacheKey, model);
+                        if (model == null)
+                            _viewportTextureModelBuildFailures.Add(cacheKey);
+
+                        // Refresh materials so the newly loaded texture appears
+                        InvalidateViewportMaterialCache();
+                        UpdateMeshColors(SingleColorToggle?.IsChecked ?? false);
+                    }
+                    catch (Exception ex)
+                    {
+                        System.Diagnostics.Debug.WriteLine($"[Viewport/Textures] UI refresh error: {ex.Message}");
+                    }
+                });
+            }
+            finally
+            {
+                _viewportTextureLoadInFlight.Remove(cacheKey);
+            }
         }
 
         private async void ShowZipTextures_Click(object sender, RoutedEventArgs e)

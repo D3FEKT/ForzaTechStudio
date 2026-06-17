@@ -1011,22 +1011,42 @@ namespace ForzaTechStudio.Services
 
             for (int mi = 0; mi < models.Count; mi++)
             {
-                var skel = models[mi].Bundle?.Blobs.OfType<SkeletonBlob>().FirstOrDefault();
+                var model = models[mi];
+                var skel = model.Bundle?.Blobs.OfType<SkeletonBlob>().FirstOrDefault();
                 if (skel == null || skel.Bones.Count == 0) continue;
 
-                int baseIdx = bones.Count;
-                for (int bi = 0; bi < skel.Bones.Count; bi++)
+                // Collect the set of bone indices actually referenced by meshes in this modelbin,
+                // skipping placeholder bones named "root" or "<root>".
+                var usedBoneIndices = new HashSet<int>();
+                foreach (var (_, data) in model.Meshes)
+                {
+                    int boneIdx = data.BoneIndex;
+                    if (boneIdx < 0 || boneIdx >= skel.Bones.Count)
+                        continue;
+
+                    string boneName = skel.Bones[boneIdx].Name;
+                    if (string.Equals(boneName, "root", StringComparison.OrdinalIgnoreCase) ||
+                        string.Equals(boneName, "<root>", StringComparison.OrdinalIgnoreCase))
+                        continue;
+
+                    usedBoneIndices.Add(boneIdx);
+                }
+
+                // If no significant bones are used by any mesh, skip this modelbin entirely.
+                if (usedBoneIndices.Count == 0) continue;
+
+
+                foreach (int bi in usedBoneIndices)
                 {
                     int g = bones.Count;
                     var b = skel.Bones[bi];
-                    bool isRoot = b.ParentId < 0 || b.ParentId >= skel.Bones.Count;
                     bones.Add(new FbxBone
                     {
                         Bone = b,
                         Id = 700_000L + g * 2,
                         AttrId = 700_001L + g * 2,
-                        IsRoot = isRoot,
-                        ParentBoneGlobal = isRoot ? -1 : baseIdx + b.ParentId,
+                        IsRoot = true,
+                        ParentBoneGlobal = -1,
                         ParentModelBinId = mbNodeId[mi]
                     });
                 }

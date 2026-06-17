@@ -8,9 +8,9 @@ namespace ForzaTechStudio.Services
 {
     public class ProcessedGeometry
     {
-        public byte[][] PositionData;
-        public byte[][] NormalUVData;
-        public byte[][] IndexData;
+        public byte[][] PositionData = Array.Empty<byte[]>();
+        public byte[][] NormalUVData = Array.Empty<byte[]>();
+        public byte[][] IndexData = Array.Empty<byte[]>();
         public Vector4 PositionScale;
         public Vector4 PositionTranslate;
         public Vector3 BoundingBoxMin;
@@ -118,7 +118,7 @@ namespace ForzaTechStudio.Services
                         if (channelCount > 0)
                         {
                             int srcChannel = k < channelCount ? k : channelCount - 1;
-                            var channel = input.UVChannels[srcChannel];
+                            var channel = input.UVChannels?[srcChannel];
                             if (channel != null && i < channel.Length) uv = channel[i];
                         }
 

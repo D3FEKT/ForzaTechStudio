@@ -61,14 +61,16 @@ namespace ForzaTechStudio.Views
         private LineGeometryModel3D? _lightHighlightModel;
         private Dictionary<IViewerNode, GeometryModel3D> _renderMap = new();
         private Dictionary<LightGroupNode, GeometryModel3D> _lightDamageRenderMap = new();
+        private Dictionary<GeometryModel3D, IViewerNode> _hitTestMap = new();
+        private Dictionary<IViewerNode, List<GeometryModel3D>> _hitProxyMap = new();
         private List<MeshNode> _currentHighlightTargets = new List<MeshNode>();
         private ViewportTransformGizmo? _transformGizmo;
         private ViewportGizmoMode _selectedGizmoMode = ViewportGizmoMode.None;
         private bool _hasTransformSelection = false;
         private bool _isGizmoDragging = false;
         private ViewportGizmoHandle _activeGizmoHandle;
-        private MeshTransformAction? _gizmoTransformAction;
-        private readonly List<MeshNode> _gizmoTransformTargets = new();
+        private ViewportTransformSession? _gizmoTransformSession;
+        private readonly List<ViewportTransformTarget> _gizmoTransformTargets = new();
         private Vector3 _gizmoPivotWorld;
         private Vector3 _gizmoDragAxis;
         private Vector3 _gizmoDragPlaneNormal;
@@ -109,6 +111,7 @@ namespace ForzaTechStudio.Views
         private double _savedOrthographicWidth = 100.0;
         private bool _isSyncingCameraSettingsUi = false;
         private bool _isModelScopeDeltaTransformActive = false;
+        private bool _isSyncingSelection = false;
         private readonly List<MeshNode> _modelScopeDeltaMeshes = new();
         private readonly Dictionary<MeshNode, (Vector4 Scale, Vector4 Translate, Vector3 Rotation)> _modelScopeDeltaSnapshots = new();
         
@@ -145,8 +148,17 @@ namespace ForzaTechStudio.Views
             this.Loaded += Page_Loaded;
             this.Unloaded += Page_Unloaded;
             ViewModel.RequestCloseRoot += ViewModel_RequestCloseRoot;
+            ViewModel.RequestResetScene += ViewModel_RequestResetScene;
             ViewModel.PropertyChanged += ViewModel_PropertyChanged;
             ViewModel.Roots.CollectionChanged += Roots_CollectionChanged;
+        }
+
+        private void ViewModel_RequestResetScene(object? sender, EventArgs e)
+        {
+            ClearSelection(syncTree: true);
+            ResetViewportScene();
+            RefreshModelList();
+            RefreshManufacturerColorsFromLoadedRoots();
         }
 
         private void SelectionModeToggle_Checked(object sender, RoutedEventArgs e)
@@ -273,7 +285,7 @@ namespace ForzaTechStudio.Views
                 ShowCoordinateSystem = true,
                 ShowViewCube = true,
                 EffectsManager = new DefaultEffectsManager(),
-                IsTabStop = true
+                IsTabStop = false
             };
             
             //had to use custom cube texture to get the L/R directions to display correct due to lefthandsystem
@@ -412,7 +424,9 @@ namespace ForzaTechStudio.Views
 
             if (e.HitTestResult != null && e.HitTestResult.ModelHit is GeometryModel3D modelHit)
             {
-                var node = _renderMap.FirstOrDefault(x => x.Value == modelHit).Key;
+                IViewerNode? node = null;
+                if (!_hitTestMap.TryGetValue(modelHit, out node))
+                    node = _renderMap.FirstOrDefault(x => x.Value == modelHit).Key;
                 // Also resolve damage-cone hits to their LightGroupNode
                 if (node == null)
                 {
@@ -429,17 +443,17 @@ namespace ForzaTechStudio.Views
                 {
                     node = carbinNode;
                 }
+                if (node != null && !IsNodeInLoadedRoots(node))
+                {
+                    ClearSelection(syncTree: true);
+                    return;
+                }
                 if (node != null)
                 {
                     // Handle locator selection ? never multi-select
                     if (node is LocatorNode locatorNode)
                     {
-                        ClearMultiSelection();
-                        ViewModel.SelectedNode = locatorNode;
-                        if (_treeNodeMap.TryGetValue(locatorNode, out var treeViewNode))
-                        {
-                            FileTree.SelectedItem = treeViewNode;
-                        }
+                        ApplySingleSelection(locatorNode, syncTree: true);
                         return;
                     }
 
@@ -464,22 +478,18 @@ namespace ForzaTechStudio.Views
 
                             if (_multiSelectedLightGroups.Count > 0)
                             {
-                                _isMultiLightSelectActive = true;
-                                SnapshotMultiLightSelectValues();
-                                UpdateHighlightForLightGroups(_multiSelectedLightGroups);
-                                UpdateTransformUIForMultiLightSelect();
+                                ApplyLightMultiSelection(_multiSelectedLightGroups, primaryNode: lightGroupNode, syncTree: true);
                             }
                             else
                             {
                                 ClearMultiLightSelection();
+                                ClearSelectionState();
                             }
                         }
                         else
                         {
                             // Normal click: single select + highlight via SelectedNode
-                            ClearMultiLightSelection();
-                            ClearMultiSelection();
-                            ViewModel.SelectedNode = lightGroupNode;
+                            ApplySingleSelection(lightGroupNode, syncTree: true);
                         }
                         return;
                     }
@@ -490,19 +500,13 @@ namespace ForzaTechStudio.Views
                     // Handle damage mesh click — select node and sync properties panel
                     if (node is DamageMeshNode damageMeshNode)
                     {
-                        ClearMultiSelection();
-                        ViewModel.SelectedNode = damageMeshNode;
-                        if (_treeNodeMap.TryGetValue(damageMeshNode, out var dmgTreeNode))
-                            FileTree.SelectedItem = dmgTreeNode;
+                        ApplySingleSelection(damageMeshNode, syncTree: true);
                         return;
                     }
 
                     if (node is CarbinModelNode carbinModelNode)
                     {
-                        ClearMultiSelection();
-                        ViewModel.SelectedNode = carbinModelNode;
-                        if (_treeNodeMap.TryGetValue(carbinModelNode, out var carbinTreeNode))
-                            FileTree.SelectedItem = carbinTreeNode;
+                        ApplySingleSelection(carbinModelNode, syncTree: true);
                         return;
                     }
 
@@ -547,14 +551,12 @@ namespace ForzaTechStudio.Views
 
                         if (_multiSelectedMeshes.Count > 0)
                         {
-                            _isMultiSelectActive = true;
-                            SnapshotMultiSelectValues();
-                            UpdateHighlight(_multiSelectedMeshes);
-                            UpdateTransformUIForMultiSelect();
+                            ApplyMeshMultiSelection(_multiSelectedMeshes, primaryNode: clickedMesh, syncTree: true);
                         }
                         else
                         {
                             ClearMultiSelection();
+                            ClearSelectionState();
                         }
                         return;
                     }
@@ -571,33 +573,39 @@ namespace ForzaTechStudio.Views
 
                         if (parent != null)
                         {
-                            ViewModel.SelectedNode = parent;
-                            UpdateHighlight((IViewerNode?)parent);
+                            ApplySingleSelection(parent, syncTree: true);
                         }
                         else
                         {
-                            ViewModel.SelectedNode = node;
+                            ApplySingleSelection(node, syncTree: true);
                         }
                     }
                     else if (clickedMesh != null)
                     {
                         // Mesh selection mode: select individual mesh
-                        ViewModel.SelectedNode = node;
-                        UpdateHighlight(clickedMesh);
+                        ApplySingleSelection(clickedMesh, syncTree: true);
                     }
                     else
                     {
-                        ViewModel.SelectedNode = node;
-                        UpdateHighlight((IViewerNode?)null);
+                        ApplySingleSelection(node, syncTree: true);
                     }
                 }
             }
             else
             {
-                ClearMultiSelection();
-                ViewModel.SelectedNode = null;
-                UpdateHighlight((IViewerNode?)null);
+                ClearSelection(syncTree: true);
             }
+        }
+
+        private bool IsNodeInLoadedRoots(IViewerNode node)
+        {
+            for (var current = node; current != null; current = current.Parent)
+            {
+                if (ViewModel.Roots.Contains(current))
+                    return true;
+            }
+
+            return false;
         }
 
         private void ClearMultiSelection()

@@ -164,6 +164,11 @@ namespace ForzaTechStudio.Views
             await Windows.System.Launcher.LaunchUriAsync(new Uri("https://discord.gg/forzamods"));
         }
 
+        private async void KofiButton_Click(object sender, RoutedEventArgs e)
+        {
+            await Windows.System.Launcher.LaunchUriAsync(new Uri("https://ko-fi.com/d3fekt"));
+        }
+
         private void DocsButton_Click(object sender, RoutedEventArgs e)
         {
             if (ViewModel != null)

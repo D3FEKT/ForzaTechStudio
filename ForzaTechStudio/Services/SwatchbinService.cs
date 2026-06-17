@@ -420,7 +420,8 @@ public class SwatchbinService
             bcEncoder.EncodeToStream(pixelData, (int)width, (int)height, BCnEncoder.Encoder.PixelFormat.Rgba32, ddsStream);
             byte[] ddsBytes = ddsStream.ToArray();
 
-            ReplaceSwatchbinCore(swatchbinPath, ddsBytes, outputPath);
+            var replacementFormat = new ReplacementTextureFormat(encoding, transcoding, colorProfile, isPremultipliedAlpha);
+            ReplaceSwatchbinCore(swatchbinPath, ddsBytes, outputPath, replacementFormat);
         });
     }
 
@@ -430,7 +431,7 @@ public class SwatchbinService
         ReplaceSwatchbinCore(swatchbinPath, ddsBytes, outputPath);
     }
 
-    private void ReplaceSwatchbinCore(string swatchbinPath, byte[] ddsBytes, string outputPath)
+    private void ReplaceSwatchbinCore(string swatchbinPath, byte[] ddsBytes, string outputPath, ReplacementTextureFormat? replacementFormat = null)
     {
          var ddsInfo = ParseDdsHeader(ddsBytes);
 
@@ -461,7 +462,18 @@ public class SwatchbinService
          meta.ParseWithBlobVersion(txcb.VersionMajor, txcb.VersionMinor);
          
          // Map Formats
-         MapDxgiToInternal(ddsInfo.DxgiFormat, out var encoding, out var transcoding, out var colorProfile);
+         int? encoding = replacementFormat != null ? (int)replacementFormat.Encoding : null;
+         int? transcoding = replacementFormat != null ? (int)replacementFormat.Transcoding : null;
+         int? colorProfile = replacementFormat != null ? (int)replacementFormat.ColorProfile : null;
+         var isPremultipliedAlpha = replacementFormat?.IsPremultipliedAlpha ?? ddsInfo.IsPremultipliedAlpha;
+
+         if (encoding == null || transcoding == null || colorProfile == null)
+         {
+             MapDxgiToInternal(ddsInfo.DxgiFormat, out var inferredEncoding, out var inferredTranscoding, out var inferredColorProfile);
+             encoding ??= inferredEncoding;
+             transcoding ??= inferredTranscoding;
+             colorProfile ??= inferredColorProfile;
+         }
          
         
         if (meta.PCHeader != null)
@@ -469,15 +481,15 @@ public class SwatchbinService
              meta.PCHeader.Width = ddsInfo.Width;
              meta.PCHeader.Height = ddsInfo.Height;
              meta.PCHeader.NumMips = (byte)ddsInfo.MipMapCount;
-             meta.PCHeader.Transcoding = (ForzaTools.Bundles.Metadata.TextureContentHeaders.TextureTranscoding)transcoding;
-             meta.PCHeader.TargetColorProfile = (ForzaTools.Bundles.Metadata.TextureContentHeaders.ColorProfile)colorProfile;
-             meta.PCHeader.IsPremultipliedAlpha = ddsInfo.IsPremultipliedAlpha;
+             meta.PCHeader.Transcoding = (ForzaTools.Bundles.Metadata.TextureContentHeaders.TextureTranscoding)transcoding.Value;
+             meta.PCHeader.TargetColorProfile = (ForzaTools.Bundles.Metadata.TextureContentHeaders.ColorProfile)colorProfile.Value;
+             meta.PCHeader.IsPremultipliedAlpha = isPremultipliedAlpha;
 
              // Handle Slices/Mips
              meta.PCHeader.Slices.Clear();
              var slice = new ForzaTools.Bundles.Metadata.TextureContentHeaders.TextureContentSlice
              {
-                 Encoding = (ForzaTools.Bundles.Metadata.TextureContentHeaders.TextureEncoding)encoding
+                 Encoding = (ForzaTools.Bundles.Metadata.TextureContentHeaders.TextureEncoding)encoding.Value
              };
              
              // Calculate Mip Offsets/Sizes
@@ -537,6 +549,12 @@ public class SwatchbinService
              bundle.SerializeConverted(fs);
          }
     }
+
+    private sealed record ReplacementTextureFormat(
+        ForzaTechStudio.Models.TextureEncoding Encoding,
+        ForzaTechStudio.Models.TextureTranscoding Transcoding,
+        ForzaTechStudio.Models.ColorProfile ColorProfile,
+        bool IsPremultipliedAlpha);
 
     public async Task CreateSwatchbinAsync(string ddsPath, string outputPath)
     {

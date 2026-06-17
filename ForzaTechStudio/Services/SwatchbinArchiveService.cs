@@ -130,16 +130,36 @@ public sealed class SwatchbinArchiveService
 
         using var zip = new CustomZipFile(zipPath);
         var entries = zip.GetEntries()
-            .Where(e => !e.IsDirectory && e.Name.EndsWith(".swatchbin", StringComparison.OrdinalIgnoreCase))
+            .Where(e => !e.IsDirectory &&
+                (e.Name.EndsWith(".swatchbin", StringComparison.OrdinalIgnoreCase) ||
+                 e.Name.EndsWith(".pb", StringComparison.OrdinalIgnoreCase) ||
+                 e.Name.EndsWith(".materialbin", StringComparison.OrdinalIgnoreCase)))
             .ToList();
 
         var nameCounts = entries
+            .Where(e => e.Name.EndsWith(".swatchbin", StringComparison.OrdinalIgnoreCase))
             .GroupBy(e => Path.GetFileName(e.Name), StringComparer.OrdinalIgnoreCase)
             .ToDictionary(group => group.Key, group => group.Count(), StringComparer.OrdinalIgnoreCase);
 
         foreach (var entry in entries)
         {
             cancellationToken.ThrowIfCancellationRequested();
+
+            if (entry.Name.EndsWith(".pb", StringComparison.OrdinalIgnoreCase))
+            {
+                try
+                {
+                    var data = zip.ExtractToMemory(entry);
+                    using var stream = new MemoryStream(data);
+                    indexedEntries.AddRange(ExtractTextureBundleEntries(stream, zipPath, entry.Name, $"[{zipName}] {entry.Name}", entry.Name));
+                }
+                catch (Exception ex)
+                {
+                    System.Diagnostics.Debug.WriteLine($"[Zip/IndexPB] {entry.Name}: {ex.Message}");
+                }
+
+                continue;
+            }
 
             string entryName = entry.Name;
             string displayName = $"[{zipName}] {Path.GetFileName(entryName)}";

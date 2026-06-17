@@ -838,7 +838,13 @@ namespace ForzaTechStudio.Views
                             else if (ext == ".bin")
                             {
                                 var bytes = await File.ReadAllBytesAsync(file.FilePath, ct);
-                                if (IsLightsBinFile(bytes))
+                                if (fileName.Equals("manufacturercolors.bin", StringComparison.OrdinalIgnoreCase))
+                                {
+                                    var mfgColors = TryLoadManufacturerColors(bytes);
+                                    if (mfgColors != null)
+                                        folderNode.ManufacturerColors = mfgColors;
+                                }
+                                else if (IsLightsBinFile(bytes))
                                 {
                                     node = LoadLightsBin(fileName, bytes);
                                     if (node is LightsBinNode lightsBinNode)

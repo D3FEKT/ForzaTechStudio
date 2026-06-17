@@ -1022,9 +1022,7 @@ namespace ForzaTechStudio.Views
             if (_isUpdatingAvPinsUi) return;
             if (AvPinSelector.SelectedItem is AvPinNode pinNode)
             {
-                ViewModel.SelectedNode = pinNode;
-                if (_treeNodeMap.TryGetValue(pinNode, out var treeViewNode))
-                    FileTree.SelectedItem = treeViewNode;
+                ApplySingleSelection(pinNode, syncTree: true);
             }
         }
 
@@ -1176,11 +1174,7 @@ namespace ForzaTechStudio.Views
             if (_isUpdatingLocatorUi) return;
             if (LocatorPartSelector.SelectedItem is LocatorNode locNode)
             {
-                ViewModel.SelectedNode = locNode;
-                if (_treeNodeMap.TryGetValue(locNode, out var treeViewNode))
-                {
-                    FileTree.SelectedItem = treeViewNode;
-                }
+                ApplySingleSelection(locNode, syncTree: true);
             }
         }
 
@@ -1408,13 +1402,7 @@ namespace ForzaTechStudio.Views
             if (_isUpdatingUi) return;
             if (LightPartSelector.SelectedItem is LightGroupNode group)
             {
-                if (_isMultiLightSelectActive) ClearMultiLightSelection();
-                ViewModel.SelectedNode = group;
-                if (_treeNodeMap.TryGetValue(group, out var tvNode))
-                    FileTree.SelectedItem = tvNode;
-                UpdateLightTransformUI(group);
-                _currentLightHighlightTargets = new List<LightGroupNode> { group };
-                UpdateHighlightForLightGroups(_currentLightHighlightTargets);
+                ApplySingleSelection(group, syncTree: true);
             }
         }
 

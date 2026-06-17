@@ -51,8 +51,8 @@ Full page documentation at [docs/3d-viewer.md](docs/3d-viewer.md)
 | Tool | Description |
 |---|---|
 | **Modelbin Editor** | Edit meshes, LOD groups, materials, and bone hierarchies in `.modelbin` files. Full transform editing (position, scale, rotation) with undo/redo support. Also opens `locators.xml`, `physicsdefinition.bin`, and `lights.bin` for in-place transform editing. [Full documentation](docs/modelbin-editor.md) |
-| **Modelbin Creator** | Step-by-step wizard to import OBJ/FBX assets and compile them into a Forza-compatible `.modelbin`, including material slot mapping and LOD configuration. Supports targeting Forza Horizon 6 (Modl 1.4 / Mesh 1.12) alongside FH5, FM2023, FH4 and earlier titles. |
-| **Conversion Tool** | Batch convert `.carbin`, `.modelbin`, `lights.bin`, and `.swatchbin` files across game versions (FH2/3/4/5, FM5/6/7/8). Supports bulk Xbox-swizzled swatchbin conversion. [Full documentation](docs/conversion-tool.md) |
+| **Modelbin Creator** | Step-by-step wizard to import OBJ/FBX assets and compile them into a Forza-compatible `.modelbin`, including material slot mapping and LOD configuration. Supports targeting Forza Horizon 6 (Modl 1.4 / Mesh 1.12) alongside FH6, FH5, FM2023, FH4 and earlier titles. |
+| **Conversion Tool** | Batch convert `.carbin`, `.modelbin`, `lights.bin`, and `.swatchbin` files across game versions (FH2/3/4/5,6, FM5/6/7/8). Supports bulk Xbox-swizzled swatchbin conversion. [Full documentation](docs/conversion-tool.md) |
 | **Physics Definition Creator** | Create and edit `.bin` physics collision models — bounding volumes, collision primitives, and material flags. [Full documentation](docs/physics-definition.md) |
 
 ### Material Tools
@@ -157,5 +157,4 @@ dotnet build ForzaTechStudio\ForzaTechStudio.csproj
 - **Nenkai** — Original ForzaTools library and file format research
 - **Doliman100** — Reverse engineering Forza file formats and documentation
 - **[HelixToolkit](https://github.com/helix-toolkit/helix-toolkit)** — 3D rendering
-- **[AssimpNet](https://github.com/assimp/assimp)** — OBJ/FBX model import
 - **[BCnEncoder.NET](https://github.com/Nominom/BCnEncoder.NET)** — Texture compression

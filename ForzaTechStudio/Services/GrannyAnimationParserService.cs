@@ -7,12 +7,12 @@ using System.Threading.Tasks;
 
 namespace ForzaTechStudio.Services
 {
-    // ??? Data models ??????????????????????????????????????????????????
+    
 
     public class GrannyAnimFileInfo
     {
-        public string FilePath { get; set; }
-        public byte[] RawData { get; set; }
+        public string FilePath { get; set; } = string.Empty;
+        public byte[] RawData { get; set; } = Array.Empty<byte>();
         public int FileSize { get; set; }
 
         // Header
@@ -59,7 +59,7 @@ namespace ForzaTechStudio.Services
         public int SectionIndex { get; set; }
         public int Offset { get; set; }
         public int AbsoluteOffset { get; set; }
-        public string Name { get; set; }
+        public string Name { get; set; } = string.Empty;
         public float Duration { get; set; }
         public float TimeStep { get; set; }
         public float Oversampling { get; set; }
@@ -73,7 +73,7 @@ namespace ForzaTechStudio.Services
         public int SectionIndex { get; set; }
         public int Offset { get; set; }
         public int AbsoluteOffset { get; set; }
-        public string Name { get; set; }
+        public string Name { get; set; } = string.Empty;
         public int VectorTrackCount { get; set; }
         public int TransformTrackCount { get; set; }
         public List<ParsedTransformTrack> TransformTracks { get; set; } = new();
@@ -85,17 +85,17 @@ namespace ForzaTechStudio.Services
         public int SectionIndex { get; set; }
         public int Offset { get; set; }
         public int AbsoluteOffset { get; set; }
-        public string Name { get; set; }
+        public string Name { get; set; } = string.Empty;
         public int Flags { get; set; }
         public int StructSize { get; set; }
-        public ParsedCurve2 Orientation { get; set; }
-        public ParsedCurve2 Position { get; set; }
-        public ParsedCurve2 ScaleShear { get; set; }
+        public ParsedCurve2 Orientation { get; set; } = default!;
+        public ParsedCurve2 Position { get; set; } = default!;
+        public ParsedCurve2 ScaleShear { get; set; } = default!;
     }
 
     public class ParsedCurve2
     {
-        public string Label { get; set; }
+        public string Label { get; set; } = string.Empty;
         public int Offset { get; set; }
         public int AbsoluteOffset { get; set; }
         public string FormatName { get; set; } = "Unknown";
@@ -107,15 +107,15 @@ namespace ForzaTechStudio.Services
 
     public class QueuedAnimEdit
     {
-        public string FieldLabel { get; set; }
+        public string FieldLabel { get; set; } = string.Empty;
         public int AbsoluteOffset { get; set; }
-        public string OldValue { get; set; }
-        public string NewValue { get; set; }
-        public string PackType { get; set; } // "float32", "int32", "uint32"
-        public string Context { get; set; }
+        public string OldValue { get; set; } = string.Empty;
+        public string NewValue { get; set; } = string.Empty;
+        public string PackType { get; set; } = string.Empty; // "float32", "int32", "uint32"
+        public string Context { get; set; } = string.Empty;
     }
 
-    // ??? Parser service ???????????????????????????????????????????????
+
 
     public class GrannyAnimationParserService
     {
@@ -157,7 +157,7 @@ namespace ForzaTechStudio.Services
             return (fi, animations, errors);
         }
 
-        // ??? Save with edits ??????????????????????????????????????????
+        // Save with edits 
 
         public byte[] ApplyEditsAndSave(GrannyAnimFileInfo fi, List<QueuedAnimEdit> edits)
         {
@@ -194,7 +194,7 @@ namespace ForzaTechStudio.Services
             };
         }
 
-        // ??? Header reading ??????????????????????????????????????????
+        // Header reading 
 
         private static void ReadHeader(GrannyAnimFileInfo fi)
         {
@@ -301,7 +301,7 @@ namespace ForzaTechStudio.Services
                 uint comprFmt = sec.Format & 0x3u;
                 if (comprFmt != 0 && sec.DataSize != sec.ExpandedDataSize && sec.ExpandedDataSize > 0)
                 {
-                    byte[] decompressed = null;
+                    byte[]? decompressed = null;
 
                     // Try native granny2 with correct stop values from section header
                     if (Granny2Native.IsAvailable)
@@ -364,7 +364,7 @@ namespace ForzaTechStudio.Services
             }
         }
 
-        // ??? Pointer size detection (ported from Python) ?????????????
+        // Pointer size detection (ported from Python)
 
         private static void DetectPointerSize(GrannyAnimFileInfo fi)
         {
@@ -421,7 +421,7 @@ namespace ForzaTechStudio.Services
             // Keep magic-detected value if detection fails
         }
 
-        // ??? Helpers ??????????????????????????????????????????????????
+       
 
         private static byte[] GetSectionData(GrannyAnimFileInfo fi, int secIdx)
         {
@@ -511,7 +511,7 @@ namespace ForzaTechStudio.Services
             }
         }
 
-        private static ParsedAnimation ParseAnimation(GrannyAnimFileInfo fi, int secIdx, int offset, List<string> errors)
+        private static ParsedAnimation? ParseAnimation(GrannyAnimFileInfo fi, int secIdx, int offset, List<string> errors)
         {
             int PTR = fi.PointerSize;
             var secData = GetSectionData(fi, secIdx);
@@ -549,7 +549,7 @@ namespace ForzaTechStudio.Services
             return anim;
         }
 
-        private static ParsedTrackGroup ParseTrackGroup(GrannyAnimFileInfo fi, int secIdx, int offset, int index)
+        private static ParsedTrackGroup? ParseTrackGroup(GrannyAnimFileInfo fi, int secIdx, int offset, int index)
         {
             int PTR = fi.PointerSize;
             var secData = GetSectionData(fi, secIdx);
@@ -584,7 +584,7 @@ namespace ForzaTechStudio.Services
             return tg;
         }
 
-        private static ParsedTransformTrack ParseTransformTrack(GrannyAnimFileInfo fi, int secIdx, int offset, int index)
+        private static ParsedTransformTrack? ParseTransformTrack(GrannyAnimFileInfo fi, int secIdx, int offset, int index)
         {
             int PTR = fi.PointerSize;
             int CURVE2 = 2 * PTR;
