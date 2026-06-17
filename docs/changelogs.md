@@ -1,4 +1,4 @@
-﻿# Version 0.9.2.1 - Change Log
+﻿# Version 0.9.2.1 Hot fix - Change Log
 
 
 ## 3d viewer

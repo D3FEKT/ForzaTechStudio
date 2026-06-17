@@ -9,7 +9,7 @@
     <RuntimeIdentifiers>win-x86;win-x64;win-arm64</RuntimeIdentifiers>
     <PublishProfile>win-$(Platform).pubxml</PublishProfile>
     <UseWinUI>true</UseWinUI>
-    <Version>0.9.2.0</Version>
+    <Version>0.9.2.1</Version>
     <EnableMsixTooling>true</EnableMsixTooling>
     <Nullable>enable</Nullable>
     <BuiltInComInteropSupport>true</BuiltInComInteropSupport>
@@ -262,8 +262,8 @@
     <AssemblyName>ForzaTech Studio</AssemblyName>
     <Description>Forza Resource Tools</Description>
     <Copyright>D3FEKT</Copyright>
-    <AssemblyVersion>0.9.2.0</AssemblyVersion>
-    <FileVersion>0.9.2.0</FileVersion>
+    <AssemblyVersion>0.9.2.1</AssemblyVersion>
+    <FileVersion>0.9.2.1</FileVersion>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x86'">
     <DebugType>none</DebugType>
