@@ -30,7 +30,7 @@ namespace ForzaTechStudio.Views
         private static readonly RecyclableMemoryStreamManager _msManager = new();
         private static readonly HashSet<string> ViewportLoadableDropExtensions = new(StringComparer.OrdinalIgnoreCase)
         {
-            ".zip", ".minizip", ".modelbin", ".bin", ".carbin", ".xml", ".avpins", ".gr2", ".gsf"
+            ".zip", ".minizip", ".modelbin", ".bin", ".carbin", ".xml", ".avpins", ".gr2", ".gsf", ".clipd"
         };
 
         private static readonly HashSet<string> ViewportLooseTextureDropExtensions = new(StringComparer.OrdinalIgnoreCase)
@@ -210,7 +210,7 @@ namespace ForzaTechStudio.Views
             // XML files must be loaded synchronously on the UI thread
             var xmlPaths = filePaths.Where(p => Path.GetExtension(p).Equals(".xml", StringComparison.OrdinalIgnoreCase)).ToList();
             var avpinsPaths = filePaths.Where(p => Path.GetExtension(p).Equals(".avpins", StringComparison.OrdinalIgnoreCase)).ToList();
-            var grannyPaths = filePaths.Where(p => { var ext = Path.GetExtension(p).ToLowerInvariant(); return ext == ".gr2" || ext == ".gsf"; }).ToList();
+            var grannyPaths = filePaths.Where(p => { var ext = Path.GetExtension(p).ToLowerInvariant(); return ext == ".gr2" || ext == ".gsf" || ext == ".clipd"; }).ToList();
             var otherPaths = filePaths.Where(p => !xmlPaths.Contains(p) && !avpinsPaths.Contains(p) && !grannyPaths.Contains(p)).ToList();
 
             foreach (var xmlPath in xmlPaths)
@@ -230,11 +230,19 @@ namespace ForzaTechStudio.Views
                     loadedNodes.Add((node, avpinsPath));
             }
 
-            // Granny files are loaded on the UI thread (no native DLL threading issues)
+            // Granny/CLIPD files are loaded on the UI thread (no native DLL threading issues)
             foreach (var grannyPath in grannyPaths)
             {
                 LoadingDetail = Path.GetFileName(grannyPath);
-                var node = LoadGrannyFile(grannyPath);
+                ViewerNode? node;
+                if (Path.GetExtension(grannyPath).Equals(".clipd", StringComparison.OrdinalIgnoreCase))
+                {
+                    node = LoadClipdFile(grannyPath);
+                }
+                else
+                {
+                    node = LoadGrannyFile(grannyPath);
+                }
                 if (node != null)
                     loadedNodes.Add((node, grannyPath));
             }
@@ -762,7 +770,7 @@ namespace ForzaTechStudio.Views
             var uiThreadFiles = allFiles.Where(f =>
             {
                 var ext = Path.GetExtension(f.FilePath).ToLowerInvariant();
-                return ext == ".xml" || ext == ".avpins" || ext == ".gr2" || ext == ".gsf";
+                return ext == ".xml" || ext == ".avpins" || ext == ".gr2" || ext == ".gsf" || ext == ".clipd";
             }).ToList();
 
             var bgFiles = allFiles.Except(uiThreadFiles).ToList();
@@ -789,6 +797,10 @@ namespace ForzaTechStudio.Views
                     else if (ext == ".gr2" || ext == ".gsf")
                     {
                         node = LoadGrannyFile(file.FilePath);
+                    }
+                    else if (ext == ".clipd")
+                    {
+                        node = LoadClipdFile(file.FilePath);
                     }
 
                     if (node != null)
@@ -940,7 +952,8 @@ namespace ForzaTechStudio.Views
                           e.Name.EndsWith(".xml", StringComparison.OrdinalIgnoreCase) ||
                           e.Name.EndsWith(".avpins", StringComparison.OrdinalIgnoreCase) ||
                           e.Name.EndsWith(".gr2", StringComparison.OrdinalIgnoreCase) ||
-                          e.Name.EndsWith(".gsf", StringComparison.OrdinalIgnoreCase))).ToList();
+                          e.Name.EndsWith(".gsf", StringComparison.OrdinalIgnoreCase) ||
+                          e.Name.EndsWith(".clipd", StringComparison.OrdinalIgnoreCase))).ToList();
                           
                      var results = new List<(CustomZipFile.ZipEntryInfo Entry, ViewerNode Node)>();
 
@@ -1042,6 +1055,13 @@ namespace ForzaTechStudio.Views
                                  var gr2Node = LoadGrannyFileFromBytes(fileName, bytes, sourceZipPath: path);
                                  if (gr2Node != null)
                                      node = gr2Node;
+                             }
+                             else if (fileName.EndsWith(".clipd", StringComparison.OrdinalIgnoreCase))
+                             {
+                                 var bytes = zip.ExtractToMemory(entry);
+                                 var clipdNode = LoadClipdFromBytes(fileName, bytes, sourceZipPath: path);
+                                 if (clipdNode != null)
+                                     node = clipdNode;
                              }
 
                              if (node != null)
@@ -1676,10 +1696,64 @@ namespace ForzaTechStudio.Views
                 };
             }
 
-            // Delegate to the full node-building path via a temp-style call reusing the same logic.
-            // Build a GrannyFileNode with the parsed data (identical to LoadGrannyFile logic).
+            return BuildGrannyNodeTree(fileName, data, sourceZipPath);
+        }
+
+        private GrannyFileNode? LoadClipdFromBytes(string fileName, byte[] bytes, string? sourceZipPath = null)
+        {
+            GrannyFileData data;
+            try
+            {
+                var parser = new ClipdSkeldParserService();
+                var result = parser.Parse(bytes, fileName);
+                data = result.FileData;
+            }
+            catch (Exception ex)
+            {
+                return new GrannyFileNode
+                {
+                    Name = $"{fileName} [CLIPD LOAD ERROR: {ex.Message}]",
+                    FilePath = fileName,
+                    SourceZipPath = sourceZipPath,
+                    FileData = new GrannyFileData { IsValid = false, StatusMessage = ex.Message },
+                    IsGsf = false,
+                    IsChecked = true,
+                    IsExpanded = false
+                };
+            }
+
+            if (!data.IsValid)
+            {
+                return new GrannyFileNode
+                {
+                    Name = $"{fileName} [CLIPD PARSE ERROR: {data.StatusMessage}]",
+                    FilePath = fileName,
+                    SourceZipPath = sourceZipPath,
+                    FileData = data,
+                    IsGsf = false,
+                    IsChecked = true,
+                    IsExpanded = false
+                };
+            }
+
+            return BuildGrannyNodeTree(fileName, data, sourceZipPath, formatLabel: "CLIPD");
+        }
+
+        private GrannyFileNode? LoadClipdFile(string filePath)
+        {
+            if (!File.Exists(filePath))
+                return null;
+            var bytes = File.ReadAllBytes(filePath);
+            return LoadClipdFromBytes(Path.GetFileName(filePath), bytes);
+        }
+
+        /// Builds the full GrannyFileNode tree (skeletons, animations, character info)
+        /// from already-parsed GrannyFileData.  Used by GR2, GSF, and CLIPD loaders.
+        private static GrannyFileNode BuildGrannyNodeTree(
+            string fileName, GrannyFileData data, string? sourceZipPath, string? formatLabel = null)
+        {
             var labelParts = new List<string>();
-            if (data.IsGsf) labelParts.Add("GSF"); else labelParts.Add("GR2");
+            labelParts.Add(formatLabel ?? (data.IsGsf ? "GSF" : "GR2"));
             if (data.Skeletons.Count > 0) labelParts.Add($"{data.Skeletons.Count} skel");
             if (data.Animations.Count > 0) labelParts.Add($"{data.Animations.Count} anim");
             if (data.TrackGroups.Count > 0) labelParts.Add($"{data.TrackGroups.Count} tracks");
@@ -1828,183 +1902,7 @@ namespace ForzaTechStudio.Views
             }
 
             string fileName = Path.GetFileName(filePath);
-
-            // Build descriptive label
-            var labelParts = new List<string>();
-            if (data.IsGsf) labelParts.Add("GSF");
-            else labelParts.Add("GR2");
-
-            if (data.Skeletons.Count > 0)
-                labelParts.Add($"{data.Skeletons.Count} skel");
-            if (data.Animations.Count > 0)
-                labelParts.Add($"{data.Animations.Count} anim");
-            if (data.TrackGroups.Count > 0)
-                labelParts.Add($"{data.TrackGroups.Count} tracks");
-            if (data.CharacterInfo != null)
-                labelParts.Add($"{data.CharacterInfo.AnimationSetCount} sets");
-
-            string label = $"{fileName} [{string.Join(", ", labelParts)}]";
-
-            var rootNode = new GrannyFileNode
-            {
-                Name = label,
-                FilePath = filePath,
-                FileData = data,
-                IsGsf = data.IsGsf,
-                IsChecked = true,
-                IsExpanded = true
-            };
-
-            // Add skeletons
-            foreach (var skeleton in data.Skeletons)
-            {
-                var skelNode = new SkeletonNode
-                {
-                    Name = $"Skeleton: {skeleton.Name ?? "unnamed"} ({skeleton.Bones.Count} bones)",
-                    SkeletonData = skeleton,
-                    Parent = rootNode,
-                    IsChecked = true,
-                    IsExpanded = false
-                };
-
-                // Build bone hierarchy via parent indices
-                var boneNodes = new Dictionary<int, BoneNode>();
-                for (int i = 0; i < skeleton.Bones.Count; i++)
-                {
-                    var bone = skeleton.Bones[i];
-                    var boneNode = new BoneNode
-                    {
-                        Name = $"{bone.Name ?? $"bone_{i}"} (idx:{i}, parent:{bone.ParentIndex})",
-                        BoneData = bone,
-                        BoneIndex = i,
-                        IsChecked = true
-                    };
-                    boneNodes[i] = boneNode;
-                }
-
-                foreach (var kvp in boneNodes)
-                {
-                    var bone = skeleton.Bones[kvp.Key];
-                    if (bone.ParentIndex >= 0 && boneNodes.TryGetValue(bone.ParentIndex, out var parentBoneNode))
-                    {
-                        kvp.Value.Parent = parentBoneNode;
-                        parentBoneNode.Children.Add(kvp.Value);
-                    }
-                    else
-                    {
-                        kvp.Value.Parent = skelNode;
-                        skelNode.Children.Add(kvp.Value);
-                    }
-                }
-
-                rootNode.Children.Add(skelNode);
-            }
-
-            // Add animations
-            foreach (var anim in data.Animations)
-            {
-                int trackCount = anim.TrackGroups.Sum(tg => tg.TransformTracks.Count);
-                var animNode = new AnimationClipNode
-                {
-                    Name = $"Anim: {anim.Name ?? "unnamed"} ({anim.Duration:F2}s, {trackCount} tracks)",
-                    AnimationData = anim,
-                    Parent = rootNode,
-                    IsChecked = false
-                };
-
-                foreach (var tg in anim.TrackGroups)
-                {
-                    var tgFolder = new FolderNode
-                    {
-                        Name = $"TrackGroup: {tg.Name ?? "unnamed"} ({tg.TransformTracks.Count} tracks)",
-                        Parent = animNode,
-                        IsChecked = false
-                    };
-                    foreach (var tt in tg.TransformTracks)
-                    {
-                        tgFolder.Children.Add(new FolderNode
-                        {
-                            Name = $"Track: {tt.Name ?? "unnamed"}",
-                            Parent = tgFolder,
-                            IsChecked = false
-                        });
-                    }
-                    animNode.Children.Add(tgFolder);
-                }
-
-                rootNode.Children.Add(animNode);
-            }
-
-            // Add GSF state machine info
-            if (data.CharacterInfo != null)
-            {
-                var gsfNode = new GsfInfoNode
-                {
-                    Name = $"State Machine ({data.CharacterInfo.AnimationSlotCount} slots, {data.CharacterInfo.AnimationSetCount} sets)",
-                    CharacterInfoData = data.CharacterInfo,
-                    Parent = rootNode,
-                    IsChecked = false,
-                    IsExpanded = true
-                };
-
-                foreach (var slot in data.CharacterInfo.AnimationSlots)
-                {
-                    gsfNode.Children.Add(new FolderNode
-                    {
-                        Name = $"Slot [{slot.Index}]: {slot.Name}",
-                        Parent = gsfNode,
-                        IsChecked = false
-                    });
-                }
-
-                foreach (var set in data.CharacterInfo.AnimationSets)
-                {
-                    var setFolder = new FolderNode
-                    {
-                        Name = $"Set: {set.Name ?? "unnamed"} ({set.SourceFileReferences.Count} refs, {set.AnimationSpecs.Count} specs)",
-                        Parent = gsfNode,
-                        IsChecked = false,
-                        IsExpanded = true
-                    };
-                    foreach (var sfr in set.SourceFileReferences)
-                    {
-                        string refFileName = Path.GetFileName(sfr.SourceFilename ?? "");
-                        setFolder.Children.Add(new FolderNode
-                        {
-                            Name = $"?? {refFileName} ({sfr.ExpectedAnimCount} anims, CRC:0x{sfr.AnimCRC:X8})",
-                            Parent = setFolder,
-                            IsChecked = false
-                        });
-                    }
-                    foreach (var spec in set.AnimationSpecs)
-                    {
-                        setFolder.Children.Add(new FolderNode
-                        {
-                            Name = $"Spec [{spec.AnimationIndex}]: {spec.ExpectedName}",
-                            Parent = setFolder,
-                            IsChecked = false
-                        });
-                    }
-                    gsfNode.Children.Add(setFolder);
-                }
-
-                rootNode.Children.Add(gsfNode);
-            }
-
-            // Show status if partial
-            if (!string.IsNullOrEmpty(data.StatusMessage) &&
-                (data.Skeletons.Count == 0 && data.Animations.Count == 0 && data.CharacterInfo == null))
-            {
-                rootNode.Children.Add(new FolderNode
-                {
-                    Name = $"? {data.StatusMessage}",
-                    Parent = rootNode,
-                    IsChecked = false
-                });
-            }
-
-            rootNode.UpdateCheckStateFromChildren();
-            return rootNode;
+            return BuildGrannyNodeTree(fileName, data, filePath);
         }
     }
 }

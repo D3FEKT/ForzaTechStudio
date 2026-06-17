@@ -12,6 +12,8 @@ using System.Collections.Specialized;
 using System.ComponentModel;
 using System.Linq;
 using System.Numerics;
+using System.Threading;
+using System.Threading.Tasks;
 using System.Windows.Input;
 using SDX = SharpDX;
 using Color = Windows.UI.Color;
@@ -71,6 +73,7 @@ namespace ForzaTechStudio.Views
         private ViewportGizmoHandle _activeGizmoHandle;
         private ViewportTransformSession? _gizmoTransformSession;
         private readonly List<ViewportTransformTarget> _gizmoTransformTargets = new();
+        private readonly SemaphoreSlim _contentDialogLock = new(1, 1);
         private Vector3 _gizmoPivotWorld;
         private Vector3 _gizmoDragAxis;
         private Vector3 _gizmoDragPlaneNormal;
@@ -112,10 +115,56 @@ namespace ForzaTechStudio.Views
         private bool _isSyncingCameraSettingsUi = false;
         private bool _isModelScopeDeltaTransformActive = false;
         private bool _isSyncingSelection = false;
+        private int _transformUiSuppressionDepth = 0;
+        private int _transformUiSuppressionToken = 0;
         private readonly List<MeshNode> _modelScopeDeltaMeshes = new();
         private readonly Dictionary<MeshNode, (Vector4 Scale, Vector4 Translate, Vector3 Rotation)> _modelScopeDeltaSnapshots = new();
         
         private Dictionary<IViewerNode, TreeViewNode> _treeNodeMap = new();
+
+        private bool IsTransformUiSuppressed => _isUpdatingUi || _transformUiSuppressionDepth > 0;
+
+        private async Task<ContentDialogResult> ShowViewportDialogAsync(ContentDialog dialog)
+        {
+            dialog.XamlRoot ??= this.XamlRoot;
+            await _contentDialogLock.WaitAsync();
+            try
+            {
+                return await dialog.ShowAsync();
+            }
+            finally
+            {
+                _contentDialogLock.Release();
+            }
+        }
+
+        private void SuppressTransformUiUpdates(Action action)
+        {
+            _transformUiSuppressionDepth++;
+            _isUpdatingUi = true;
+            try
+            {
+                action();
+            }
+            finally
+            {
+                if (_transformUiSuppressionDepth > 0)
+                    _transformUiSuppressionDepth--;
+
+                if (_transformUiSuppressionDepth == 0)
+                {
+                    int token = ++_transformUiSuppressionToken;
+                    if (!DispatcherQueue.TryEnqueue(Microsoft.UI.Dispatching.DispatcherQueuePriority.Low, () =>
+                    {
+                        if (_transformUiSuppressionDepth == 0 && _transformUiSuppressionToken == token)
+                            _isUpdatingUi = false;
+                    }))
+                    {
+                        _isUpdatingUi = false;
+                    }
+                }
+            }
+        }
 
         public bool IsLoading
         {

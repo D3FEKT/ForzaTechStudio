@@ -134,6 +134,7 @@ namespace ForzaTechStudio.Views
             ClearModelScopeDeltaTransformState();
             ConflictingTransformsText.Visibility = Visibility.Collapsed;
             
+             bool wasUpdatingUi = _isUpdatingUi;
              _isUpdatingUi = true;
              
              ScaleControlsPanel.Visibility = Visibility.Visible;
@@ -149,7 +150,7 @@ namespace ForzaTechStudio.Views
              UpdateField(TransY, conflictTY, refTrans.Y);
              UpdateField(TransZ, conflictTZ, refTrans.Z);
              
-             _isUpdatingUi = false;
+               _isUpdatingUi = wasUpdatingUi;
         }
 
         private void UpdateTransformUIForModelScopeDelta(IReadOnlyList<MeshNode> meshList)
@@ -168,6 +169,7 @@ namespace ForzaTechStudio.Views
                 _modelScopeDeltaSnapshots[mesh] = (blob.PositionScale, blob.PositionTranslate, mesh.GeometryData.RotationEulerDegrees);
             }
 
+            bool wasUpdatingUi = _isUpdatingUi;
             _isUpdatingUi = true;
             ConflictingTransformsText.Visibility = Visibility.Collapsed;
             ScaleControlsPanel.Visibility = Visibility.Visible;
@@ -181,7 +183,7 @@ namespace ForzaTechStudio.Views
             EnableAndSet(TransX, "0.00000");
             EnableAndSet(TransY, "0.00000");
             EnableAndSet(TransZ, "0.00000");
-            _isUpdatingUi = false;
+            _isUpdatingUi = wasUpdatingUi;
         }
 
         private void ClearModelScopeDeltaTransformState()
@@ -200,6 +202,7 @@ namespace ForzaTechStudio.Views
         private void ClearTransformFields()
         {
             ClearModelScopeDeltaTransformState();
+            bool wasUpdatingUi = _isUpdatingUi;
             _isUpdatingUi = true;
             ConflictingTransformsText.Visibility = Visibility.Collapsed;
             ScaleControlsPanel.Visibility = Visibility.Visible;
@@ -213,7 +216,7 @@ namespace ForzaTechStudio.Views
             EnableAndSet(TransX, "0.00000");
             EnableAndSet(TransY, "0.00000");
             EnableAndSet(TransZ, "0.00000");
-            _isUpdatingUi = false;
+            _isUpdatingUi = wasUpdatingUi;
         }
         
         private void EnableAndSet(TextBox box, string text)
@@ -225,7 +228,7 @@ namespace ForzaTechStudio.Views
         private void ModelBinSelector_SelectionChanged(object sender, SelectionChangedEventArgs e)
         {
             // If user manually changes the Model selector, exit multi-select mode
-            if (!_isUpdatingUi && _isMultiSelectActive)
+            if (!IsTransformUiSuppressed && _isMultiSelectActive)
             {
                 ClearMultiSelection();
             }
@@ -317,6 +320,9 @@ namespace ForzaTechStudio.Views
 
         private void MeshSelector_SelectionChanged(object sender, SelectionChangedEventArgs e)
         {
+            if (IsTransformUiSuppressed)
+                return;
+
             // Normal model mesh case
             UpdateTransformUI();
             UpdateHighlightFromUI();
@@ -481,6 +487,11 @@ namespace ForzaTechStudio.Views
                 ModelBinSelector.SelectedItem = null;
                 MeshSelector.ItemsSource = null;
                 ClearTransformFields();
+            }
+
+            if (ModelBinSelector.SelectedItem is ModelBinNode)
+            {
+                UpdateTransformUI();
             }
 
             UpdateLocatorExpanderVisibility();

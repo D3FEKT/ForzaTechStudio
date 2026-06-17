@@ -60,6 +60,9 @@ namespace ForzaTechStudio.Views
         {
              if (_isUpdatingUi) return;
 
+             if (IsTransformUiSuppressed)
+                 return;
+
              // Mesh multi-select delta mode
              if (_isMultiSelectActive && _multiSelectedMeshes.Count > 0)
              {
@@ -1370,10 +1373,9 @@ namespace ForzaTechStudio.Views
              {
                  Title = "Error",
                  Content = msg,
-                 CloseButtonText = "OK",
-                 XamlRoot = this.XamlRoot
+                 CloseButtonText = "OK"
              };
-             await dialog.ShowAsync();
+             await ShowViewportDialogAsync(dialog);
         }
 
         private void ChangeValue(TextBox box, float delta)

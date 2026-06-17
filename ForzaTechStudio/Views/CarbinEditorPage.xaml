@@ -216,12 +216,9 @@
             </ListView>
         </Grid>
 
-        <!-- Empty state -->
+        <!-- Empty state  -->
         <Grid Grid.Row="3"
               Background="Transparent"
-              AllowDrop="True"
-              DragOver="Page_DragOver"
-              Drop="Page_Drop"
               Visibility="{x:Bind ViewModel.IsContentVisible, Mode=OneWay, Converter={StaticResource InvertedBoolToVis}}">
             <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center"
                         Spacing="12">

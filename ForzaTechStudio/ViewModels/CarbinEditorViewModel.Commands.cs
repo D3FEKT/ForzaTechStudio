@@ -1420,7 +1420,9 @@ namespace ForzaTechStudio.ViewModels
 
         private void EnsureTabForLoad()
         {
-            if (IsContentVisible && ActiveTab != null)
+            // Only create a new tab if the active tab already has a real file loaded.
+
+            if (!string.IsNullOrEmpty(LoadedFilePath) && ActiveTab != null)
             {
                 SaveCurrentStateToTab(ActiveTab);
                 var newTab = CreateEmptyTab();

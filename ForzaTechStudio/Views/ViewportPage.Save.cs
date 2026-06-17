@@ -716,10 +716,9 @@ namespace ForzaTechStudio.Views
             {
                 Title = title,
                 Content = content,
-                CloseButtonText = "OK",
-                XamlRoot = this.XamlRoot
+                CloseButtonText = "OK"
             };
-            await dialog.ShowAsync();
+            await ShowViewportDialogAsync(dialog);
         }
     }
 }

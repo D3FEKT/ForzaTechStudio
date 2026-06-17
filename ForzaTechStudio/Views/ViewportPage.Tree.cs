@@ -336,11 +336,14 @@ namespace ForzaTechStudio.Views
             var closingNodes = CollectSubtreeNodes(root);
             bool removedActiveSelection = closingNodes.Contains(ViewModel.SelectedNode);
 
-            ClearClosedRootSelections(closingNodes);
-            ClearClosedRootUiReferences(closingNodes);
-            ClearClosedRootPendingWork(closingNodes);
-            ClearClosedRootAnimationReferences(closingNodes);
-            _carbinModelBinCache.Clear();
+            SuppressTransformUiUpdates(() =>
+            {
+                ClearClosedRootSelections(closingNodes);
+                ClearClosedRootUiReferences(closingNodes);
+                ClearClosedRootPendingWork(closingNodes);
+                ClearClosedRootAnimationReferences(closingNodes);
+                _carbinModelBinCache.Clear();
+            });
 
             if (_treeNodeMap.TryGetValue(root, out var treeNode))
             {
@@ -356,9 +359,11 @@ namespace ForzaTechStudio.Views
             InvalidateViewportMaterialCache();
             DispatcherQueue.TryEnqueue(() =>
             {
-                RefreshModelList();
-                if (removedActiveSelection)
+                SuppressTransformUiUpdates(RefreshModelList);
+                if (removedActiveSelection && ModelBinSelector.SelectedItem is not ModelBinNode)
                     ClearSelectionVisuals();
+                else
+                    UpdateTransformUI();
                 RefreshManufacturerColorsFromLoadedRoots();
                 UpdateMeshColors(SingleColorToggle?.IsChecked ?? false);
             });
