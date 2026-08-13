@@ -510,6 +510,8 @@ namespace ForzaTechStudio.ViewModels.ThreeDViewer
         // Materials for the mesh-level material editor (swap list for selected mesh)
         public ObservableCollection<ViewportMaterialItem> MeshMaterials { get; } = new();
 
+        public bool HasLoadedModelBins => GetAllModelBinNodes().Count > 0;
+
         private ViewportMaterialItem? _selectedMeshMaterial;
         public ViewportMaterialItem? SelectedMeshMaterial
         {
@@ -548,6 +550,7 @@ namespace ForzaTechStudio.ViewModels.ThreeDViewer
         {
             Roots.Add(root);
             ActiveTab?.Roots.Add(root);
+            OnPropertyChanged(nameof(HasLoadedModelBins));
         }
 
         public void RemoveRoot(IViewerNode root)
@@ -555,6 +558,7 @@ namespace ForzaTechStudio.ViewModels.ThreeDViewer
             Roots.Remove(root);
             foreach (var tab in Tabs)
                 tab.Roots.Remove(root);
+            OnPropertyChanged(nameof(HasLoadedModelBins));
         }
 
         private RelayCommand? _closeSelectedCommand;
@@ -590,6 +594,7 @@ namespace ForzaTechStudio.ViewModels.ThreeDViewer
             Roots.Clear();
             ActiveTab?.Roots.Clear();
             SelectedNode = null;
+            OnPropertyChanged(nameof(HasLoadedModelBins));
             RequestResetScene?.Invoke(this, EventArgs.Empty);
         }
 

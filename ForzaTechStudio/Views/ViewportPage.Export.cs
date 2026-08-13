@@ -107,7 +107,7 @@ namespace ForzaTechStudio.Views
                 string? mtlContent = null;
                 await Task.Run(() =>
                 {
-                    var texMap = BuildTexturePathMap(zipPathList, _exportOptions.TextureFormat);
+                    var texMap = BuildTexturePathMap(modelList, zipPathList, _exportOptions.TextureFormat);
                     objContent = ObjExportService.BuildObjContent(modelList, mtlFileName, _exportOptions);
                     mtlContent = ObjExportService.BuildMtlContent(modelList, texMap);
                 });
@@ -129,7 +129,7 @@ namespace ForzaTechStudio.Views
                     await Windows.Storage.FileIO.WriteTextAsync(mtlFile, mtlContent);
                 }
 
-                // Export DDS textures from any source zip(s).
+                // Export textures from any source zip(s).
                 LoadingStatus = "Exporting textures...";
                 await Task.Yield();
                 string? texSummary = await ExportZipTextures(zipPathList, outputDir, _exportOptions.TextureFormat);
@@ -258,11 +258,11 @@ namespace ForzaTechStudio.Views
                 string outPath = outFile.Path;
                 string outputDir = Path.GetDirectoryName(outPath) ?? string.Empty;
                 var zipPathList = CollectSourceZipPaths(ViewModel.Roots).ToList();
-                var texMap = BuildTexturePathMap(zipPathList, _exportOptions.TextureFormat);
+                var texMap = BuildTexturePathMap(modelList, zipPathList, _exportOptions.TextureFormat);
 
                 await Task.Run(() => FbxExportService.Export(modelList, outPath, format, texMap, _exportOptions));
 
-                // Export DDS textures from any source zip(s).
+                // Export textures from any source zip(s).
                 LoadingStatus = "Exporting textures...";
                 await Task.Yield();
                 string? texSummary = await ExportZipTextures(zipPathList, outputDir, _exportOptions.TextureFormat);
@@ -335,7 +335,7 @@ namespace ForzaTechStudio.Views
                     string mtlContent = string.Empty;
                     await Task.Run(() =>
                     {
-                        var texMap = BuildTexturePathMap(zipPathList, _exportOptions.TextureFormat);
+                        var texMap = BuildTexturePathMap(single, zipPathList, _exportOptions.TextureFormat);
                         objContent = ObjExportService.BuildObjContent(single, mtlFileName, _exportOptions);
                         mtlContent = ObjExportService.BuildMtlContent(single, texMap);
                     });
@@ -402,7 +402,6 @@ namespace ForzaTechStudio.Views
             {
                 string outputDir = folder.Path;
                 var zipPathList = CollectSourceZipPaths(ViewModel.Roots).ToList();
-                var texMap = BuildTexturePathMap(zipPathList, _exportOptions.TextureFormat);
                 var usedNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
                 int fileCount = 0;
 
@@ -414,6 +413,7 @@ namespace ForzaTechStudio.Views
                     string baseName = UniqueFileName(usedNames, model.ModelBinName);
                     string outPath = Path.Combine(outputDir, baseName + ".fbx");
                     var single = new List<ModelBinExportData> { model };
+                    var texMap = BuildTexturePathMap(single, zipPathList, _exportOptions.TextureFormat);
 
                     await Task.Run(() => FbxExportService.Export(single, outPath, format, texMap, _exportOptions));
                     fileCount++;

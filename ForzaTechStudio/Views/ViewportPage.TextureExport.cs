@@ -1,6 +1,8 @@
 using ForzaTechStudio.Models;
 using ForzaTechStudio.Services;
 using ForzaTechStudio.ViewModels.ThreeDViewer;
+using ForzaTools.Bundles.Blobs;
+using ForzaTools.Bundles.Metadata;
 using Microsoft.UI.Xaml.Controls;
 using System;
 using System.Collections.Generic;
@@ -14,7 +16,7 @@ namespace ForzaTechStudio.Views
     // a "{ZipName} Textures" subfolder alongside the exported geometry file.
     public sealed partial class ViewportPage : Page
     {
-        // Exports DDS textures from every zip that contributed to the current export.
+        // Exports textures from every zip that contributed to the current export.
         // Returns a short summary string (e.g. "12 texture(s) NIS_SilviaK_92 Textures")
         // or null if no zip sources were found or no swatchbins existed.
         private async Task<string?> ExportZipTextures(
@@ -103,10 +105,50 @@ namespace ForzaTechStudio.Views
                 : null;
         }
 
-        // Scans the zip entries for .swatchbin files and builds a map of material base name > relative path from the MTL file to the exported DDS.
-        // e.g. "BODYWORK" - "NIS_SilviaK_92 Textures\BODYWORK.dds"
+        // Scans zip entries and material shader parameters to build a map of material
+        // base name > relative exported texture path.
+        private static Dictionary<string, string> BuildTexturePathMap(
+            IEnumerable<ModelBinExportData> models,
+            IEnumerable<string> zipPaths,
+            ExportTextureFormat format)
+        {
+            var textureByBaseName = BuildExportedTexturePathMap(zipPaths, format);
+            var materialMap = new Dictionary<string, string>(textureByBaseName, StringComparer.OrdinalIgnoreCase);
+
+            foreach (var model in models)
+            {
+                if (model.Bundle == null)
+                    continue;
+
+                foreach (var material in model.Bundle.Blobs.OfType<MaterialBlob>())
+                {
+                    string? materialName = material.Metadatas
+                        .OfType<NameMetadata>()
+                        .FirstOrDefault()
+                        ?.Name;
+
+                    string safeMaterialName = ObjExportService.ExtractMaterialBaseName(materialName ?? string.Empty);
+                    if (string.IsNullOrWhiteSpace(safeMaterialName) || materialMap.ContainsKey(safeMaterialName))
+                        continue;
+
+                    if (TryFindBestMaterialTexture(material, textureByBaseName, out var texturePath))
+                        materialMap[safeMaterialName] = texturePath;
+                }
+            }
+
+            return materialMap;
+        }
+
+        // Scans the zip entries for .swatchbin files and builds a map of exported
+        // texture base name > relative path from the MTL/FBX file to the texture.
+        // e.g. "BODYWORK" -> "NIS_SilviaK_92 Textures\BODYWORK.png"
 
         private static Dictionary<string, string> BuildTexturePathMap(
+            IEnumerable<string> zipPaths,
+            ExportTextureFormat format)
+            => BuildExportedTexturePathMap(zipPaths, format);
+
+        private static Dictionary<string, string> BuildExportedTexturePathMap(
             IEnumerable<string> zipPaths,
             ExportTextureFormat format)
         {
@@ -138,6 +180,84 @@ namespace ForzaTechStudio.Views
             }
 
             return map;
+        }
+
+        private static bool TryFindBestMaterialTexture(
+            MaterialBlob material,
+            IReadOnlyDictionary<string, string> textureByBaseName,
+            out string texturePath)
+        {
+            texturePath = string.Empty;
+            if (material.Bundle == null || textureByBaseName.Count == 0)
+                return false;
+
+            var candidates = material.Bundle.Blobs
+                .OfType<MaterialShaderParameterBlob>()
+                .SelectMany(blob => blob.Parameters)
+                .Where(param => param.Type == ShaderParameterType.Texture2D && param.Value is TextureParameter)
+                .Select(param =>
+                {
+                    var tex = (TextureParameter)param.Value;
+                    return new
+                    {
+                        Parameter = param,
+                        Texture = tex,
+                        ParameterName = NameHashService.Instance.GetName(param.NameHash) ?? string.Empty,
+                        TextureBaseName = ExtractTextureBaseName(tex.Path)
+                    };
+                })
+                .Where(c => !string.IsNullOrWhiteSpace(c.TextureBaseName) &&
+                            textureByBaseName.ContainsKey(c.TextureBaseName))
+                .OrderByDescending(c => ScoreTextureCandidate(c.ParameterName, c.Texture.Path))
+                .ToList();
+
+            if (candidates.Count == 0)
+                return false;
+
+            texturePath = textureByBaseName[candidates[0].TextureBaseName];
+            return true;
+        }
+
+        private static string ExtractTextureBaseName(string? texturePath)
+        {
+            if (string.IsNullOrWhiteSpace(texturePath))
+                return string.Empty;
+
+            string normalized = texturePath
+                .Replace("game:", string.Empty, StringComparison.OrdinalIgnoreCase)
+                .Replace('/', '\\');
+
+            string fileName = Path.GetFileName(normalized);
+            string baseName = Path.GetFileNameWithoutExtension(fileName);
+
+            // Some paths are stored extensionless or with .dds/.png already stripped by tools.
+            if (string.IsNullOrWhiteSpace(baseName))
+                baseName = fileName;
+
+            return baseName ?? string.Empty;
+        }
+
+        private static int ScoreTextureCandidate(string parameterName, string? texturePath)
+        {
+            string text = $"{parameterName} {texturePath}".ToLowerInvariant();
+            int score = 0;
+
+            if (text.Contains("basecolor") || text.Contains("base_color") ||
+                text.Contains("diffuse") || text.Contains("_diff") ||
+                text.Contains("albedo") || text.Contains("color"))
+                score += 100;
+
+            if (text.Contains("emissive") || text.Contains("radiosity") || text.Contains("_lite"))
+                score += 25;
+
+            if (text.Contains("normal") || text.Contains("nrml"))
+                score -= 100;
+
+            if (text.Contains("_ao") || text.Contains("ambient") ||
+                text.Contains("mask") || text.Contains("rough") || text.Contains("metal"))
+                score -= 50;
+
+            return score;
         }
 
         private IEnumerable<string> CollectSourceZipPaths(IEnumerable<IViewerNode> roots)

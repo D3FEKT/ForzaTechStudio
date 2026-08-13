@@ -16,7 +16,7 @@ namespace ForzaTechStudio.Models
     {
         public ExportUpAxis UpAxis { get; set; } = ExportUpAxis.YUp;
         public float ScaleFactor { get; set; } = 1.0f;
-        public ExportTextureFormat TextureFormat { get; set; } = ExportTextureFormat.Dds;
+        public ExportTextureFormat TextureFormat { get; set; } = ExportTextureFormat.Png;
 
         // LOD filter. When AllLods is true every mesh is exported regardless of SelectedLods.
         // SelectedLods values: -1 = LODS, 0..5 = LOD0..LOD5.

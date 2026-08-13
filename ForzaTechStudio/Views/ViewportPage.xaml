@@ -1854,6 +1854,17 @@
                 </Button.Flyout>
             </Button>
 
+            <Button x:Name="SaveAllMaterialsJsonBtn"
+                    Click="SaveAllMaterialsJson_Click"
+                    IsEnabled="{x:Bind ViewModel.HasLoadedModelBins, Mode=OneWay}"
+                    Style="{StaticResource CompactGhostAccentButtonStyle}"
+                    ToolTipService.ToolTip="Save materials used by the selected vehicle parts to JSON">
+                <StackPanel Orientation="Horizontal" Spacing="4">
+                    <FontIcon Glyph="&#xE74E;" FontSize="12"/>
+                    <TextBlock Text="Save All to JSON" FontSize="11"/>
+                </StackPanel>
+            </Button>
+
             <Border Width="1"
                     Background="{ThemeResource DividerStrokeColorDefaultBrush}"
                     Margin="3,4"/>
